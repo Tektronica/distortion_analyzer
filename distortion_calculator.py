@@ -1,5 +1,32 @@
 import numpy as np
 from scipy.signal.windows import hann, blackman, blackmanharris
+from scipy.fftpack import fft
+
+"""
+FFT Fundamentals
+https://www.sjsu.edu/people/burford.furman/docs/me120/FFT_tutorial_NI.pdf
+https://docs.scipy.org/doc/scipy/reference/tutorial/fft.html
+https://youtu.be/aQKX3mrDFoY
+https://github.com/markjay4k/Audio-Spectrum-Analyzer-in-Python/blob/master/audio%20spectrum_pt2_spectrum_analyzer.ipynb
+
+DIGITIZING + SAMPLING
+https://www.datatranslation.eu/frontend/products/pdf/DT9862S-UnderSampling.pdf
+https://www.renesas.com/cn/en/www/doc/application-note/an9675.pdf
+https://dartbrains.org/features/notebooks/6_Signal_Processing.html
+
+INTERPOLATION
+https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html
+https://ccrma.stanford.edu/~jos/sasp/Quadratic_Interpolation_Spectral_Peaks.html
+
+Frequency detectors:
+https://gist.github.com/endolith/255291
+
+Calculate THDN
+https://gist.github.com/endolith/246092
+
+RMS in frequency domain
+https://stackoverflow.com/questions/23341935/find-rms-value-in-frequency-domain
+"""
 
 
 ########################################################################################################################
@@ -25,6 +52,13 @@ def find_range(f, x):
             lowermin = i + 1
             break
     return lowermin, uppermin
+
+
+########################################################################################################################
+def windowed_fft(y, N, windfunc='blackman'):
+    w = blackman(N)
+    ywf = fft(y * w)
+    return ywf
 
 
 ########################################################################################################################
@@ -55,6 +89,8 @@ def THDN(y, fs, lpf):
         fc = int(lpf * len(y) / fs)
         yf[fc:] = 1e-10
 
+    # RMS in frequency domain
+    # https: // stackoverflow.com / questions / 23341935 / find - rms - value - in -frequency - domain
     total_rms = np.sqrt(np.sum(np.abs(yf / len(y)) ** 2))  # Parseval'amp_string Theorem
 
     # NOTCH REJECT FUNDAMENTAL AND MEASURE NOISE
