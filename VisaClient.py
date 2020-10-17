@@ -1,4 +1,4 @@
-import visa
+import pyvisa as visa
 import re
 import time
 
@@ -63,7 +63,9 @@ class VisaClient:
                 else:
                     print('No such mode.')
 
-                print(re.sub(r'[\r\n|\r\n|\n]+', '', self.INSTR.query('*IDN?').lstrip(' ')))
+                # test communication to instrument by identifying instrument
+                idn = re.sub(r'[\r\n|\r\n|\n]+', '', self.INSTR.query('*IDN?').lstrip(' '))
+                print(f"[FOUND] {idn}")
 
             except visa.VisaIOError:
                 # https://github.com/pyvisa/pyvisa-py/issues/146#issuecomment-453695057
@@ -80,9 +82,9 @@ class VisaClient:
     def InstrumentConnectionFailed(self, info):
         """Raised when attempted connection to instrument has timedout or is unreachable"""
         if info['mode'] in ('SOCKET', 'SERIAL'):
-            print(f"Cannot reach address {info['address']} over {info['mode']}. Connection timed out.")
+            print(f"\nCannot reach address {info['address']} over {info['mode']}. Connection timed out.")
         else:
-            print(f"Cannot reach address {info['gpib']} over {info['mode']}. Connection timed out.")
+            print(f"\nCannot reach address {info['gpib']} over {info['mode']}. Connection timed out.")
 
     def info(self):
         return self.instr_info
@@ -119,10 +121,20 @@ class VisaClient:
         return response
 
     def close(self):
-        self.INSTR.close()
+        try:
+            self.INSTR.close()
+        except AttributeError:
+            # If caught, 'VisaClient' object will have no attribute 'INSTR'. Occurs when instrument not initialized.
+            if self.instr_info['mode'] in ('SOCKET', 'SERIAL'):
+                print(f"instrument at address {self.instr_info['address']} could not be disconnected.")
+                print(f"instrument may not have been found.\n")
+            else:
+                print(f"instrument at address {self.instr_info['gpib']} could not be disconnected.")
 
 
 def main():
+    """ THIS IS A TEST METHOD FOR THE VISACLIENT CLASS"""
+
     f5560A_id = {'ip_address': '129.196.136.130', 'port': '3490', 'gpib_address': '', 'mode': 'NIGHTHAWK'}
     f5790A_id = {'ip_address': '', 'port': '', 'gpib_address': '6', 'mode': 'GPIB'}
     k34461A_id = {'ip_address': '10.205.92.63', 'port': '3490', 'gpib_address': '', 'mode': 'INSTR'}
