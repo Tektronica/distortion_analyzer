@@ -1,23 +1,22 @@
-import VisaClient
 from dmm_f8588A import *
 from dut_f5560A import *
 from distortion_calculator import *
-import numpy as np
-from scipy.signal.windows import blackman
-from scipy.fftpack import fft
-import pandas as pd
-import time
-import re
+from instruments_dialog_gui import *
+from instruments_RWConfig import *
+
 import wx
+import re
+import time
+import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.pylab as pylab
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.backends.backend_wxagg import NavigationToolbar2WxAgg as NavigationToolbar
+import numpy as np
+from pathlib import Path
 import threading
-import matplotlib.pylab as pylab
 import datetime
 import os
-from pathlib import Path
-import yaml
 
 DUMMY = False
 
@@ -34,40 +33,7 @@ params = {'legend.fontsize': 'medium',
 pylab.rcParams.update(params)
 
 
-# https://www.sjsu.edu/people/burford.furman/docs/me120/FFT_tutorial_NI.pdf
-
-# https://www.datatranslation.eu/frontend/products/pdf/DT9862S-UnderSampling.pdf
-# https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interp1d.html
-# https://docs.scipy.org/doc/scipy/reference/tutorial/fft.html
-
-# Calculate THDN
-# https://gist.github.com/endolith/246092
-
-# Frequency detectors:
-# https://gist.github.com/endolith/255291
-# https://ccrma.stanford.edu/~jos/sasp/Quadratic_Interpolation_Spectral_Peaks.html
-
-# https://dartbrains.org/features/notebooks/6_Signal_Processing.html
-
-# https://youtu.be/aQKX3mrDFoY
-# https://github.com/markjay4k/Audio-Spectrum-Analyzer-in-Python/blob/master/audio%20spectrum_pt2_spectrum_analyzer.ipynb
-# https://www.renesas.com/cn/en/www/doc/application-note/an9675.pdf
-
-# RMS in frequency domain
-# https://stackoverflow.com/questions/23341935/find-rms-value-in-frequency-domain
-
 ########################################################################################################################
-def ReadConfig():
-    if os.path.exists("instrument_config.yaml"):
-        with open("instrument_config.yaml", 'r') as stream:
-            try:
-                return yaml.safe_load(stream)
-            except yaml.YAMLError as exc:
-                print(exc)
-    else:
-        pass
-
-
 def _getFilepath():
     Path('results').mkdir(parents=True, exist_ok=True)
     date = datetime.date.today().strftime("%Y%m%d")
@@ -106,8 +72,8 @@ class Instruments(f5560A_instrument, f8588A_instrument):
 
     def close_instruments(self):
         time.sleep(1)
-        self.f5560A.close()
-        self.f8588A.close()
+        self.close_f5560A()
+        self.close_f8588A()
 
 
 ########################################################################################################################
@@ -131,6 +97,7 @@ class TestFrame(wx.Frame):
         self.panel_4 = wx.Panel(self.panel_3, wx.ID_ANY)  # amplitude/frequency panel
         self.panel_5 = wx.Panel(self.panel_2, wx.ID_ANY, style=wx.SIMPLE_BORDER)  # plot panel
 
+        # PLOT Panel ---------------------------------------------------------------------------------------------------
         self.figure = plt.figure(figsize=(1, 1))  # look into Figure((5, 4), 75)
         self.canvas = FigureCanvas(self.panel_5, -1, self.figure)
         self.toolbar = NavigationToolbar(self.canvas)
@@ -142,31 +109,33 @@ class TestFrame(wx.Frame):
         self.temporal, = self.ax1.plot([], [], linestyle='-')
         self.spectral, = self.ax2.plot([], [], color='red')
 
-        self.text_ctrl_1 = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
-        self.text_ctrl_2 = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
+        # LEFT TOOL PANEL ----------------------------------------------------------------------------------------------
+        self.text_DUT_report = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
+        self.text_DMM_report = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
         self.btn_connect = wx.Button(self.panel_3, wx.ID_ANY, "Connect")
         self.btn_config = wx.Button(self.panel_3, wx.ID_ANY, "Config")
 
         self.checkbox_1 = wx.CheckBox(self.panel_3, wx.ID_ANY, "Control Source")
-        self.text_ctrl_3 = wx.TextCtrl(self.panel_4, wx.ID_ANY, "1.2A")
+        self.text_amplitude = wx.TextCtrl(self.panel_4, wx.ID_ANY, "1.2A")
         self.combo_box_1 = wx.ComboBox(self.panel_4, wx.ID_ANY, choices=["RMS", "Peak"],
                                        style=wx.CB_DROPDOWN | wx.CB_READONLY)
-        self.text_ctrl_4 = wx.TextCtrl(self.panel_4, wx.ID_ANY, "5000")
-        self.text_ctrl_5 = wx.TextCtrl(self.panel_3, wx.ID_ANY, "10000")
-        self.text_ctrl_6 = wx.TextCtrl(self.panel_3, wx.ID_ANY, "70")
-        self.combo_box_2 = wx.ComboBox(self.panel_3, wx.ID_ANY, choices=["None", "100kHz", "3MHz"],
-                                       style=wx.CB_DROPDOWN | wx.CB_READONLY)
-        self.label_13 = wx.StaticText(self.panel_3, wx.ID_ANY, "--")
-        self.label_14 = wx.StaticText(self.panel_3, wx.ID_ANY, "--")
-        self.text_ctrl_7 = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
-        self.text_ctrl_8 = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
-        self.text_ctrl_9 = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
+        self.text_frequency = wx.TextCtrl(self.panel_4, wx.ID_ANY, "5000")
+        self.text_samples = wx.TextCtrl(self.panel_3, wx.ID_ANY, "20000")
+        self.text_cycles = wx.TextCtrl(self.panel_3, wx.ID_ANY, "70")
+        self.combo_filter = wx.ComboBox(self.panel_3, wx.ID_ANY, choices=["None", "100kHz", "3MHz"],
+                                        style=wx.CB_DROPDOWN | wx.CB_READONLY)
+        self.label_fs_report = wx.StaticText(self.panel_3, wx.ID_ANY, "--")
+        self.label_rms_report = wx.StaticText(self.panel_3, wx.ID_ANY, "--")
+        self.text_rms_report = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
+        self.text_thdn_report = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
+        self.text_thd_report = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
+
         self.btn_single = wx.Button(self.panel_3, wx.ID_ANY, "RUN")
         self.combo_box_3 = wx.ComboBox(self.panel_3, wx.ID_ANY,
                                        choices=["Single Run", "Sweep", "Continuous Run", "JAKE"],
                                        style=wx.CB_DROPDOWN)
 
-        # Menu Bar
+        # Menu Bar -----------------------------------------------------------------------------------------------------
         self.frame_menubar = wx.MenuBar()
         wxglade_tmp_menu = wx.Menu()
         wxglade_tmp_menu.Append(wx.ID_ANY, "Export Data", "")
@@ -176,14 +145,14 @@ class TestFrame(wx.Frame):
         self.frame_menubar.Append(wxglade_tmp_menu, "Instruments")
         self.SetMenuBar(self.frame_menubar)
 
-        # Configure Instruments
+        # Configure Instruments ----------------------------------------------------------------------------------------
         on_connect = lambda event: self.connect(event)
         self.Bind(wx.EVT_BUTTON, on_connect, self.btn_connect)
 
         on_config = lambda event: self.config(event)
         self.Bind(wx.EVT_BUTTON, on_config, self.btn_config)
 
-        # Run Measurement (start subprocess)
+        # Run Measurement (start subprocess) ---------------------------------------------------------------------------
         on_single_event = lambda event: self.on_run(event)
         self.Bind(wx.EVT_BUTTON, on_single_event, self.btn_single)
 
@@ -195,21 +164,24 @@ class TestFrame(wx.Frame):
 
         self.Bind(wx.EVT_CLOSE, self.OnCloseWindow)
 
+        self.Freeze()
         self.__set_properties()
         self.__do_layout()
         self.__do_plot_layout()
+        self.Thaw()
+
         self.M = Instruments(self)
 
     def __set_properties(self):
         self.SetTitle("Distortion Analyzer")
-        self.text_ctrl_1.SetMinSize((200, 23))
-        self.text_ctrl_2.SetMinSize((200, 23))
+        self.text_DUT_report.SetMinSize((200, 23))
+        self.text_DMM_report.SetMinSize((200, 23))
         self.canvas.SetMinSize((700, 490))
         self.panel_3.SetMinSize((310, 502))
         self.panel_5.SetMinSize((700, 502))
         self.checkbox_1.SetValue(1)
         self.combo_box_1.SetSelection(0)
-        self.combo_box_2.SetSelection(1)
+        self.combo_filter.SetSelection(1)
         self.combo_box_3.SetSelection(0)
 
     def __do_layout(self):
@@ -221,83 +193,105 @@ class TestFrame(wx.Frame):
         grid_sizer_3 = wx.GridBagSizer(0, 0)
         grid_sizer_4 = wx.GridBagSizer(0, 0)
 
+        # TITLE --------------------------------------------------------------------------------------------------------
         label_1 = wx.StaticText(self.panel_3, wx.ID_ANY, "DISTORTION ANALYZER")
         label_1.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
         grid_sizer_2.Add(label_1, (0, 0), (1, 2), 0, 0)
 
+        static_line_5 = wx.StaticLine(self.panel_3, wx.ID_ANY)
+        static_line_5.SetMinSize((300, 2))
+        grid_sizer_2.Add(static_line_5, (1, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
+
+        # PLOT PANEL ---------------------------------------------------------------------------------------------------
         grid_sizer_4.Add(self.canvas, (0, 0), (1, 1), wx.ALL | wx.EXPAND)
         grid_sizer_4.Add(self.toolbar, (1, 0), (1, 1), wx.ALL | wx.EXPAND)
         self.panel_5.SetSizer(grid_sizer_4)
 
-        static_line_5 = wx.StaticLine(self.panel_3, wx.ID_ANY)
-        static_line_5.SetMinSize((300, 2))
-        grid_sizer_2.Add(static_line_5, (1, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
-        label_2 = wx.StaticText(self.panel_3, wx.ID_ANY, "UUT")
-        label_2.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_2.Add(label_2, (2, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
-        grid_sizer_2.Add(self.text_ctrl_1, (2, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        label_3 = wx.StaticText(self.panel_3, wx.ID_ANY, "DMM (Digitizer)")
-        label_3.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_2.Add(label_3, (3, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
-        grid_sizer_2.Add(self.text_ctrl_2, (3, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        # LEFT TOOL PANEL ==============================================================================================
+        # INSTRUMENT INFO  ---------------------------------------------------------------------------------------------
+        label_DUT = wx.StaticText(self.panel_3, wx.ID_ANY, "DUT")
+        label_DMM = wx.StaticText(self.panel_3, wx.ID_ANY, "DMM (Digitizer)")
+
+        label_DUT.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
+        label_DMM.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
+
+        grid_sizer_2.Add(label_DUT, (2, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
+        grid_sizer_2.Add(label_DMM, (3, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
         grid_sizer_2.Add(self.btn_connect, (4, 0), (1, 1), wx.BOTTOM, 5)
+        grid_sizer_2.Add(self.text_DUT_report, (2, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_2.Add(self.text_DMM_report, (3, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
         grid_sizer_2.Add(self.btn_config, (4, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        label_4 = wx.StaticText(self.panel_3, wx.ID_ANY, "Source")
-        label_4.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_2.Add(label_4, (5, 0), (1, 1), wx.TOP, 10)
-        grid_sizer_2.Add(self.checkbox_1, (5, 1), (1, 1), wx.ALIGN_BOTTOM | wx.LEFT | wx.TOP, 5)
+
         static_line_6 = wx.StaticLine(self.panel_3, wx.ID_ANY)
         static_line_6.SetMinSize((300, 2))
         grid_sizer_2.Add(static_line_6, (6, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
-        label_5 = wx.StaticText(self.panel_4, wx.ID_ANY, "Amplitude:")
-        grid_sizer_3.Add(label_5, (0, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
-        grid_sizer_3.Add(self.text_ctrl_3, (0, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        # SOURCE -------------------------------------------------------------------------------------------------------
+        label_source = wx.StaticText(self.panel_3, wx.ID_ANY, "Source")
+        label_source.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
+        grid_sizer_2.Add(label_source, (5, 0), (1, 1), wx.TOP, 10)
+        grid_sizer_2.Add(self.checkbox_1, (5, 1), (1, 1), wx.ALIGN_BOTTOM | wx.LEFT | wx.TOP, 5)
+
+        label_amplitude = wx.StaticText(self.panel_4, wx.ID_ANY, "Amplitude:")
+        label_frequency = wx.StaticText(self.panel_4, wx.ID_ANY, "Frequency (Ft):")
+        label_Hz = wx.StaticText(self.panel_4, wx.ID_ANY, "(Hz)")
+        label_measure = wx.StaticText(self.panel_3, wx.ID_ANY, "Measure")
+
+        label_frequency.SetMinSize((95, 16))
+
+        grid_sizer_3.Add(label_amplitude, (0, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
+        grid_sizer_3.Add(self.text_amplitude, (0, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
         grid_sizer_3.Add(self.combo_box_1, (0, 2), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        label_6 = wx.StaticText(self.panel_4, wx.ID_ANY, "Frequency (Ft):")
-        label_6.SetMinSize((95, 16))
-        grid_sizer_3.Add(label_6, (1, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
-        grid_sizer_3.Add(self.text_ctrl_4, (1, 1), (1, 1), wx.LEFT, 5)
-        label_7 = wx.StaticText(self.panel_4, wx.ID_ANY, "(Hz)")
-        grid_sizer_3.Add(label_7, (1, 2), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
+        grid_sizer_3.Add(label_frequency, (1, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
+        grid_sizer_3.Add(self.text_frequency, (1, 1), (1, 1), wx.LEFT, 5)
+        grid_sizer_3.Add(label_Hz, (1, 2), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
         self.panel_4.SetSizer(grid_sizer_3)
         grid_sizer_2.Add(self.panel_4, (7, 0), (1, 2), wx.EXPAND, 0)
-        label_8 = wx.StaticText(self.panel_3, wx.ID_ANY, "Measure")
-        label_8.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_2.Add(label_8, (8, 0), (1, 2), wx.TOP, 10)
+
+        # MEASURE ------------------------------------------------------------------------------------------------------
+        label_samples = wx.StaticText(self.panel_3, wx.ID_ANY, "Samples (N):")
+        label_cycles = wx.StaticText(self.panel_3, wx.ID_ANY, "Cycles:")
+        label_filter = wx.StaticText(self.panel_3, wx.ID_ANY, "Filter:")
+        label_fs = wx.StaticText(self.panel_3, wx.ID_ANY, "Fs:")
+        label_aperture = wx.StaticText(self.panel_3, wx.ID_ANY, "Aperture:")
+
+        label_measure.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
+        grid_sizer_2.Add(label_measure, (8, 0), (1, 2), wx.TOP, 10)
         static_line_7 = wx.StaticLine(self.panel_3, wx.ID_ANY)
+
         static_line_7.SetMinSize((300, 2))
         grid_sizer_2.Add(static_line_7, (9, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
-        label_9 = wx.StaticText(self.panel_3, wx.ID_ANY, "Samples (N):")
-        grid_sizer_2.Add(label_9, (10, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.text_ctrl_5, (10, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        label_10 = wx.StaticText(self.panel_3, wx.ID_ANY, "Cycles:")
-        grid_sizer_2.Add(label_10, (11, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.text_ctrl_6, (11, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        label_19 = wx.StaticText(self.panel_3, wx.ID_ANY, "Filter:")
-        grid_sizer_2.Add(label_19, (12, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.combo_box_2, (12, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        label_11 = wx.StaticText(self.panel_3, wx.ID_ANY, "Fs:")
-        grid_sizer_2.Add(label_11, (13, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.label_13, (13, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        label_12 = wx.StaticText(self.panel_3, wx.ID_ANY, "Aperture:")
-        grid_sizer_2.Add(label_12, (14, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.label_14, (14, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_2.Add(label_samples, (10, 0), (1, 1), 0, 0)
+        grid_sizer_2.Add(self.text_samples, (10, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_2.Add(label_cycles, (11, 0), (1, 1), 0, 0)
+        grid_sizer_2.Add(self.text_cycles, (11, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_2.Add(label_filter, (12, 0), (1, 1), 0, 0)
+        grid_sizer_2.Add(self.combo_filter, (12, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_2.Add(label_fs, (13, 0), (1, 1), 0, 0)
+        grid_sizer_2.Add(self.label_fs_report, (13, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_2.Add(label_aperture, (14, 0), (1, 1), 0, 0)
+        grid_sizer_2.Add(self.label_rms_report, (14, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+
+        # RESULTS ------------------------------------------------------------------------------------------------------
         static_line_8 = wx.StaticLine(self.panel_3, wx.ID_ANY)
         static_line_8.SetMinSize((300, 2))
         grid_sizer_2.Add(static_line_8, (15, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
-        label_15 = wx.StaticText(self.panel_3, wx.ID_ANY, "RMS:")
-        grid_sizer_2.Add(label_15, (16, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.text_ctrl_7, (16, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        label_16 = wx.StaticText(self.panel_3, wx.ID_ANY, "THD+N:")
-        grid_sizer_2.Add(label_16, (17, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.text_ctrl_8, (17, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        label_17 = wx.StaticText(self.panel_3, wx.ID_ANY, "THD:")
-        grid_sizer_2.Add(label_17, (18, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.text_ctrl_9, (18, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+
+        label_rms = wx.StaticText(self.panel_3, wx.ID_ANY, "RMS:")
+        label_thdn = wx.StaticText(self.panel_3, wx.ID_ANY, "THD+N:")
+        label_thd = wx.StaticText(self.panel_3, wx.ID_ANY, "THD:")
+
+        grid_sizer_2.Add(label_rms, (16, 0), (1, 1), 0, 0)
+        grid_sizer_2.Add(self.text_rms_report, (16, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_2.Add(label_thdn, (17, 0), (1, 1), 0, 0)
+        grid_sizer_2.Add(self.text_thdn_report, (17, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_2.Add(label_thd, (18, 0), (1, 1), 0, 0)
+        grid_sizer_2.Add(self.text_thd_report, (18, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
         static_line_9 = wx.StaticLine(self.panel_3, wx.ID_ANY)
         static_line_9.SetMinSize((300, 2))
         grid_sizer_2.Add(static_line_9, (19, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
+
+        # BUTTONS ------------------------------------------------------------------------------------------------------
         grid_sizer_2.Add(self.btn_single, (20, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
         grid_sizer_2.Add(self.combo_box_3, (20, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
 
@@ -317,12 +311,11 @@ class TestFrame(wx.Frame):
 
     # ------------------------------------------------------------------------------------------------------------------
     def connect(self, evt):
-        if hasattr(self.M, 'DUT') and hasattr(self.M, 'DMM'):
-            print('\nResetting connection. Closing communication with any connected instruments')
-            self.text_ctrl_1.Clear()
-            self.text_ctrl_2.Clear()
-            self.M.close_instruments()
-            time.sleep(2)
+        print('\nResetting connection. Closing communication with any connected instruments')
+        self.text_DUT_report.Clear()
+        self.text_DMM_report.Clear()
+        self.M.close_instruments()
+        time.sleep(2)
         self.thread_this(self.M.connect, (self.get_instruments(),))
 
     def config(self, evt):
@@ -341,8 +334,8 @@ class TestFrame(wx.Frame):
         return instruments
 
     def set_ident(self, idn_dict):
-        self.text_ctrl_1.SetValue(idn_dict['DUT'])  # DUT
-        self.text_ctrl_2.SetValue(idn_dict['DMM'])  # current DMM
+        self.text_DUT_report.SetValue(idn_dict['DUT'])  # DUT
+        self.text_DMM_report.SetValue(idn_dict['DMM'])  # current DMM
 
     # ------------------------------------------------------------------------------------------------------------------
     def on_run(self, evt):
@@ -407,8 +400,8 @@ class TestFrame(wx.Frame):
         results = np.zeros(shape=(len(df.index), len(headers)))
 
         for idx, row in df.iterrows():
-            self.text_ctrl_3.SetValue(str(row.amplitude))
-            self.text_ctrl_4.SetValue(str(row.frequency))
+            self.text_amplitude.SetValue(str(row.amplitude))
+            self.text_frequency.SetValue(str(row.frequency))
             results[idx] = self.test(self.get_values(), setup=True)
             self.M.standby()
 
@@ -441,8 +434,8 @@ class TestFrame(wx.Frame):
         results = np.zeros(shape=(len(df.index), len(headers)))
 
         for idx, row in df.iterrows():
-            self.text_ctrl_3.SetValue(str(row.amplitude))
-            self.text_ctrl_4.SetValue(str(row.frequency))
+            self.text_amplitude.SetValue(str(row.amplitude))
+            self.text_frequency.SetValue(str(row.frequency))
             results[idx] = self.test_jake(self.get_values(), setup=True)
             self.M.standby()
 
@@ -494,25 +487,9 @@ class TestFrame(wx.Frame):
         else:
             lpf = 0
 
-        Fs = 5e6 / (2 ** round(np.log2(5e6 / ((N * Ft) / cycles))))  # Hz
-        aperture = 200e-9 * round(((1 / Fs) - 200e-9) / 200e-9)
-        runtime = N * (aperture + 200e-9)
-
-        '''
-        The entire process for one reading is 200 ns, which gives a maximum trigger rate of 5 MHz. The aperture can be
-        set from 0 ns to 3 ms in 200 ns increments up to 1 ms, and 100 μs increments from 1 ms to 3 ms. Aperture length
-        increases sample rate. 
-            Fs = 5MHz
-            Ts = 200ns
-            Aperture = 600ns --> 4 points averaged for each sample since:200ns + 3 * (200ns)
-            Apparent sample time: 200ns + 600ns
-            Apparent sample rate: 1/(800ns) = 1.25MHz
-
-        Aperture is the time difference between the occurrence of the trigger and time when the tracking value is held.
-          + with an Fs an apparent sample rate of 156.250 kHz, an aperture length of 6.2us averages 32 points per sample
-          + with an Fs an apparent sample rate of 625.000 kHz, an aperture length of 1.4us averages 8 points per sample
-          + with an Fs an apparent sample rate of 1.25 MHz, an aperture length of 600ns averages 4 points per sample
-        '''
+        aperture, Fs, runtime = get_aperture(Ft, N, cycles)
+        self.label_fs_report.SetLabel(f'{round(Fs / 1000, 2)}kHz')
+        self.label_rms_report.SetLabel(f'{round(aperture * 1e6, 4)}us')
 
         # START DATA COLLECTION ----------------------------------------------------------------------------------------
         # TODO
@@ -533,19 +510,16 @@ class TestFrame(wx.Frame):
         # FFT ==========================================================================================================
         x = np.arange(0.0, runtime, aperture + 200e-9)
         xf = np.linspace(0.0, Fs, N)
-        w = blackman(N)
-        ywf = fft(y * w)
+        ywf = windowed_fft(y, N, 'blackman')
 
         # Find %THD+N
         thdn, f0, yf = THDN(y, Fs, lpf)
         thd = THD(y)
         data = {'x': x, 'y': y, 'xf': xf, 'ywf': ywf, 'yrms': yrms, 'N': N, 'runtime': runtime, 'Fs': Fs, 'f0': f0}
 
-        self.label_13.SetLabel(f'{round(Fs / 1000, 2)}kHz')
-        self.label_14.SetLabel(f'{round(aperture * 1e6, 4)}us')
-        self.text_ctrl_7.SetValue(f'{round(yrms, 6)}A')
-        self.text_ctrl_8.SetValue(f"{round(thdn * 100, 4)}% or {round(20 * np.log10(thdn), 1)}dB")
-        self.text_ctrl_9.SetValue(f"{round(thd * 100, 4)}% or {round(20 * np.log10(thd), 1)}dB")
+        self.text_rms_report.SetValue(f'{round(yrms, 6)}{mode.capitalize()}')
+        self.text_thdn_report.SetValue(f"{round(thdn * 100, 4)}% or {round(20 * np.log10(thdn), 1)}dB")
+        self.text_thd_report.SetValue(f"{round(thd * 100, 4)}% or {round(20 * np.log10(thd), 1)}dB")
         self.plot(data)
 
         return [amplitude, Ft, yrms, thdn, thd, Fs, aperture]
@@ -573,11 +547,11 @@ class TestFrame(wx.Frame):
         # CURRENT
         if meter_mode in ('A', 'a'):
             if meter_outval <= 1.5:
-                oper_range = 10 ** round(np.log10(meter_outval))
+                meter_range = 10 ** round(np.log10(meter_outval))
             elif 1.5 <= meter_outval <= 10:
-                oper_range = 10
+                meter_range = 10
             else:
-                oper_range = 30
+                meter_range = 30
         # VOLTAGE
         else:
             if meter_range <= 0.1:
@@ -593,9 +567,9 @@ class TestFrame(wx.Frame):
         else:
             lpf = 0
 
-        Fs = 5e6 / (2 ** round(np.log2(5e6 / ((N * Ft) / cycles))))  # Hz
-        aperture = 200e-9 * round(((1 / Fs) - 200e-9) / 200e-9)
-        runtime = N * (aperture + 200e-9)
+        aperture, Fs, runtime = get_aperture(Ft, N, cycles)
+        self.label_fs_report.SetLabel(f'{round(Fs / 1000, 2)}kHz')
+        self.label_rms_report.SetLabel(f'{round(aperture * 1e6, 4)}us')
 
         # START DATA COLLECTION ----------------------------------------------------------------------------------------
         if setup:
@@ -617,11 +591,10 @@ class TestFrame(wx.Frame):
         thd = THD(y)
         data = {'x': x, 'y': y, 'xf': xf, 'ywf': ywf, 'yrms': yrms, 'N': N, 'runtime': runtime, 'Fs': Fs, 'f0': f0}
 
-        self.label_13.SetLabel(f'{round(Fs / 1000, 2)}kHz')
-        self.label_14.SetLabel(f'{round(aperture * 1e6, 4)}us')
-        self.text_ctrl_7.SetValue(f'{round(yrms, 6)}V')
-        self.text_ctrl_8.SetValue(f"{round(thdn * 100, 4)}% or {round(20 * np.log10(thdn), 1)}dB")
-        self.text_ctrl_9.SetValue(f"{round(thd * 100, 4)}% or {round(20 * np.log10(thd), 1)}dB")
+
+        self.text_rms_report.SetValue(f'{round(yrms, 6)}V')
+        self.text_thdn_report.SetValue(f"{round(thdn * 100, 4)}% or {round(20 * np.log10(thdn), 1)}dB")
+        self.text_thd_report.SetValue(f"{round(thd * 100, 4)}% or {round(20 * np.log10(thd), 1)}dB")
         self.plot(data)
 
         return [amplitude, Ft, yrms, thdn, thd, Fs, aperture]
@@ -686,26 +659,26 @@ class TestFrame(wx.Frame):
                 self.checkbox_1.SetValue(1)
                 self.toggle_panel(evt)
             self.checkbox_1.Disable()
-            self.text_ctrl_3.Disable()
+            self.text_amplitude.Disable()
             self.combo_box_1.Disable()
-            self.text_ctrl_4.Disable()
+            self.text_frequency.Disable()
         else:
             self.checkbox_1.Enable()
-            self.text_ctrl_3.Enable()
+            self.text_amplitude.Enable()
             self.combo_box_1.Enable()
-            self.text_ctrl_4.Enable()
+            self.text_frequency.Enable()
 
     def toggle_controls(self):
-        if self.text_ctrl_3.Enabled:
+        if self.text_amplitude.Enabled:
             self.checkbox_1.Disable()
-            self.text_ctrl_3.Disable()
+            self.text_amplitude.Disable()
             self.combo_box_1.Disable()
-            self.text_ctrl_4.Disable()
+            self.text_frequency.Disable()
         else:
             self.checkbox_1.Enable()
-            self.text_ctrl_3.Enable()
+            self.text_amplitude.Enable()
             self.combo_box_1.Enable()
-            self.text_ctrl_4.Enable()
+            self.text_frequency.Enable()
 
     # ------------------------------------------------------------------------------------------------------------------
     def toggle_panel(self, evt):
@@ -717,13 +690,13 @@ class TestFrame(wx.Frame):
 
     # ------------------------------------------------------------------------------------------------------------------
     def get_values(self):
-        amp_string = self.text_ctrl_3.GetValue()
-        freq_string = self.text_ctrl_4.GetValue()
+        amp_string = self.text_amplitude.GetValue()
+        freq_string = self.text_frequency.GetValue()
         amplitude, units, ft = self.get_string_value(amp_string, freq_string)
 
-        return {'source': self.checkbox_1.GetValue(), 'amplitude': amplitude, 'mode': units,
-                'rms': self.combo_box_1.GetSelection(), 'ft': ft, 'samples': int(self.text_ctrl_5.GetValue()),
-                'cycles': float(self.text_ctrl_6.GetValue()), 'filter': self.combo_box_2.GetStringSelection()}
+        return {'source': self.checkbox_1.GetValue(), 'amplitude': amplitude, 'mode': units.capitalize(),
+                'rms': self.combo_box_1.GetSelection(), 'ft': ft, 'samples': int(self.text_samples.GetValue()),
+                'cycles': float(self.text_cycles.GetValue()), 'filter': self.combo_filter.GetStringSelection()}
 
     def get_string_value(self, amp_string, freq_string):
         # https://stackoverflow.com/a/35610194
@@ -763,7 +736,7 @@ class TestFrame(wx.Frame):
         try:
             frequency = float(freq_string)
         except ValueError:
-            self.error_dialog(f"The value {self.text_ctrl_4.GetValue()} is not a valid frequency!")
+            self.error_dialog(f"The value {self.text_frequency.GetValue()} is not a valid frequency!")
             self.frequency_good = False
         else:
             self.frequency_good = True
@@ -779,272 +752,6 @@ class TestFrame(wx.Frame):
         if hasattr(self.M, 'DUT') and hasattr(self.M, 'DMM'):
             self.M.close_instruments()
         self.Destroy()
-
-
-########################################################################################################################
-class InstrumentDialog(wx.Dialog):
-    """"""
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def __init__(self, parent, *args, **kwds):
-        kwds["style"] = kwds.get("style", 0) | wx.DEFAULT_DIALOG_STYLE
-        super(InstrumentDialog, self).__init__(parent, title='Configure Instruments')
-        wx.Dialog.__init__(self, *args, **kwds)
-
-        self.dut_mode = ''
-        self.dut_address = ''
-        self.dut_port = ''
-        self.dut_gpib = ''
-
-        self.dmm_mode = ''
-        self.dmm_address = ''
-        self.dmm_port = ''
-        self.dmm_gpib = ''
-
-        self.panel_5 = wx.Panel(self, wx.ID_ANY)
-        self.dut_mode = wx.ComboBox(self.panel_5, wx.ID_ANY, choices=["SOCKET", "GPIB", "SERIAL"], style=wx.CB_DROPDOWN)
-        self.dmm_mode = wx.ComboBox(self.panel_5, wx.ID_ANY, choices=["SOCKET", "GPIB", "SERIAL"], style=wx.CB_DROPDOWN)
-
-        self.panel_6 = wx.Panel(self.panel_5, wx.ID_ANY)
-        self.dut_address = wx.TextCtrl(self.panel_6, wx.ID_ANY, "")
-        self.dut_port = wx.TextCtrl(self.panel_6, wx.ID_ANY, "3490")
-
-        self.panel_7 = wx.Panel(self.panel_5, wx.ID_ANY)
-        self.dmm_address = wx.TextCtrl(self.panel_7, wx.ID_ANY, "")
-        self.dmm_port = wx.TextCtrl(self.panel_7, wx.ID_ANY, "3490")
-
-        self.panel_8 = wx.Panel(self.panel_5, wx.ID_ANY)
-        self.dut_gpib = wx.TextCtrl(self.panel_8, wx.ID_ANY, "")
-
-        self.panel_9 = wx.Panel(self.panel_5, wx.ID_ANY)
-        self.dmm_gpib = wx.TextCtrl(self.panel_9, wx.ID_ANY, "")
-
-        self.btn_save = wx.Button(self.panel_5, wx.ID_ANY, "Save")
-        self.btn_save.Bind(wx.EVT_BUTTON, self.on_save)
-
-        on_combo_00 = lambda event: self.on_combo(event, self.dut_mode.GetValue(), 'DUT')
-        self.Bind(wx.EVT_COMBOBOX_CLOSEUP, on_combo_00, self.dut_mode)
-        on_combo_01 = lambda event: self.on_combo(event, self.dmm_mode.GetValue(), 'DMM')
-        self.Bind(wx.EVT_COMBOBOX_CLOSEUP, on_combo_01, self.dmm_mode)
-
-        self.__set_properties()
-        self.__do_layout()
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def __set_properties(self):
-        self.SetTitle("Configure Instruments")
-        self.dut_port.SetMinSize((50, 23))
-        self.dut_gpib.SetMinSize((50, 23))
-        self.panel_6.SetMinSize((176, 51))
-        self.panel_8.SetMinSize((176, 51))
-        self.dut_mode.SetSelection(0)
-
-        self.dmm_port.SetMinSize((50, 23))
-        self.dmm_gpib.SetMinSize((50, 23))
-        self.panel_7.SetMinSize((176, 51))
-        self.panel_9.SetMinSize((176, 51))
-        self.dmm_mode.SetSelection(0)
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def __do_layout(self):
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        grid_sizer_4 = wx.GridBagSizer(0, 0)
-        sizer_1 = wx.BoxSizer()
-        sizer_2 = wx.BoxSizer()
-        grid_sizer_5 = wx.GridBagSizer(0, 0)
-        grid_sizer_6 = wx.GridBagSizer(0, 0)
-        grid_sizer_7 = wx.GridBagSizer(0, 0)
-        grid_sizer_8 = wx.GridBagSizer(0, 0)
-
-        label_18 = wx.StaticText(self.panel_5, wx.ID_ANY, "INSTRUMENTS")
-        label_18.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_4.Add(label_18, (0, 0), (1, 3), wx.BOTTOM, 10)
-
-        static_line_1 = wx.StaticLine(self.panel_5, wx.ID_ANY)
-        static_line_1.SetMinSize((292, 2))
-        grid_sizer_4.Add(static_line_1, (1, 0), (1, 3), wx.BOTTOM | wx.TOP, 5)
-
-        label_19 = wx.StaticText(self.panel_5, wx.ID_ANY, "DUT")
-        label_19.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_4.Add(label_19, (2, 0), (1, 1), wx.BOTTOM, 5)
-
-        label_21 = wx.StaticText(self.panel_6, wx.ID_ANY, "ADDRESS")
-        grid_sizer_5.Add(label_21, (0, 0), (1, 2), wx.BOTTOM, 5)
-        label_22 = wx.StaticText(self.panel_6, wx.ID_ANY, "PORT")
-        grid_sizer_5.Add(label_22, (0, 2), (1, 1), wx.BOTTOM, 5)
-        grid_sizer_5.Add(self.dut_address, (1, 0), (1, 1), 0, 0)
-        label_23 = wx.StaticText(self.panel_6, wx.ID_ANY, ":")
-        label_23.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_5.Add(label_23, (1, 1), (1, 1), wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
-        grid_sizer_5.Add(self.dut_port, (1, 2), (1, 1), 0, 0)
-        self.panel_6.SetSizer(grid_sizer_5)
-        sizer_1.Add(self.panel_6, 1, wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
-
-        label_20 = wx.StaticText(self.panel_5, wx.ID_ANY, "DMM")
-        label_20.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_4.Add(label_20, (3, 0), (1, 1), wx.BOTTOM, 5)
-        label_24 = wx.StaticText(self.panel_7, wx.ID_ANY, "ADDRESS")
-        grid_sizer_6.Add(label_24, (0, 0), (1, 2), wx.BOTTOM, 5)
-        label_25 = wx.StaticText(self.panel_7, wx.ID_ANY, "PORT")
-        grid_sizer_6.Add(label_25, (0, 2), (1, 1), wx.BOTTOM, 5)
-        grid_sizer_6.Add(self.dmm_address, (1, 0), (1, 1), 0, 0)
-        label_26 = wx.StaticText(self.panel_7, wx.ID_ANY, ":")
-        label_26.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_6.Add(label_26, (1, 1), (1, 1), wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
-        grid_sizer_6.Add(self.dmm_port, (1, 2), (1, 1), 0, 0)
-        self.panel_7.SetSizer(grid_sizer_6)
-        sizer_2.Add(self.panel_7, 1, wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
-
-        label_27 = wx.StaticText(self.panel_8, wx.ID_ANY, "GPIB ADDRESS")
-        grid_sizer_7.Add(label_27, (0, 0), (1, 2), wx.BOTTOM, 5)
-        grid_sizer_7.Add(self.dut_gpib, (1, 0), (1, 1), 0, 0)
-        self.panel_8.SetSizer(grid_sizer_7)
-        self.panel_8.Hide()
-        sizer_1.Add(self.panel_8, 1, wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
-
-        label_28 = wx.StaticText(self.panel_9, wx.ID_ANY, "GPIB ADDRESS")
-        grid_sizer_8.Add(label_28, (0, 0), (1, 2), wx.BOTTOM, 5)
-        grid_sizer_8.Add(self.dmm_gpib, (1, 0), (1, 1), 0, 0)
-        self.panel_9.SetSizer(grid_sizer_8)
-        self.panel_9.Hide()
-        sizer_2.Add(self.panel_9, 1, wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
-
-        grid_sizer_4.Add(sizer_1, (2, 1), (1, 1), wx.ALIGN_BOTTOM | wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
-        grid_sizer_4.Add(sizer_2, (3, 1), (1, 1), wx.ALIGN_BOTTOM | wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
-
-        grid_sizer_4.Add(self.dut_mode, (2, 2), (1, 1), wx.ALIGN_BOTTOM | wx.BOTTOM, 17)
-        grid_sizer_4.Add(self.dmm_mode, (3, 2), (1, 1), wx.ALIGN_BOTTOM | wx.BOTTOM, 17)
-
-        static_line_2 = wx.StaticLine(self.panel_5, wx.ID_ANY)
-        static_line_2.SetMinSize((292, 2))
-        grid_sizer_4.Add(static_line_2, (4, 0), (1, 3), wx.BOTTOM | wx.TOP, 5)
-
-        grid_sizer_4.Add(self.btn_save, (5, 0), (1, 3), wx.ALIGN_RIGHT, 0)
-        self.panel_5.SetSizer(grid_sizer_4)
-        sizer.Add(self.panel_5, 1, wx.ALL | wx.EXPAND, 10)
-
-        self.SetSizer(sizer)
-        sizer.Fit(self)
-
-        self.LoadConfig()
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def LoadConfig(self):
-        config_dict = ReadConfig()
-        # load config file into settings if available
-        if isinstance(config_dict, dict):
-            config = config_dict
-
-            self.dut_mode.SetValue(config['DUT']['mode'])
-            self.dut_address.SetValue(config['DUT']['address'])
-            self.dut_port.SetValue(config['DUT']['port'])
-            self.dut_gpib.SetValue(config['DUT']['gpib'])
-
-            self.dmm_mode.SetValue(config['DMM']['mode'])
-            self.dmm_address.SetValue(config['DMM']['address'])
-            self.dmm_port.SetValue(config['DMM']['port'])
-            self.dmm_gpib.SetValue(config['DMM']['gpib'])
-
-            self.toggle_panel(config['DUT']['mode'], self.panel_6, self.panel_8)
-            self.toggle_panel(config['DMM']['mode'], self.panel_7, self.panel_9)
-
-        else:
-            print('no config')
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def on_combo(self, evt, mode, instr):
-        if instr == 'DUT':
-            self.toggle_panel(mode, self.panel_6, self.panel_8)
-        else:
-            self.toggle_panel(mode, self.panel_7, self.panel_9)
-
-    def toggle_panel(self, mode, panel, panel_gpib):
-        if mode in ('SOCKET', 'SERIAL'):
-            if not panel.IsShown():
-                panel_gpib.Hide()
-                panel.Show()
-        else:
-            if not panel_gpib.IsShown():
-                panel.Hide()
-                panel_gpib.Show()
-        self.Layout()
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def on_save(self, evt):
-        config = {'DUT': {'mode': self.dut_mode.GetStringSelection(),
-                          'address': self.dut_address.GetValue(),
-                          'port': self.dut_port.GetValue(),
-                          'gpib': self.dut_gpib.GetValue()},
-                  'DMM': {'mode': self.dmm_mode.GetStringSelection(),
-                          'address': self.dmm_address.GetValue(),
-                          'port': self.dmm_port.GetValue(),
-                          'gpib': self.dmm_gpib.GetValue()}}
-
-        with open('instrument_config.yaml', 'w') as f:
-            yaml.dump(config, f, sort_keys=False)
-
-        if self.IsModal():
-            self.EndModal(wx.ID_OK)
-            evt.Skip()
-        else:
-            self.Close()
-
-
-class EntryPanel(wx.Panel):
-    def __init__(self, parent):
-        super(EntryPanel, self).__init__(parent)
-
-        self.panel_1 = wx.Panel(self, wx.ID_ANY)
-        self.panel_2 = wx.Panel(self, wx.ID_ANY)
-
-        self.address = wx.TextCtrl(self.panel_1, wx.ID_ANY, "")
-        self.port = wx.TextCtrl(self.panel_1, wx.ID_ANY, "3490")
-        self.gpib = wx.TextCtrl(self.panel_2, wx.ID_ANY, "")
-
-        self.__set_properties()
-        self.__do_layout()
-
-    def __set_properties(self):
-        self.port.SetMinSize((50, 23))
-        self.gpib.SetMinSize((50, 23))
-        self.panel_1.SetMinSize((176, 51))
-        self.panel_2.SetMinSize((176, 51))
-
-    def __do_layout(self):
-        sizer = wx.BoxSizer()
-        grid_sizer_1 = wx.GridBagSizer(0, 0)
-        grid_sizer_2 = wx.GridBagSizer(0, 0)
-
-        label_address = wx.StaticText(self.panel_1, wx.ID_ANY, "ADDRESS")
-        grid_sizer_1.Add(label_address, (0, 0), (1, 2), wx.BOTTOM, 5)
-        label_port = wx.StaticText(self.panel_1, wx.ID_ANY, "PORT")
-        grid_sizer_1.Add(label_port, (0, 2), (1, 1), wx.BOTTOM, 5)
-        grid_sizer_1.Add(self.address, (1, 0), (1, 1), 0, 0)
-        label_colon = wx.StaticText(self.panel_1, wx.ID_ANY, ":")
-        label_colon.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_1.Add(label_colon, (1, 1), (1, 1), wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
-        grid_sizer_1.Add(self.port, (1, 2), (1, 1), 0, 0)
-        self.panel_1.SetSizer(grid_sizer_1)
-        sizer.Add(self.panel_1, 1, wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
-
-        label_gpibaddress = wx.StaticText(self.panel_2, wx.ID_ANY, "GPIB ADDRESS")
-        grid_sizer_2.Add(label_gpibaddress, (0, 0), (1, 2), wx.BOTTOM, 5)
-        grid_sizer_2.Add(self.gpib, (1, 0), (1, 1), 0, 0)
-        self.panel_2.SetSizer(grid_sizer_2)
-        self.panel_2.Hide()
-        sizer.Add(self.panel_2, 1, wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
-
-    # --------------------------------------------------------------------------------------------------------------
-    def toggle_panel(self, mode):
-        if mode in ('SOCKET', 'SERIAL'):
-            if not self.panel_1.IsShown():
-                self.panel_2.Hide()
-                self.panel_1.Show()
-        else:
-            if not self.panel_2.IsShown():
-                self.panel_1.Hide()
-                self.panel_2.Show()
-        self.Layout()
 
 
 ########################################################################################################################

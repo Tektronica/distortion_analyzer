@@ -15,6 +15,51 @@ def to_float(s):
     return f
 
 
+def get_aperture(Ft, N, cycles):
+    """
+    The aperture is the duration after trigger where samples at a rate of 5 MHz are averaged together.
+
+    The aperture can be set from 0 ns to 3 ms in 200 ns increments up to 1 ms, and 100 μs increments from 1 ms to 3 ms.
+
+    Since the minimum duration to trigger one sample is 200ns, an aperture length greater than 0 ns allows more than one
+    sample to be captured and averaged by the digitizer. In a sense, increasing the aperture lowers the sampling
+    frequency of the digitizer.
+
+    The entire process for one reading is 200 ns, which gives a maximum trigger rate of 5 MHz. The aperture can be
+    set from 0 ns to 3 ms in 200 ns increments up to 1 ms, and 100 μs increments from 1 ms to 3 ms. Greater aperture
+    length decreases sample rate.
+        Fs = 5MHz
+        Ts = 200ns
+        Aperture = 600ns --> 4 points averaged for each sample since:200ns + 3 * (200ns)
+        Apparent sample time: 200ns + 600ns
+        Apparent sample rate: 1/(800ns) = 1.25MHz
+
+    Aperture	Time	        Samples (#)	    Fs
+    --------------------------------------------------------
+    0ns	        200ns	        1	            5 MHz
+    200ns	    200ns + 200ns	2	            2.5 MHz
+    400ns	    400ns + 200ns	3 	            1.6667 MHz
+    600ns	    600ns + 200ns	4	            1.25 MHz
+    800ns	    800ns + 200ns	5	            1 MHz
+    1us	        1us + 0.2us	    6	            833.33kHz
+    --------------------------------------------------------
+
+    """
+
+    Fs_digitize = 5e6
+    Fs = Ft * N / cycles  # The desired sampling frequency
+    Navg = max(round(Fs_digitize / Fs), 1)  # The number of samples averaged per trigger
+
+    # The duration of the digitizer averaging per trigger
+    aperture = max(200e-9 * (Navg - 1), 0)
+    if aperture > 1e-3:
+        aperture = max(100e-6 * (Navg - 1), 0)
+
+    runtime = N * (aperture + 200e-9)  # The total runtime
+    Fs = Fs_digitize / Navg  # The calculated sampling frequency
+    return aperture, Fs, runtime
+
+
 class f8588A_instrument:
     """"""
 
@@ -22,13 +67,14 @@ class f8588A_instrument:
         super().__init__()
         self.measurement = []
         self.f8588A_IDN = ''
-        self.connected = False
+        self.f8588_connected = False
 
     def connect_to_f8588A(self, instr_id):
         # ESTABLISH COMMUNICATION TO INSTRUMENTS -----------------------------------------------------------------------
         self.f8588A = VisaClient.VisaClient(instr_id)  # Fluke 8588A
 
         if self.f8588A.okay:
+            self.f8588_connected = True
             self.f8588A_IDN = self.f8588A.query('*IDN?')
         else:
             print('\nUnable to connect to the Fluke 8588A. Check software configuration, ensure instrument are in'
@@ -98,20 +144,22 @@ class f8588A_instrument:
         return buffer
 
     ####################################################################################################################
-    def close(self):
-        time.sleep(1)
-        self.f8588A.close()
+    def close_f8588A(self):
+        if self.f8588_connected:
+            time.sleep(1)
+            self.f8588A.close()
+            self.f8588_connected = False
 
 
 # Run
 if __name__ == "__main__":
     output, mode = 'VOLT', 'AC'
-    instr = f8588A_instrument(0)
+    instr = f8588A_instrument()
 
-    instr.connect(instruments)
+    instr.connect_to_f8588A(instruments)
     instr.setup_meter(output, mode)
 
-    outval, freqval = instr.read_meter(mode)
+    outval, dmm_range, freqval = instr.read_meter(mode)
     print(f"\nOutput: {outval}\nFrequency: {freqval} Hz")
 
-    instr.close()
+    instr.close_f8588A()
