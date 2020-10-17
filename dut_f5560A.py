@@ -12,13 +12,14 @@ class f5560A_instrument:
         super().__init__()
         self.measurement = []
         self.f5560A_IDN = ''
-        self.connected = False
+        self.f5560_connected = False
 
     def connect_to_f5560A(self, instr_id):
         # ESTABLISH COMMUNICATION TO INSTRUMENT -----------------------------------------------------------------------
         self.f5560A = VisaClient.VisaClient(instr_id)  # Fluke 5560A
 
         if self.f5560A.okay:
+            self.f5560_connected = True
             self.f5560A_IDN = self.f5560A.query('*IDN?')
         else:
             print('\nUnable to connect to the Fluke 5560A. Check software configuration, ensure instrument are in'
@@ -41,7 +42,7 @@ class f5560A_instrument:
             time.sleep(2)
             print(f'\nout: {rms}A, {Ft}Hz')
             # self.f5560A.write('write P7P7, #hDC')  # turn COMP3 ON (distortion amp)
-            self.f5560A.write('Mod P7P1SEL, #h40, 0')  # turn idac fly cap inverter off in AC
+            self.f5560A.write('Mod P7P1SEL, #h40, 0')  # turn idac flying cap inverter off in AC
         # ("v", "V")
         else:
             self.f5560A.write(f'\nout {rms}V, {Ft}Hz')
@@ -58,17 +59,21 @@ class f5560A_instrument:
         self.f5560A.write('*WAI')
         time.sleep(1)
 
-    def close(self):
-        time.sleep(1)
-        self.f5560A.close()
+    def close_f5560A(self):
+        if self.f5560_connected:
+            time.sleep(1)
+            self.f5560A.close()
+            self.f5560_connected = False
 
 
 # Run
 if __name__ == "__main__":
-    current, Ft = 120e-3, 1000
+    mode, rms, Ft = 'A', 120e-3, 1000
 
-    instr = f5560A_instrument(0)
-    instr.connect(instruments)
+    instr = f5560A_instrument()
+    instr.connect_to_f5560A(instruments)
     instr.setup_source()
 
-    instr.run_source(current, Ft)
+    instr.run_source(mode, rms, Ft)
+    time.sleep(5)
+    instr.close_f5560A()
