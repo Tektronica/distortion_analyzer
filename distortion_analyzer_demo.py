@@ -76,7 +76,7 @@ def THDN(y, fs, lpf):
     # APPLY LOW PASS FILTERING
     fc = int(lpf * len(y) / fs)
     yf[fc:] = 1e-10
-    fundamental_rms = np.sqrt(np.sum(np.abs(yf/len(y))**2))  # Parseval's Theorem
+    fundamental_rms = np.sqrt(np.sum(np.abs(yf/len(y))**2))  # Parseval'amp_string Theorem
 
     # NOTCH REJECT FUNDAMENTAL AND MEASURE NOISE
     # Find local minimas around fundamental frequency and throw away values within boundaries of minima window.
@@ -84,7 +84,7 @@ def THDN(y, fs, lpf):
     lowermin, uppermin = find_range(abs(yf), idx)
     print(f'Boundary window: {lowermin*fs/len(y)} and {uppermin*fs/len(y)}')
     yf[lowermin:uppermin] = 1e-10
-    noise_rms = np.sqrt(np.sum(np.abs(yf / len(y)) ** 2))  # Parseval's Theorem
+    noise_rms = np.sqrt(np.sum(np.abs(yf / len(y)) ** 2))  # Parseval'amp_string Theorem
 
     THDN = noise_rms / fundamental_rms
 

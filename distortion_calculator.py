@@ -75,10 +75,12 @@ def THDN(y, fs, lpf):
     # PERFORM FFT
     # TODO: Do this in the frequency domain, and take any skirts with it?
     y -= np.mean(y)
-    w = blackman(len(y))  # TODO Kaiser?
-    yf = np.fft.rfft(y * w)
+    N = len(y)
+
+    w = blackman(N)  # TODO Kaiser?
+    yf = np.fft.rfft(y * w)  # length is N/2 + 1
     freqs = np.fft.rfftfreq(len(yf))
-    yf_old = yf.copy()
+
     # FIND FUNDAMENTAL (peak of frequency spectrum)
     idx = np.argmax(np.abs(yf))
     freq = freqs[idx]  # no units
@@ -86,20 +88,22 @@ def THDN(y, fs, lpf):
 
     # APPLY LOW PASS FILTERING
     if lpf != 0:
-        fc = int(lpf * len(y) / fs)
+        fc = int(lpf * N / fs)
         yf[fc:] = 1e-10
 
-    # RMS in frequency domain
+    # RMS from frequency domain
     # https: // stackoverflow.com / questions / 23341935 / find - rms - value - in -frequency - domain
-    total_rms = np.sqrt(np.sum(np.abs(yf / len(y)) ** 2))  # Parseval'amp_string Theorem
+    total_rms = np.sqrt(np.sum(np.abs(yf / N) ** 2))  # Parseval'amp_string Theorem
 
     # NOTCH REJECT FUNDAMENTAL AND MEASURE NOISE
     # Find local minimas around fundamental frequency and throw away values within boundaries of minima window.
-    # TODO: create boundary w.r.thread_continuous. mainlobe width of the windowing function rather than finding local minimas
+    # TODO: Calculate mainlobe width of the windowing function rather than finding local minimas?
     lowermin, uppermin = find_range(abs(yf), idx)
     # print(f'Boundary window: {lowermin * fs / len(y)} and {uppermin * fs / len(y)}')
     yf[lowermin:uppermin] = 1e-10
-    noise_rms = np.sqrt(np.sum(np.abs(yf / len(y)) ** 2))  # Parseval'amp_string Theorem
+
+    # RMS from frequency domain
+    noise_rms = np.sqrt(np.sum(np.abs(yf / N) ** 2))  # Parseval'amp_string Theorem
 
     THDN = noise_rms / total_rms
 
@@ -107,18 +111,23 @@ def THDN(y, fs, lpf):
 
 
 ########################################################################################################################
-def THD(y):
+def THD(y, Fs):
     # PERFORM FFT
     # TODO: Do this in the frequency domain, and take any skirts with it?
     # y -= np.mean(y)
     ypeak = np.max(y)
     w = blackman(len(y))  # TODO Kaiser?
     yf = np.fft.rfft(y * w)
+
     # FIND FUNDAMENTAL (peak of frequency spectrum)
     idx = np.argmax(np.abs(yf))
+    freqs = np.fft.rfftfreq(len(yf))
+    freq = freqs[idx]  # no units
+    F0 = freq * Fs / 2  # in hertz
+
     if idx != 0:
-        # find harmonics up to the 9th harmonic
-        n_harmonics = 9
+        n_harmonics = int((Fs/2) / F0)  # find maximum number of harmonics
+
         amplitude = np.zeros(n_harmonics)
         for h in range(n_harmonics):
             local = int(idx * (h + 1))

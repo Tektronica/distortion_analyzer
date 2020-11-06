@@ -5,6 +5,6 @@ DUT:
   gpib: '6'
 DMM:
   mode: SOCKET
-  address: 10.205.92.156
+  address: 10.205.92.183
   port: '3490'
   gpib: '6'

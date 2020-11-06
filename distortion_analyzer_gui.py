@@ -514,7 +514,7 @@ class TestFrame(wx.Frame):
 
         # Find %THD+N
         thdn, f0, yf = THDN(y, Fs, lpf)
-        thd = THD(y)
+        thd = THD(y, Fs)
         data = {'x': x, 'y': y, 'xf': xf, 'ywf': ywf, 'yrms': yrms, 'N': N, 'runtime': runtime, 'Fs': Fs, 'f0': f0}
 
         self.text_rms_report.SetValue(f'{round(yrms, 6)}{mode.capitalize()}')
@@ -582,7 +582,8 @@ class TestFrame(wx.Frame):
 
         # FFT ==========================================================================================================
         x = np.arange(0.0, runtime, aperture + 200e-9)
-        xf = np.linspace(0.0, Fs, N)
+        xf = np.linspace(0.0, Fs / 2, int(N / 2 + 1))
+        # xf = np.linspace(0.0, Fs, N)
         w = blackman(N)
         ywf = fft(y * w)
 
@@ -590,7 +591,6 @@ class TestFrame(wx.Frame):
         thdn, f0, yf = THDN(y, Fs, lpf)
         thd = THD(y)
         data = {'x': x, 'y': y, 'xf': xf, 'ywf': ywf, 'yrms': yrms, 'N': N, 'runtime': runtime, 'Fs': Fs, 'f0': f0}
-
 
         self.text_rms_report.SetValue(f'{round(yrms, 6)}V')
         self.text_thdn_report.SetValue(f"{round(thdn * 100, 4)}% or {round(20 * np.log10(thdn), 1)}dB")
@@ -623,28 +623,39 @@ class TestFrame(wx.Frame):
         self.figure.tight_layout()
 
     def plot(self, data):
+
+        F0 = data['f0']
+
+        # TEMPORAL -----------------------------------------------------------------------------------------------------
         x = data['x']
         y = data['y']
-        xf = data['xf']
-        ywf = data['ywf']
-        f0 = data['f0']
         runtime = data['runtime']
-        yrms = data['yrms']
-        N = data['N']
-        ylimit = np.max(np.abs(y)) * 1.25
-        increment = ylimit / 4
 
         self.temporal.set_data(x * 1e3, y)
-        # divide by number of samples to keep the scaling.
-        self.spectral.set_data(xf[0:N] / 1000, 20 * np.log10(2 * np.abs(ywf[0:N] / (yrms * N))))
-
+        x_periods = 4
+        x_max = min(x_periods / F0, runtime)
+        ylimit = np.max(np.abs(y)) * 1.25
+        increment = ylimit / 4
         self.ax1.set_yticks(np.arange(-ylimit, ylimit + increment, increment))
         self.ax1.relim()  # recompute the ax.dataLim
         self.ax1.autoscale()
-        self.ax1.set_xlim([0, 1e3 * runtime])
+        self.ax1.set_xlim([0, 1e3 * x_max])
 
-        self.ax2.set_xlim(np.min(xf), 10 ** (np.ceil(np.log10(f0)) + 1) / 1000)
+        # SPECTRAL -----------------------------------------------------------------------------------------------------
+        xf = data['xf']
+        ywf = data['ywf']
+        Fs = data['Fs']
+        N = data['N']
+        yrms = data['yrms']
+
+        # divide by number of samples to keep the scaling.
+        self.spectral.set_data(xf[0:N] / 1000, 20 * np.log10(2 * np.abs(ywf[0:N] / (yrms * N))))
+
+        xf_max = min(10 ** (np.ceil(np.log10(F0)) + 1), Fs / 2 - Fs / N)  # Does not exceed max bin
+        self.ax2.set_xlim(np.min(xf) / 1000, xf_max / 1000)
         self.ax2.set_ylim(-150, 0)
+
+        # UPDATE PLOT FEATURES -----------------------------------------------------------------------------------------
         self.figure.tight_layout()
 
         self.toolbar.update()  # Not sure why this is needed - ADS
