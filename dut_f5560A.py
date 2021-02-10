@@ -41,14 +41,15 @@ class f5560A_instrument:
             self.f5560A.write(f'\nout {rms}A, {Ft}Hz')
             time.sleep(2)
             print(f'\nout: {rms}A, {Ft}Hz')
-            # self.f5560A.write('write P7P7, #hDC')  # TODO: turn COMP3 ON (distortion amp)
-            self.f5560A.write('Mod P7P1SEL, #h40, 0')  # turn idac flying cap inverter off in AC
+            # self.f5560A.write('write P7P7, #hDC')  # TODO: this turns COMP3 ON - 22uF (distortion amp)
+            # self.f5560A.write('write P7P7, #hEC')  # TODO: this turns COMP2 ON - 22nF (distortion amp)
+            # self.f5560A.write('Mod P7P1SEL, #h40, 0')  # TODO: this turns idac fly cap inverter off in AC
         # ("v", "V")
         else:
             self.f5560A.write(f'\nout {rms}V, {Ft}Hz')
             time.sleep(2)
             print(f'\nout: {rms}V, {Ft}Hz')
-            self.f5560A.write('Mod P7P1SEL, #h40, 0')  # turn idac fly cap inverter off in AC
+            # self.f5560A.write('Mod P7P1SEL, #h40, 0')  # TODO: this turns idac fly cap inverter off in AC
         time.sleep(1)
         self.f5560A.write('oper')
         time.sleep(5)

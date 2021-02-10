@@ -132,7 +132,7 @@ class TestFrame(wx.Frame):
 
         self.btn_single = wx.Button(self.panel_3, wx.ID_ANY, "RUN")
         self.combo_box_3 = wx.ComboBox(self.panel_3, wx.ID_ANY,
-                                       choices=["Single Run", "Sweep", "Continuous Run", "JAKE"],
+                                       choices=["Single", "Sweep", "Single w/ shunt", "Sweep w/ shunt", "~Continuous"],
                                        style=wx.CB_DROPDOWN)
 
         # Menu Bar -----------------------------------------------------------------------------------------------------
@@ -342,6 +342,7 @@ class TestFrame(wx.Frame):
         selection = self.combo_box_3.GetSelection()
         if self.M.connected:
             params = self.get_values()
+            # TODO: Why did I do this?
             if selection in (1, 3):
                 self.run_selected_function(selection)
             elif not self.checkbox_1.GetValue() or (self.amplitude_good and self.frequency_good):
@@ -355,24 +356,36 @@ class TestFrame(wx.Frame):
         if not self.t.is_alive() and self.flag_complete:
             # run single
             if selection == 0:
-                self.thread_this(self.run_single)
+                print('Running single')
+                self.thread_this(self.run_single, (self.test,))
 
             # run sweep
             elif selection == 1:
+                print('Running sweep')
                 df = pd.read_csv('distortion_breakpoints.csv')
-                self.thread_this(self.run_sweep, (df,))
+                self.thread_this(self.run_sweep, (df, self.test,))
 
-            # run jake sweep
+            # run single shunt voltage implied current measurement
+            elif selection == 2:
+                print('Running single measurement measuring current from shunt voltage')
+                self.thread_this(self.run_single, (self.test_analyze_shunt_voltage,))
+
+            # run swept shunt voltage implied current measurement
             elif selection == 3:
+                print('Running sweep measuring current from shunt voltage')
                 df = pd.read_csv('distortion_breakpoints.csv')
-                self.thread_this(self.run_jake, (df,))
+                self.thread_this(self.run_sweep, (df, self.test_analyze_shunt_voltage,))
 
             # run continuous
-            else:
+            elif selection == 4:
                 self.btn_single.SetLabel('STOP')
                 self.thread_this(self.run_continuous)
+
+            else:
+                print('Nothing happened.')
+
         # stop continuous
-        elif self.t.is_alive() and selection == 3:
+        elif self.t.is_alive() and selection == 4:
             # https://stackoverflow.com/a/36499538
             self.t.do_run = False
             self.btn_single.SetLabel('RUN')
@@ -384,25 +397,24 @@ class TestFrame(wx.Frame):
         self.t.start()
 
     # ------------------------------------------------------------------------------------------------------------------
-    def run_single(self):
+    def run_single(self, func):
         print('\nrun_single!')
         self.toggle_controls()
         self.flag_complete = False
-        self.test(self.get_values(), setup=True)
+        func(self.get_values(), setup=True)
         self.M.standby()
         self.toggle_controls()
         self.flag_complete = True
 
-    def run_sweep(self, df):
+    def run_sweep(self, df, func):
         self.flag_complete = False
 
         headers = ['amplitude', 'frequency', 'yrms', 'THDN', 'THD', 'Fs', 'aperture']
         results = np.zeros(shape=(len(df.index), len(headers)))
-
         for idx, row in df.iterrows():
             self.text_amplitude.SetValue(str(row.amplitude))
             self.text_frequency.SetValue(str(row.frequency))
-            results[idx] = self.test(self.get_values(), setup=True)
+            results[idx] = func(self.get_values(), setup=True)
             self.M.standby()
 
         self.flag_complete = True
@@ -425,39 +437,23 @@ class TestFrame(wx.Frame):
         print('Ending continuous run_source process.')
         self.flag_complete = True
 
-    # TODO
-    def run_jake(self, df):
-        print('Jake mode!')
-        self.flag_complete = False
-
-        headers = ['amplitude', 'frequency', 'yrms', 'THDN', 'THD', 'Fs', 'aperture']
-        results = np.zeros(shape=(len(df.index), len(headers)))
-
-        for idx, row in df.iterrows():
-            self.text_amplitude.SetValue(str(row.amplitude))
-            self.text_frequency.SetValue(str(row.frequency))
-            results[idx] = self.test_jake(self.get_values(), setup=True)
-            self.M.standby()
-
-        self.flag_complete = True
-        # https://stackoverflow.com/a/28356566
-        # https://stackoverflow.com/a/28058264
-        results_df = pd.DataFrame(results, columns=headers)
-        results_df.to_csv(path_or_buf=_getFilepath(), sep=',', index=False)
-
     # ------------------------------------------------------------------------------------------------------------------
     def test(self, params, setup):
+        # SOURCE
         amplitude = params['amplitude']
         rms = params['rms']
-        mode = params['mode']
-        Ft = params['ft']
-        N = params['samples']
-        cycles = params['cycles']
-        filter_val = params['filter']
-
         if rms != 0:
             amplitude = amplitude / np.sqrt(2)
             print('Provided amplitude converted to RMS.')
+
+        Ft = params['ft']
+        mode = params['mode']
+        time.sleep(1)
+
+        # DIGITIZER
+        N = params['samples']
+        cycles = params['cycles']
+        filter_val = params['filter']
 
         # SIGNAL SOURCE ================================================================================================
         if mode in ('A', 'a'):
@@ -498,12 +494,13 @@ class TestFrame(wx.Frame):
             if setup:
                 self.M.setup_digitizer(mode, oper_range, filter_val, N, aperture)
             if params['source']:
-                y = self.run_with_source(mode, amplitude, Ft)
+                self.M.run_source(mode, amplitude, Ft)
+                y = self.M.retrieve_digitize()
             else:
-                y = self.run_without_source()
+                y = self.M.retrieve_digitize()
             pd.DataFrame(data=y, columns=['ydata']).to_csv('results/y_data.csv')
         else:
-            y = self.dummy()
+            y = pd.read_csv('results/y_data.csv')['ydata'].to_numpy()
 
         yrms = rms_flat(y)
 
@@ -525,9 +522,14 @@ class TestFrame(wx.Frame):
         return [amplitude, Ft, yrms, thdn, thd, Fs, aperture]
 
     # ------------------------------------------------------------------------------------------------------------------
-    def test_jake(self, params, setup):
+    def test_analyze_shunt_voltage(self, params, setup):
         # SOURCE
         amplitude = params['amplitude']
+        rms = params['rms']
+        if rms != 0:
+            amplitude = amplitude / np.sqrt(2)
+            print('Provided amplitude converted to RMS.')
+
         Ft = params['ft']
         mode = params['mode']
         self.M.run_source(mode, amplitude, Ft)
@@ -582,14 +584,13 @@ class TestFrame(wx.Frame):
 
         # FFT ==========================================================================================================
         x = np.arange(0.0, runtime, aperture + 200e-9)
-        xf = np.linspace(0.0, Fs / 2, int(N / 2 + 1))
-        # xf = np.linspace(0.0, Fs, N)
-        w = blackman(N)
-        ywf = fft(y * w)
+        # xf = np.linspace(0.0, Fs / 2, int(N / 2 + 1))
+        xf = np.linspace(0.0, Fs, N)
+        ywf = windowed_fft(y, N, 'blackman')
 
         # Find %THD+N
         thdn, f0, yf = THDN(y, Fs, lpf)
-        thd = THD(y)
+        thd = THD(y, Fs)
         data = {'x': x, 'y': y, 'xf': xf, 'ywf': ywf, 'yrms': yrms, 'N': N, 'runtime': runtime, 'Fs': Fs, 'f0': f0}
 
         self.text_rms_report.SetValue(f'{round(yrms, 6)}V')
@@ -598,17 +599,6 @@ class TestFrame(wx.Frame):
         self.plot(data)
 
         return [amplitude, Ft, yrms, thdn, thd, Fs, aperture]
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def run_with_source(self, mode, rms, Ft):
-        self.M.run_source(mode, rms, Ft)
-        return self.M.retrieve_digitize()
-
-    def run_without_source(self):
-        return self.M.retrieve_digitize()
-
-    def dummy(self):
-        return pd.read_csv('results/y_data.csv')['ydata'].to_numpy()
 
     # ------------------------------------------------------------------------------------------------------------------
     def __do_plot_layout(self):
@@ -694,10 +684,10 @@ class TestFrame(wx.Frame):
     # ------------------------------------------------------------------------------------------------------------------
     def toggle_panel(self, evt):
         if self.checkbox_1.GetValue():
-            if not self.panel_3.IsShown():
-                self.panel_3.Show()
+            if not self.panel_4.IsShown():
+                self.panel_4.Show()
         else:
-            self.panel_3.Hide()
+            self.panel_4.Hide()
 
     # ------------------------------------------------------------------------------------------------------------------
     def get_values(self):
