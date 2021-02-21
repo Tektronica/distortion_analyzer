@@ -1,24 +1,20 @@
-from dmm_f8588A import *
-from dut_f5560A import *
-from distortion_calculator import *
+from distortion_analyzer import DistortionAnalyzer as da
+
 from instruments_dialog_gui import *
 from instruments_RWConfig import *
+from grid_enhanced import MyGrid
 
 import wx
 import re
 import time
-import pandas as pd
+import numpy as np
+
 import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.backends.backend_wxagg import NavigationToolbar2WxAgg as NavigationToolbar
-import numpy as np
-from pathlib import Path
-import threading
-import datetime
-import os
 
-DUMMY = False
+import threading
 
 # https://stackoverflow.com/a/38251497
 # https://matplotlib.org/3.1.1/tutorials/introductory/customizing.html
@@ -34,49 +30,6 @@ pylab.rcParams.update(params)
 
 
 ########################################################################################################################
-def _getFilepath():
-    Path('results').mkdir(parents=True, exist_ok=True)
-    date = datetime.date.today().strftime("%Y%m%d")
-    filename = f'distortion_{date}'
-    index = 0
-
-    while os.path.isfile('results/' + filename + "_" + str(index).zfill(2) + '.csv'):
-        index += 1
-    filename = filename + "_" + str(index).zfill(2)
-    return f'results/{filename}.csv'
-
-
-########################################################################################################################
-class Instruments(f5560A_instrument, f8588A_instrument):
-    def __init__(self, parent):
-        f5560A_instrument.__init__(self)
-        f8588A_instrument.__init__(self)
-        self.parent = parent
-        self.measurement = []
-        self.connected = False
-
-    def connect(self, instruments):
-        # ESTABLISH COMMUNICATION TO INSTRUMENTS -----------------------------------------------------------------------
-        f5560A_id = instruments['DUT']
-        f8588A_id = instruments['DMM']
-        self.connect_to_f5560A(f5560A_id)
-        self.connect_to_f8588A(f8588A_id)
-
-        if self.f5560A.okay and self.f8588A.okay:
-            self.connected = True
-            idn_dict = {'DUT': self.f5560A_IDN, 'DMM': self.f8588A_IDN}
-            self.parent.set_ident(idn_dict)
-            self.setup_source()
-        else:
-            print('\nUnable to connect to all instruments.\n')
-
-    def close_instruments(self):
-        time.sleep(1)
-        self.close_f5560A()
-        self.close_f8588A()
-
-
-########################################################################################################################
 class TestFrame(wx.Frame):
     """"""
 
@@ -84,18 +37,23 @@ class TestFrame(wx.Frame):
     def __init__(self, *args, **kwds):
         kwds["style"] = kwds.get("style", 0) | wx.DEFAULT_FRAME_STYLE
         wx.Frame.__init__(self, *args, **kwds)
-        self.SetSize((1049, 605))
+        self.SetSize((1050, 637))
+        # https://stackoverflow.com/a/24704039/3382269
+        self.SetSizeHints(1050, 637, -1, -1)
 
         self.t = threading.Thread()
+        self.da = da(self)
         self.flag_complete = True  # Flag indicates any active threads (False) or thread completed (True)
         self.amplitude_good = False  # Flag indicates user input for amplitude value is good (True)
         self.frequency_good = False  # Flag indicates user input for frequency value is good (True)
 
         self.panel_1 = wx.Panel(self, wx.ID_ANY)
-        self.panel_2 = wx.Panel(self.panel_1, wx.ID_ANY)
-        self.panel_3 = wx.Panel(self.panel_2, wx.ID_ANY)  # left panel
+        self.notebook = wx.Notebook(self.panel_1, wx.ID_ANY)
+        self.notebook_analyzer = wx.Panel(self.notebook, wx.ID_ANY)
+        self.notebook_data = wx.Panel(self.notebook, wx.ID_ANY)
+        self.panel_3 = wx.Panel(self.notebook_analyzer, wx.ID_ANY)  # left panel
         self.panel_4 = wx.Panel(self.panel_3, wx.ID_ANY)  # amplitude/frequency panel
-        self.panel_5 = wx.Panel(self.panel_2, wx.ID_ANY, style=wx.SIMPLE_BORDER)  # plot panel
+        self.panel_5 = wx.Panel(self.notebook_analyzer, wx.ID_ANY, style=wx.SIMPLE_BORDER)  # plot panel
 
         # PLOT Panel ---------------------------------------------------------------------------------------------------
         self.figure = plt.figure(figsize=(1, 1))  # look into Figure((5, 4), 75)
@@ -107,7 +65,7 @@ class TestFrame(wx.Frame):
         self.ax2 = self.figure.add_subplot(212)
 
         self.temporal, = self.ax1.plot([], [], linestyle='-')
-        self.spectral, = self.ax2.plot([], [], color='red')
+        self.spectral, = self.ax2.plot([], [], color='#C02942')
 
         # LEFT TOOL PANEL ----------------------------------------------------------------------------------------------
         self.text_DUT_report = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
@@ -120,20 +78,24 @@ class TestFrame(wx.Frame):
         self.combo_box_1 = wx.ComboBox(self.panel_4, wx.ID_ANY, choices=["RMS", "Peak"],
                                        style=wx.CB_DROPDOWN | wx.CB_READONLY)
         self.text_frequency = wx.TextCtrl(self.panel_4, wx.ID_ANY, "5000")
-        self.text_samples = wx.TextCtrl(self.panel_3, wx.ID_ANY, "20000")
+        self.text_samples = wx.TextCtrl(self.panel_3, wx.ID_ANY, "40000")
         self.text_cycles = wx.TextCtrl(self.panel_3, wx.ID_ANY, "70")
         self.combo_filter = wx.ComboBox(self.panel_3, wx.ID_ANY, choices=["None", "100kHz", "3MHz"],
                                         style=wx.CB_DROPDOWN | wx.CB_READONLY)
         self.label_fs_report = wx.StaticText(self.panel_3, wx.ID_ANY, "--")
-        self.label_rms_report = wx.StaticText(self.panel_3, wx.ID_ANY, "--")
+        self.label_aperture_report = wx.StaticText(self.panel_3, wx.ID_ANY, "--")
         self.text_rms_report = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
         self.text_thdn_report = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
         self.text_thd_report = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
 
-        self.btn_single = wx.Button(self.panel_3, wx.ID_ANY, "RUN")
-        self.combo_box_3 = wx.ComboBox(self.panel_3, wx.ID_ANY,
-                                       choices=["Single", "Sweep", "Single w/ shunt", "Sweep w/ shunt", "~Continuous"],
-                                       style=wx.CB_DROPDOWN)
+        self.btn_start = wx.Button(self.panel_3, wx.ID_ANY, "RUN")
+        self.combo_mode = wx.ComboBox(self.panel_3, wx.ID_ANY,
+                                      choices=["Single", "Sweep", "Single w/ shunt", "Sweep w/ shunt", "~Continuous"],
+                                      style=wx.CB_DROPDOWN)
+
+        # Data panel for displaying raw output -------------------------------------------------------------------------
+        self.grid_1 = MyGrid(self.notebook_data)
+        self.btn_export = wx.Button(self.notebook_data, wx.ID_ANY, "Export")
 
         # Menu Bar -----------------------------------------------------------------------------------------------------
         self.frame_menubar = wx.MenuBar()
@@ -146,7 +108,7 @@ class TestFrame(wx.Frame):
         self.SetMenuBar(self.frame_menubar)
 
         # Configure Instruments ----------------------------------------------------------------------------------------
-        on_connect = lambda event: self.connect(event)
+        on_connect = lambda event: self.on_connect_instr(event)
         self.Bind(wx.EVT_BUTTON, on_connect, self.btn_connect)
 
         on_config = lambda event: self.config(event)
@@ -154,13 +116,16 @@ class TestFrame(wx.Frame):
 
         # Run Measurement (start subprocess) ---------------------------------------------------------------------------
         on_single_event = lambda event: self.on_run(event)
-        self.Bind(wx.EVT_BUTTON, on_single_event, self.btn_single)
+        self.Bind(wx.EVT_BUTTON, on_single_event, self.btn_start)
 
         on_toggle = lambda event: self.toggle_panel(event)
         self.Bind(wx.EVT_CHECKBOX, on_toggle, self.checkbox_1)
 
         on_combo_select = lambda event: self.lock_controls(event)
-        self.Bind(wx.EVT_COMBOBOX_CLOSEUP, on_combo_select, self.combo_box_3)
+        self.Bind(wx.EVT_COMBOBOX_CLOSEUP, on_combo_select, self.combo_mode)
+
+        # export grid data ---------------------------------------------------------------------------------------------
+        self.Bind(wx.EVT_BUTTON, self.grid_1.export, self.btn_export)
 
         self.Bind(wx.EVT_CLOSE, self.OnCloseWindow)
 
@@ -168,9 +133,8 @@ class TestFrame(wx.Frame):
         self.__set_properties()
         self.__do_layout()
         self.__do_plot_layout()
+        self.__do_table_header()
         self.Thaw()
-
-        self.M = Instruments(self)
 
     def __set_properties(self):
         self.SetTitle("Distortion Analyzer")
@@ -182,7 +146,10 @@ class TestFrame(wx.Frame):
         self.checkbox_1.SetValue(1)
         self.combo_box_1.SetSelection(0)
         self.combo_filter.SetSelection(1)
-        self.combo_box_3.SetSelection(0)
+        self.combo_mode.SetSelection(0)
+
+        self.grid_1.CreateGrid(100, 60)
+        self.grid_1.SetMinSize((1024, 50))
 
     def __do_layout(self):
         sizer_7 = wx.BoxSizer(wx.VERTICAL)
@@ -192,6 +159,8 @@ class TestFrame(wx.Frame):
         grid_sizer_2 = wx.GridBagSizer(0, 0)
         grid_sizer_3 = wx.GridBagSizer(0, 0)
         grid_sizer_4 = wx.GridBagSizer(0, 0)
+        grid_sizer_5 = wx.FlexGridSizer(2, 1, 0, 0)
+        grid_sizer_6 = wx.GridSizer(1, 3, 0, 0)
 
         # TITLE --------------------------------------------------------------------------------------------------------
         label_1 = wx.StaticText(self.panel_3, wx.ID_ANY, "DISTORTION ANALYZER")
@@ -270,7 +239,7 @@ class TestFrame(wx.Frame):
         grid_sizer_2.Add(label_fs, (13, 0), (1, 1), 0, 0)
         grid_sizer_2.Add(self.label_fs_report, (13, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
         grid_sizer_2.Add(label_aperture, (14, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.label_rms_report, (14, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_2.Add(self.label_aperture_report, (14, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
 
         # RESULTS ------------------------------------------------------------------------------------------------------
         static_line_8 = wx.StaticLine(self.panel_3, wx.ID_ANY)
@@ -292,31 +261,61 @@ class TestFrame(wx.Frame):
         grid_sizer_2.Add(static_line_9, (19, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
         # BUTTONS ------------------------------------------------------------------------------------------------------
-        grid_sizer_2.Add(self.btn_single, (20, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
-        grid_sizer_2.Add(self.combo_box_3, (20, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
+        grid_sizer_2.Add(self.btn_start, (20, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
+        grid_sizer_2.Add(self.combo_mode, (20, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
 
         self.panel_3.SetSizer(grid_sizer_2)
         grid_sizer_1.Add(self.panel_3, (0, 0), (1, 1), wx.EXPAND, 0)
         grid_sizer_1.Add(self.panel_5, (0, 1), (1, 1), wx.EXPAND, 0)
-        self.panel_2.SetSizer(grid_sizer_1)
+        self.notebook_analyzer.SetSizer(grid_sizer_1)
+
+        grid_sizer_6.Add(self.btn_export, 0, wx.ALL, 5)
+        grid_sizer_6.Add((0, 0), 0, 0, 0)
+        grid_sizer_6.Add((0, 0), 0, 0, 0)
+        grid_sizer_5.Add(self.grid_1, 0, wx.EXPAND, 0)
+        grid_sizer_5.Add(grid_sizer_6, 1, wx.EXPAND, 0)
+        self.notebook_data.SetSizer(grid_sizer_5)
+        grid_sizer_5.AddGrowableRow(0)
+        grid_sizer_5.AddGrowableCol(0)
+
         grid_sizer_1.AddGrowableRow(0)
         grid_sizer_1.AddGrowableCol(1)
         grid_sizer_4.AddGrowableRow(0)
         grid_sizer_4.AddGrowableCol(0)
-        sizer_8.Add(self.panel_2, 1, wx.ALL | wx.EXPAND, 10)
+        self.notebook.AddPage(self.notebook_analyzer, "Analyzer")
+        self.notebook.AddPage(self.notebook_data, "Data")
+        sizer_8.Add(self.notebook, 1, wx.ALL | wx.EXPAND, 10)
         self.panel_1.SetSizer(sizer_8)
         sizer_7.Add(self.panel_1, 1, wx.EXPAND, 0)
         self.SetSizer(sizer_7)
         self.Layout()
 
     # ------------------------------------------------------------------------------------------------------------------
-    def connect(self, evt):
+    def thread_this(self, func, arg=()):
+        self.t = threading.Thread(target=func, args=arg, daemon=True)
+        self.t.start()
+
+    def on_connect_instr(self, evt):
         print('\nResetting connection. Closing communication with any connected instruments')
         self.text_DUT_report.Clear()
         self.text_DMM_report.Clear()
-        self.M.close_instruments()
-        time.sleep(2)
-        self.thread_this(self.M.connect, (self.get_instruments(),))
+        self.thread_this(self.da.connect, (self.get_instruments(),))
+
+    # ------------------------------------------------------------------------------------------------------------------
+    def on_run(self, evt):
+        self.get_values()
+        if not self.t.is_alive() and self.flag_complete:
+            # start new thread
+            self.thread_this(self.da.start, (self.params,))
+            self.btn_start.SetLabel('STOP')
+
+        elif self.t.is_alive() and self.params['mode'] == 4:
+            # stop continuous
+            # https://stackoverflow.com/a/36499538
+            self.t.do_run = False
+            self.btn_start.SetLabel('RUN')
+        else:
+            print('thread already running.')
 
     def config(self, evt):
         dlg = InstrumentDialog(self, None, wx.ID_ANY, "")
@@ -330,7 +329,6 @@ class TestFrame(wx.Frame):
                                'gpib': config_dict['DUT']['gpib'], 'mode': config_dict['DUT']['mode']},
                        'DMM': {'address': config_dict['DMM']['address'], 'port': config_dict['DMM']['port'],
                                'gpib': config_dict['DMM']['gpib'], 'mode': config_dict['DMM']['mode']}}
-
         return instruments
 
     def set_ident(self, idn_dict):
@@ -338,323 +336,8 @@ class TestFrame(wx.Frame):
         self.text_DMM_report.SetValue(idn_dict['DMM'])  # current DMM
 
     # ------------------------------------------------------------------------------------------------------------------
-    def on_run(self, evt):
-        selection = self.combo_box_3.GetSelection()
-        if self.M.connected:
-            params = self.get_values()
-            # TODO: Why did I do this?
-            if selection in (1, 3):
-                self.run_selected_function(selection)
-            elif not self.checkbox_1.GetValue() or (self.amplitude_good and self.frequency_good):
-                self.run_selected_function(selection)
-            else:
-                self.error_dialog('\nCheck amplitude and frequency values.')
-        else:
-            self.error_dialog('\nFirst connect to instruments.')
-
-    def run_selected_function(self, selection):
-        if not self.t.is_alive() and self.flag_complete:
-            # run single
-            if selection == 0:
-                print('Running single')
-                self.thread_this(self.run_single, (self.test,))
-
-            # run sweep
-            elif selection == 1:
-                print('Running sweep')
-                df = pd.read_csv('distortion_breakpoints.csv')
-                self.thread_this(self.run_sweep, (df, self.test,))
-
-            # run single shunt voltage implied current measurement
-            elif selection == 2:
-                print('Running single measurement measuring current from shunt voltage')
-                self.thread_this(self.run_single, (self.test_analyze_shunt_voltage,))
-
-            # run swept shunt voltage implied current measurement
-            elif selection == 3:
-                print('Running sweep measuring current from shunt voltage')
-                df = pd.read_csv('distortion_breakpoints.csv')
-                self.thread_this(self.run_sweep, (df, self.test_analyze_shunt_voltage,))
-
-            # run continuous
-            elif selection == 4:
-                self.btn_single.SetLabel('STOP')
-                self.thread_this(self.run_continuous)
-
-            else:
-                print('Nothing happened.')
-
-        # stop continuous
-        elif self.t.is_alive() and selection == 4:
-            # https://stackoverflow.com/a/36499538
-            self.t.do_run = False
-            self.btn_single.SetLabel('RUN')
-        else:
-            self.error_dialog('A thread is currently running and will not be interrupted.')
-
-    def thread_this(self, func, arg=()):
-        self.t = threading.Thread(target=func, args=arg, daemon=True)
-        self.t.start()
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def run_single(self, func):
-        print('\nrun_single!')
-        self.toggle_controls()
-        self.flag_complete = False
-        func(self.get_values(), setup=True)
-        self.M.standby()
-        self.toggle_controls()
-        self.flag_complete = True
-
-    def run_sweep(self, df, func):
-        self.flag_complete = False
-
-        headers = ['amplitude', 'frequency', 'yrms', 'THDN', 'THD', 'Fs', 'aperture']
-        results = np.zeros(shape=(len(df.index), len(headers)))
-        for idx, row in df.iterrows():
-            self.text_amplitude.SetValue(str(row.amplitude))
-            self.text_frequency.SetValue(str(row.frequency))
-            results[idx] = func(self.get_values(), setup=True)
-            self.M.standby()
-
-        self.flag_complete = True
-        # https://stackoverflow.com/a/28356566
-        # https://stackoverflow.com/a/28058264
-        results_df = pd.DataFrame(results, columns=headers)
-        results_df.to_csv(path_or_buf=_getFilepath(), sep=',', index=False)
-
-    def run_continuous(self):
-        print('\nrun_continuous!')
-        self.flag_complete = False
-        t = threading.currentThread()
-        setup = True
-        while getattr(t, "do_run", True):
-            params = self.get_values()
-            self.test(params, setup)
-            setup = False
-            time.sleep(0.1)
-        self.M.standby()
-        print('Ending continuous run_source process.')
-        self.flag_complete = True
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def test(self, params, setup):
-        # SOURCE
-        amplitude = params['amplitude']
-        rms = params['rms']
-        if rms != 0:
-            amplitude = amplitude / np.sqrt(2)
-            print('Provided amplitude converted to RMS.')
-
-        Ft = params['ft']
-        mode = params['mode']
-        time.sleep(1)
-
-        # DIGITIZER
-        N = params['samples']
-        cycles = params['cycles']
-        filter_val = params['filter']
-
-        # SIGNAL SOURCE ================================================================================================
-        if mode in ('A', 'a'):
-            if amplitude <= 1.5:
-                oper_range = 10 ** round(np.log10(amplitude))
-            elif 1.5 <= amplitude <= 10:
-                oper_range = 10
-            else:
-                oper_range = 30
-        else:
-            if amplitude <= 0.12:
-                oper_range = 0.1
-            elif amplitude <= 1.2:
-                oper_range = 1
-            elif amplitude <= 12:
-                oper_range = 10
-            elif amplitude <= 120:
-                oper_range = 100
-            else:
-                oper_range = 1000
-
-        # DIGITIZED SIGNAL =============================================================================================
-        if filter_val == '100kHz':
-            lpf = 100e3  # low pass filter cutoff frequency
-        elif filter_val == '3MHz':
-            lpf = 3e6  # low pass filter cutoff frequency
-        else:
-            lpf = 0
-
-        aperture, Fs, runtime = get_aperture(Ft, N, cycles)
-        self.label_fs_report.SetLabel(f'{round(Fs / 1000, 2)}kHz')
-        self.label_rms_report.SetLabel(f'{round(aperture * 1e6, 4)}us')
-
-        # START DATA COLLECTION ----------------------------------------------------------------------------------------
-        # TODO
-        # This is for internal debugging only. Not user facing.
-        if not DUMMY:
-            if setup:
-                self.M.setup_digitizer(mode, oper_range, filter_val, N, aperture)
-            if params['source']:
-                self.M.run_source(mode, amplitude, Ft)
-                y = self.M.retrieve_digitize()
-            else:
-                y = self.M.retrieve_digitize()
-            pd.DataFrame(data=y, columns=['ydata']).to_csv('results/y_data.csv')
-        else:
-            y = pd.read_csv('results/y_data.csv')['ydata'].to_numpy()
-
-        yrms = rms_flat(y)
-
-        # FFT ==========================================================================================================
-        x = np.arange(0.0, runtime, aperture + 200e-9)
-        xf = np.linspace(0.0, Fs, N)
-        ywf = windowed_fft(y, N, 'blackman')
-
-        # Find %THD+N
-        thdn, f0, yf = THDN(y, Fs, lpf)
-        thd = THD(y, Fs)
-        data = {'x': x, 'y': y, 'xf': xf, 'ywf': ywf, 'yrms': yrms, 'N': N, 'runtime': runtime, 'Fs': Fs, 'f0': f0}
-
-        self.text_rms_report.SetValue(f'{round(yrms, 6)}{mode.capitalize()}')
-        self.text_thdn_report.SetValue(f"{round(thdn * 100, 4)}% or {round(20 * np.log10(thdn), 1)}dB")
-        self.text_thd_report.SetValue(f"{round(thd * 100, 4)}% or {round(20 * np.log10(thd), 1)}dB")
-        self.plot(data)
-
-        return [amplitude, Ft, yrms, thdn, thd, Fs, aperture]
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def test_analyze_shunt_voltage(self, params, setup):
-        # SOURCE
-        amplitude = params['amplitude']
-        rms = params['rms']
-        if rms != 0:
-            amplitude = amplitude / np.sqrt(2)
-            print('Provided amplitude converted to RMS.')
-
-        Ft = params['ft']
-        mode = params['mode']
-        self.M.run_source(mode, amplitude, Ft)
-        time.sleep(1)
-
-        # METER
-        self.M.setup_meter('VOLT', 'AC')
-        meter_outval, meter_range, meter_ft = self.M.read_meter('VOLT', 'AC')
-        meter_mode = 'V'
-
-        # DIGITIZER
-        N = params['samples']
-        cycles = params['cycles']
-        filter_val = params['filter']
-
-        # SIGNAL SOURCE ================================================================================================
-        # CURRENT
-        if meter_mode in ('A', 'a'):
-            if meter_outval <= 1.5:
-                meter_range = 10 ** round(np.log10(meter_outval))
-            elif 1.5 <= meter_outval <= 10:
-                meter_range = 10
-            else:
-                meter_range = 30
-        # VOLTAGE
-        else:
-            if meter_range <= 0.1:
-                meter_range = 0.1
-            else:
-                pass
-
-        # DIGITIZED SIGNAL =============================================================================================
-        if filter_val == '100kHz':
-            lpf = 100e3  # low pass filter cutoff frequency
-        elif filter_val == '3MHz':
-            lpf = 3e6  # low pass filter cutoff frequency
-        else:
-            lpf = 0
-
-        aperture, Fs, runtime = get_aperture(Ft, N, cycles)
-        self.label_fs_report.SetLabel(f'{round(Fs / 1000, 2)}kHz')
-        self.label_rms_report.SetLabel(f'{round(aperture * 1e6, 4)}us')
-
-        # START DATA COLLECTION ----------------------------------------------------------------------------------------
-        if setup:
-            self.M.setup_digitizer(meter_mode, meter_range, filter_val, N, aperture)
-        y = self.M.retrieve_digitize()
-
-        pd.DataFrame(data=y, columns=['ydata']).to_csv('results/y_data.csv')
-
-        yrms = rms_flat(y)
-
-        # FFT ==========================================================================================================
-        x = np.arange(0.0, runtime, aperture + 200e-9)
-        # xf = np.linspace(0.0, Fs / 2, int(N / 2 + 1))
-        xf = np.linspace(0.0, Fs, N)
-        ywf = windowed_fft(y, N, 'blackman')
-
-        # Find %THD+N
-        thdn, f0, yf = THDN(y, Fs, lpf)
-        thd = THD(y, Fs)
-        data = {'x': x, 'y': y, 'xf': xf, 'ywf': ywf, 'yrms': yrms, 'N': N, 'runtime': runtime, 'Fs': Fs, 'f0': f0}
-
-        self.text_rms_report.SetValue(f'{round(yrms, 6)}V')
-        self.text_thdn_report.SetValue(f"{round(thdn * 100, 4)}% or {round(20 * np.log10(thdn), 1)}dB")
-        self.text_thd_report.SetValue(f"{round(thd * 100, 4)}% or {round(20 * np.log10(thd), 1)}dB")
-        self.plot(data)
-
-        return [amplitude, Ft, yrms, thdn, thd, Fs, aperture]
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def __do_plot_layout(self):
-        self.ax1.set_title('SAMPLED TIMED SERIES DATA')
-        self.ax1.set_xlabel('TIME (ms)')
-        self.ax1.set_ylabel('AMPLITUDE')
-        self.ax2.set_title('DIGITIZED WAVEFORM SPECTRAL RESPONSE')
-        self.ax2.set_xlabel('FREQUENCY (kHz)')
-        self.ax2.set_ylabel('MAGNITUDE (dB)')
-        self.ax2.grid()
-        self.figure.align_ylabels([self.ax1, self.ax2])
-        self.figure.tight_layout()
-
-    def plot(self, data):
-
-        F0 = data['f0']
-
-        # TEMPORAL -----------------------------------------------------------------------------------------------------
-        x = data['x']
-        y = data['y']
-        runtime = data['runtime']
-
-        self.temporal.set_data(x * 1e3, y)
-        x_periods = 4
-        x_max = min(x_periods / F0, runtime)
-        ylimit = np.max(np.abs(y)) * 1.25
-        increment = ylimit / 4
-        self.ax1.set_yticks(np.arange(-ylimit, ylimit + increment, increment))
-        self.ax1.relim()  # recompute the ax.dataLim
-        self.ax1.autoscale()
-        self.ax1.set_xlim([0, 1e3 * x_max])
-
-        # SPECTRAL -----------------------------------------------------------------------------------------------------
-        xf = data['xf']
-        ywf = data['ywf']
-        Fs = data['Fs']
-        N = data['N']
-        yrms = data['yrms']
-
-        # divide by number of samples to keep the scaling.
-        self.spectral.set_data(xf[0:N] / 1000, 20 * np.log10(2 * np.abs(ywf[0:N] / (yrms * N))))
-
-        xf_max = min(10 ** (np.ceil(np.log10(F0)) + 1), Fs / 2 - Fs / N)  # Does not exceed max bin
-        self.ax2.set_xlim(np.min(xf) / 1000, xf_max / 1000)
-        self.ax2.set_ylim(-150, 0)
-
-        # UPDATE PLOT FEATURES -----------------------------------------------------------------------------------------
-        self.figure.tight_layout()
-
-        self.toolbar.update()  # Not sure why this is needed - ADS
-        self.canvas.draw()
-        self.canvas.flush_events()
-
-    # ------------------------------------------------------------------------------------------------------------------
     def lock_controls(self, evt):
-        choice = self.combo_box_3.GetSelection()
+        choice = self.combo_mode.GetSelection()
         if choice in (1, 3):
             if self.checkbox_1.GetValue() == 0:
                 self.checkbox_1.SetValue(1)
@@ -691,13 +374,27 @@ class TestFrame(wx.Frame):
 
     # ------------------------------------------------------------------------------------------------------------------
     def get_values(self):
+        mode = self.combo_mode.GetSelection()
+        source = self.checkbox_1.GetValue()
+        samples = int(self.text_samples.GetValue())
+        rms = self.combo_box_1.GetSelection()
+        cycles = float(self.text_cycles.GetValue())
+        filter = self.combo_filter.GetStringSelection()
+
         amp_string = self.text_amplitude.GetValue()
         freq_string = self.text_frequency.GetValue()
         amplitude, units, ft = self.get_string_value(amp_string, freq_string)
 
-        return {'source': self.checkbox_1.GetValue(), 'amplitude': amplitude, 'mode': units.capitalize(),
-                'rms': self.combo_box_1.GetSelection(), 'ft': ft, 'samples': int(self.text_samples.GetValue()),
-                'cycles': float(self.text_cycles.GetValue()), 'filter': self.combo_filter.GetStringSelection()}
+        self.params = {'mode': mode,
+                       'source': source,
+                       'amplitude': amplitude,
+                       'units': units.capitalize(),
+                       'rms': rms,
+                       'ft': ft,
+                       'samples': samples,
+                       'cycles': cycles,
+                       'filter': filter
+                       }
 
     def get_string_value(self, amp_string, freq_string):
         # https://stackoverflow.com/a/35610194
@@ -737,7 +434,8 @@ class TestFrame(wx.Frame):
         try:
             frequency = float(freq_string)
         except ValueError:
-            self.error_dialog(f"The value {self.text_frequency.GetValue()} is not a valid frequency!")
+            frequency = self.text_frequency.GetValue()
+            self.error_dialog(f"The value {frequency} is not a valid frequency!")
             self.frequency_good = False
         else:
             self.frequency_good = True
@@ -750,9 +448,83 @@ class TestFrame(wx.Frame):
         dial.ShowModal()
 
     def OnCloseWindow(self, evt):
-        if hasattr(self.M, 'DUT') and hasattr(self.M, 'DMM'):
-            self.M.close_instruments()
+        self.da.close_instruments()
         self.Destroy()
+
+    def __do_table_header(self):
+        header = ['Amplitude', 'Frequency', 'RMS', 'THDN', 'THD', 'Fs', 'Aperture']
+        self.grid_1.append_rows(header)
+
+    def results_update(self, results):
+        amplitude = results['Amplitude']
+        frequency = results['Frequency']
+
+        fs = results['Fs']
+        aperture = results['Aperture']
+        rms = results['RMS']
+        units = results['units']
+        thdn = results['THDN']
+        thd = results['THD']
+
+        self.label_fs_report.SetLabelText(str(fs))
+        self.label_aperture_report.SetLabelText(str(aperture))
+        self.text_rms_report.SetValue(f"{rms}{units}")
+        self.text_thdn_report.SetValue(f"{thdn}% or {round(np.log10(thdn), 1)}dB")
+        self.text_thd_report.SetValue(f"{thd}% or {round(np.log10(thd), 1)}dB")
+
+        # self.grid_1.append_rows({k: results[k] for k in set(list(results.keys())) - {'units'}})
+        self.grid_1.append_rows([amplitude, frequency, rms, thdn, thd, fs, aperture])
+
+    # ------------------------------------------------------------------------------------------------------------------
+    def __do_plot_layout(self):
+        self.ax1.set_title('SAMPLED TIMED SERIES DATA')
+        self.ax1.set_xlabel('TIME (ms)')
+        self.ax1.set_ylabel('AMPLITUDE')
+        self.ax2.set_title('DIGITIZED WAVEFORM SPECTRAL RESPONSE')
+        self.ax2.set_xlabel('FREQUENCY (kHz)')
+        self.ax2.set_ylabel('MAGNITUDE (dB)')
+        self.ax2.grid()
+        self.figure.align_ylabels([self.ax1, self.ax2])
+        self.figure.tight_layout()
+
+    def plot(self, params):
+        # TEMPORAL -----------------------------------------------------------------------------------------------------
+        xt = params['xt']
+        yt = params['yt']
+
+        self.temporal.set_data(xt, yt)
+
+        xt_start = params['xt_start']
+        xt_end = params['xt_end']
+        yt_start = params['yt_start']
+        yt_end = params['yt_end']
+        yt_tick = params['yt_tick']
+
+        self.ax1.set_yticks(np.arange(yt_start, yt_end, yt_tick))
+        self.ax1.relim()  # recompute the ax.dataLim
+        self.ax1.autoscale()
+        self.ax1.set_xlim([xt_start, xt_end])
+
+        # SPECTRAL -----------------------------------------------------------------------------------------------------
+        xf = params['xf']
+        yf = params['yf']
+
+        self.spectral.set_data(xf, yf)
+
+        xf_start = params['xf_start']
+        xf_end = params['xf_end']
+        yf_start = params['yf_start']
+        yf_end = params['yf_end']
+
+        self.ax2.set_xlim(xf_start, xf_end)
+        self.ax2.set_ylim(yf_start, yf_end)
+
+        # UPDATE PLOT FEATURES -----------------------------------------------------------------------------------------
+        self.figure.tight_layout()
+
+        self.toolbar.update()  # Not sure why this is needed - ADS
+        self.canvas.draw()
+        self.canvas.flush_events()
 
 
 ########################################################################################################################
