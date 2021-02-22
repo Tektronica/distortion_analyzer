@@ -469,8 +469,8 @@ class TestFrame(wx.Frame):
         self.label_fs_report.SetLabelText(str(fs))
         self.label_aperture_report.SetLabelText(str(aperture))
         self.text_rms_report.SetValue(f"{rms}{units}")
-        self.text_thdn_report.SetValue(f"{thdn}% or {round(np.log10(thdn), 1)}dB")
-        self.text_thd_report.SetValue(f"{thd}% or {round(np.log10(thd), 1)}dB")
+        self.text_thdn_report.SetValue(f"{thdn*100}% or {round(np.log10(thdn), 1)}dB")
+        self.text_thd_report.SetValue(f"{thd*100}% or {round(np.log10(thd), 1)}dB")
 
         # self.grid_1.append_rows({k: results[k] for k in set(list(results.keys())) - {'units'}})
         self.grid_1.append_rows([amplitude, frequency, rms, thdn, thd, fs, aperture])
