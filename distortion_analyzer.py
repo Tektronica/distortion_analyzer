@@ -36,19 +36,22 @@ class Instruments(f5560A_instrument, f8588A_instrument):
         self.connected = False
 
     def connect(self, instruments):
-        # ESTABLISH COMMUNICATION TO INSTRUMENTS -----------------------------------------------------------------------
-        f5560A_id = instruments['DUT']
-        f8588A_id = instruments['DMM']
-        self.connect_to_f5560A(f5560A_id)
-        self.connect_to_f8588A(f8588A_id)
+        try:
+            # ESTABLISH COMMUNICATION TO INSTRUMENTS -------------------------------------------------------------------
+            f5560A_id = instruments['DUT']
+            f8588A_id = instruments['DMM']
+            self.connect_to_f5560A(f5560A_id)
+            self.connect_to_f8588A(f8588A_id)
 
-        if self.f5560A.okay and self.f8588A.okay:
-            self.connected = True
-            idn_dict = {'DUT': self.f5560A_IDN, 'DMM': self.f8588A_IDN}
-            self.parent.set_ident(idn_dict)
-            self.setup_source()
-        else:
-            print('\nUnable to connect to all instruments.\n')
+            if self.f5560A.okay and self.f8588A.okay:
+                self.connected = True
+                idn_dict = {'DUT': self.f5560A_IDN, 'DMM': self.f8588A_IDN}
+                self.parent.parent.set_ident(idn_dict)
+                self.setup_source()
+            else:
+                print('\nUnable to connect to all instruments.\n')
+        except Exception:
+            print('Could not connect. Timeout error occured.')
 
     def close_instruments(self):
         time.sleep(1)
@@ -68,7 +71,9 @@ class DistortionAnalyzer:
                        'cycles': 0.0, 'filter': ''}
         self.data = {'xt': [0], 'yt': [0],
                      'xf': [0], 'yf': [0]}
-        self.results = {'Amplitude': [], 'Frequency': [], 'RMS': [], 'THDN': [], 'THD': [], 'Fs': [], 'Aperture': []}
+        self.results = {'Amplitude': [], 'Frequency': [], 'RMS': [],
+                        'THDN': [], 'THD': [], 'RMS NOISE': [],
+                        'Fs': [], 'Aperture': []}
 
         self.frame = parent
         self.M = Instruments(self)
@@ -144,7 +149,7 @@ class DistortionAnalyzer:
     def run_sweep(self, df, func):
         self.flag_complete = False
 
-        headers = ['amplitude', 'frequency', 'rms', 'THDN', 'THD', 'Fs', 'aperture']
+        headers = ['amplitude', 'frequency', 'rms', 'THDN', 'THD', 'RMS NOISE', 'Fs', 'aperture']
         results = np.zeros(shape=(len(df.index), len(headers)))
         for idx, row in df.iterrows():
             self.frame.text_amplitude.SetValue(str(row.amplitude))
@@ -214,14 +219,22 @@ class DistortionAnalyzer:
                 oper_range = 1000
 
         # DIGITIZED SIGNAL =============================================================================================
-        if filter_val == '100kHz':
-            lpf = 100e3  # low pass filter cutoff frequency
-        elif filter_val == '3MHz':
-            lpf = 3e6  # low pass filter cutoff frequency
+        if Ft == 0:
+            N = 20000
+            cycles = 10
+            lpf = 10e3
+            hpf = 1e4  # low pass filter cutoff frequency
+            aperture, Fs, runtime = get_aperture(10, N, cycles)
         else:
-            lpf = 0
+            if filter_val == '100kHz':
+                lpf = 100e3  # low pass filter cutoff frequency
+            elif filter_val == '3MHz':
+                lpf = 3e6  # low pass filter cutoff frequency
+            else:
+                lpf = 0
 
-        aperture, Fs, runtime = get_aperture(Ft, N, cycles)
+            hpf = 0
+            aperture, Fs, runtime = get_aperture(Ft, N, cycles)
 
         # START DATA COLLECTION ----------------------------------------------------------------------------------------
         # TODO
@@ -238,7 +251,7 @@ class DistortionAnalyzer:
         else:
             y = pd.read_csv('results/y_data.csv')['ydata'].to_numpy()
 
-        return self.fft(y, runtime, Fs, N, aperture, lpf, amplitude, Ft)
+        return self.fft(y, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft)
 
     # ------------------------------------------------------------------------------------------------------------------
     def test_analyze_shunt_voltage(self, setup):
@@ -282,14 +295,22 @@ class DistortionAnalyzer:
                 pass
 
         # DIGITIZED SIGNAL =============================================================================================
-        if filter_val == '100kHz':
-            lpf = 100e3  # low pass filter cutoff frequency
-        elif filter_val == '3MHz':
-            lpf = 3e6  # low pass filter cutoff frequency
+        if Ft == 0:
+            N = 20000
+            cycles = 10
+            lpf = 10e3
+            hpf = 1e4  # low pass filter cutoff frequency
+            aperture, Fs, runtime = get_aperture(10, N, cycles)
         else:
-            lpf = 0
+            if filter_val == '100kHz':
+                lpf = 100e3  # low pass filter cutoff frequency
+            elif filter_val == '3MHz':
+                lpf = 3e6  # low pass filter cutoff frequency
+            else:
+                lpf = 0
 
-        aperture, Fs, runtime = get_aperture(Ft, N, cycles)
+            hpf = 0
+            aperture, Fs, runtime = get_aperture(Ft, N, cycles)
 
         # START DATA COLLECTION ----------------------------------------------------------------------------------------
         if setup:
@@ -298,9 +319,9 @@ class DistortionAnalyzer:
 
         pd.DataFrame(data=y, columns=['ydata']).to_csv('results/y_data.csv')
 
-        return self.fft(y, runtime, Fs, N, aperture, lpf, amplitude, Ft)
+        return self.fft(y, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft)
 
-    def fft(self, y, runtime, Fs, N, aperture, lpf, amplitude, Ft):
+    def fft(self, y, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft):
         yrms = rms_flat(y)
 
         # FFT ==========================================================================================================
@@ -310,12 +331,12 @@ class DistortionAnalyzer:
         ywf = windowed_fft(y, N, 'blackman')
 
         # Find %THD+N
-        thdn, f0, yf = THDN(y, Fs, lpf)
+        thdn, f0, yf, noise_rms = THDN(y, Fs, hpf, lpf)
         thd = THD(y, Fs)
         data = {'x': x, 'y': y, 'xf': xf, 'ywf': ywf, 'RMS': yrms, 'N': N, 'runtime': runtime, 'Fs': Fs, 'f0': f0}
 
         results_row = {'Amplitude': amplitude, 'Frequency': Ft, 'RMS': round(yrms, 4),
-                       'THDN': round(thdn, 4), 'THD': round(thd, 4),
+                       'THDN': round(thdn, 5), 'THD': round(thd, 5), 'RMS NOISE': noise_rms,
                        'Fs': round(Fs, 2), 'Aperture': f'{round(aperture * 1e6, 4)}us'}
 
         for key, value in results_row.items():
@@ -325,7 +346,7 @@ class DistortionAnalyzer:
         self.frame.results_update(results_row)
         self.plot(data)
 
-        return [amplitude, Ft, yrms, thdn, thd, Fs, aperture]
+        return [amplitude, Ft, yrms, thdn, thd, noise_rms, Fs, aperture]
 
     def plot(self, data):
         F0 = data['f0']

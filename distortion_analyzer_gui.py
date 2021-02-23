@@ -452,7 +452,7 @@ class TestFrame(wx.Frame):
         self.Destroy()
 
     def __do_table_header(self):
-        header = ['Amplitude', 'Frequency', 'RMS', 'THDN', 'THD', 'Fs', 'Aperture']
+        header = ['Amplitude', 'Frequency', 'RMS', 'THDN', 'THD', 'RMS NOISE', 'Fs', 'Aperture']
         self.grid_1.append_rows(header)
 
     def results_update(self, results):
@@ -465,15 +465,16 @@ class TestFrame(wx.Frame):
         units = results['units']
         thdn = results['THDN']
         thd = results['THD']
+        rms_noise = results['RMS NOISE']
 
         self.label_fs_report.SetLabelText(str(fs))
         self.label_aperture_report.SetLabelText(str(aperture))
         self.text_rms_report.SetValue(f"{rms}{units}")
-        self.text_thdn_report.SetValue(f"{thdn*100}% or {round(np.log10(thdn), 1)}dB")
-        self.text_thd_report.SetValue(f"{thd*100}% or {round(np.log10(thd), 1)}dB")
+        self.text_thdn_report.SetValue(f"{round(thdn*100, 3)}% or {round(np.log10(thdn), 1)}dB")
+        self.text_thd_report.SetValue(f"{round(thd*100, 3)}% or {round(np.log10(thd), 1)}dB")
 
         # self.grid_1.append_rows({k: results[k] for k in set(list(results.keys())) - {'units'}})
-        self.grid_1.append_rows([amplitude, frequency, rms, thdn, thd, fs, aperture])
+        self.grid_1.append_rows([amplitude, frequency, rms, thdn, thd, rms_noise, fs, aperture])
 
     # ------------------------------------------------------------------------------------------------------------------
     def __do_plot_layout(self):

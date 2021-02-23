@@ -62,7 +62,7 @@ def windowed_fft(y, N, windfunc='blackman'):
 
 
 ########################################################################################################################
-def THDN(y, fs, lpf):
+def THDN(y, fs, hpf=0, lpf=100e3):
     """
     Performs a windowed fft of a time-series signal y and calculate THDN.
         + Estimates fundamental frequency by finding peak value in fft
@@ -86,6 +86,11 @@ def THDN(y, fs, lpf):
     freq = freqs[idx]  # no units
     f0 = freq * fs / 2  # in hertz
 
+    # APPLY HIGH PASS FILTERING
+    if not (hpf == 0) and (hpf < lpf):
+        fc = int(hpf * N / fs)
+        yf[0:fc] = 1e-10
+
     # APPLY LOW PASS FILTERING
     if lpf != 0:
         fc = int(lpf * N / fs)
@@ -107,7 +112,7 @@ def THDN(y, fs, lpf):
 
     THDN = noise_rms / total_rms
 
-    return THDN, f0, yf
+    return THDN, f0, yf, round(noise_rms, 4)
 
 
 ########################################################################################################################
