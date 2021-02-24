@@ -5,7 +5,7 @@ import time
 
 class VisaClient:
     def __init__(self, id):
-        self.okay = True
+        self.healthy = True
 
         try:
             self.rm = visa.ResourceManager()
@@ -20,14 +20,14 @@ class VisaClient:
                    "    See NI-VISA Installation:\n"
                    "        > https://pyvisa.readthedocs.io/en/1.8/getting_nivisa.html#getting-nivisa\n")
             print(msg)
-            self.okay = False
+            self.healthy = False
 
-        if self.okay:
+        if self.healthy:
             self.connect()
 
     def connect(self):
         for attempt in range(5):
-            self.okay = True
+            self.healthy = True
             try:
                 # TODO - verify this works as intended... Otherwise leave INSTR lines commented
                 # if mode is SOCKET:
@@ -70,11 +70,11 @@ class VisaClient:
             except visa.VisaIOError:
                 # https://github.com/pyvisa/pyvisa-py/issues/146#issuecomment-453695057
                 print(f'[attempt {attempt + 1}/5] - retrying connection to instrument')
-                self.okay = False
+                self.healthy = False
             else:
                 break
 
-        if not self.okay:
+        if not self.healthy:
             self.InstrumentConnectionFailed(self.instr_info)
         else:
             self.INSTR.timeout = self.timeout
@@ -90,19 +90,24 @@ class VisaClient:
         return self.instr_info
 
     def IDN(self):
-        response = None
         try:
             if self.mode == 'NIGHTHAWK':
                 response = re.sub(r'[\r\n|\r\n|\n]+', '', self.INSTR.query('*IDN?').split("\r")[0].lstrip(' '))
             else:
                 response = re.sub(r'[\r\n|\r\n|\n]+', '', self.INSTR.query('*IDN?').lstrip(' '))
+                return response
         except visa.VisaIOError:
-            print('Failed to connect to address.')
-            self.okay = False
-        return response
+            self.healthy = False
+            print('*IDN? was not returned. Failed to connect to address.')
+            raise
 
     def write(self, cmd):
-        self.INSTR.write(f'{cmd}')
+        try:
+            self.INSTR.write(f'{cmd}')
+            self.IDN()
+        except visa.VisaIOError as e:
+            print('Could not write to device.')
+            raise ValueError(e)
 
     def read(self):
         response = None
@@ -113,12 +118,14 @@ class VisaClient:
         return response
 
     def query(self, cmd):
-        response = None
-        if self.mode == 'NIGHTHAWK':
-            response = re.sub(r'[\r\n|\r\n|\n]+', '', self.INSTR.query(f'{cmd}').split("\n")[0].lstrip(' '))
-        else:
-            response = re.sub(r'[\r\n|\r\n|\n]+', '', self.INSTR.query(f'{cmd}').lstrip(' '))
-        return response
+        try:
+            if self.mode == 'NIGHTHAWK':
+                response = re.sub(r'[\r\n|\r\n|\n]+', '', self.INSTR.query(f'{cmd}').split("\n")[0].lstrip(' '))
+            else:
+                response = re.sub(r'[\r\n|\r\n|\n]+', '', self.INSTR.query(f'{cmd}').lstrip(' '))
+            return response
+        except visa.VisaIOError as e:
+            raise ValueError(e)
 
     def close(self):
         try:

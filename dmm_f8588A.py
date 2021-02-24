@@ -73,9 +73,12 @@ class f8588A_instrument:
         # ESTABLISH COMMUNICATION TO INSTRUMENTS -----------------------------------------------------------------------
         self.f8588A = VisaClient.VisaClient(instr_id)  # Fluke 8588A
 
-        if self.f8588A.okay:
+        if self.f8588A.healthy:
             self.f8588_connected = True
-            self.f8588A_IDN = self.f8588A.query('*IDN?')
+            try:
+                self.f8588A_IDN = self.f8588A.query('*IDN?')
+            except ValueError:
+                raise
         else:
             print('\nUnable to connect to the Fluke 8588A. Check software configuration, ensure instrument are in'
                   'appropriate mode, and consider power cycling the suspected instrument\n')

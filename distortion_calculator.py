@@ -89,7 +89,7 @@ def THDN(y, fs, hpf=0, lpf=100e3):
     # APPLY HIGH PASS FILTERING
     if not (hpf == 0) and (hpf < lpf):
         fc = int(hpf * N / fs)
-        yf[0:fc] = 1e-10
+        yf[:fc] = 1e-10
 
     # APPLY LOW PASS FILTERING
     if lpf != 0:
@@ -112,7 +112,7 @@ def THDN(y, fs, hpf=0, lpf=100e3):
 
     THDN = noise_rms / total_rms
 
-    return THDN, f0, yf, round(noise_rms, 4)
+    return THDN, f0, yf, round(1e6*noise_rms, 2)
 
 
 ########################################################################################################################

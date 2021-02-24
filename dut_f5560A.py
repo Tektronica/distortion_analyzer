@@ -18,7 +18,7 @@ class f5560A_instrument:
         # ESTABLISH COMMUNICATION TO INSTRUMENT -----------------------------------------------------------------------
         self.f5560A = VisaClient.VisaClient(instr_id)  # Fluke 5560A
 
-        if self.f5560A.okay:
+        if self.f5560A.healthy:
             self.f5560_connected = True
             self.f5560A_IDN = self.f5560A.query('*IDN?')
         else:
@@ -37,22 +37,26 @@ class f5560A_instrument:
         print(f"\nmonitor: {self.f5560A.query('MONITOR?')}")
 
     def run_source(self, mode, rms, Ft):
-        if mode in ("a", "A"):
-            self.f5560A.write(f'\nout {rms}A, {Ft}Hz')
-            time.sleep(2)
-            print(f'\nout: {rms}A, {Ft}Hz')
-            # self.f5560A.write('write P7P7, #hDC')  # TODO: this turns COMP3 ON - 22uF (distortion amp)
-            # self.f5560A.write('write P7P7, #hEC')  # TODO: this turns COMP2 ON - 22nF (distortion amp)
-            # self.f5560A.write('Mod P7P1SEL, #h40, 0')  # TODO: this turns idac fly cap inverter off in AC
-        # ("v", "V")
-        else:
-            self.f5560A.write(f'\nout {rms}V, {Ft}Hz')
-            time.sleep(2)
-            print(f'\nout: {rms}V, {Ft}Hz')
-            # self.f5560A.write('Mod P7P1SEL, #h40, 0')  # TODO: this turns idac fly cap inverter off in AC
-        time.sleep(1)
-        self.f5560A.write('oper')
-        time.sleep(5)
+        try:
+            if mode in ("a", "A"):
+                self.f5560A.write(f'\nout {rms}A, {Ft}Hz')
+                time.sleep(2)
+                print(f'\nout: {rms}A, {Ft}Hz')
+                # self.f5560A.write('write P7P7, #hDC')  # TODO: this turns COMP3 ON - 22uF (distortion amp)
+                # self.f5560A.write('write P7P7, #hEC')  # TODO: this turns COMP2 ON - 22nF (distortion amp)
+                # self.f5560A.write('Mod P7P1SEL, #h40, 0')  # TODO: this turns idac fly cap inverter off in AC
+            # ("v", "V")
+            else:
+                self.f5560A.write(f'\nout {rms}V, {Ft}Hz')
+                time.sleep(2)
+                print(f'\nout: {rms}V, {Ft}Hz')
+                # self.f5560A.write('Mod P7P1SEL, #h40, 0')  # TODO: this turns idac fly cap inverter off in AC
+            time.sleep(1)
+
+            self.f5560A.write('oper')
+            time.sleep(5)
+        except ValueError:
+            raise
 
     def standby(self):
         time.sleep(1)

@@ -37,16 +37,21 @@ class TestFrame(wx.Frame):
     def __init__(self, *args, **kwds):
         kwds["style"] = kwds.get("style", 0) | wx.DEFAULT_FRAME_STYLE
         wx.Frame.__init__(self, *args, **kwds)
-        self.SetSize((1050, 637))
+        self.SetSize((1055, 640))
         # https://stackoverflow.com/a/24704039/3382269
-        self.SetSizeHints(1050, 637, -1, -1)
-
+        self.SetSizeHints(1055, 640, -1, -1)
+        self.flag_complete = True  # Flag indicates any active threads (False) or thread completed (True)
         self.t = threading.Thread()
         self.da = da(self)
-        self.flag_complete = True  # Flag indicates any active threads (False) or thread completed (True)
-        self.amplitude_good = False  # Flag indicates user input for amplitude value is good (True)
-        self.frequency_good = False  # Flag indicates user input for frequency value is good (True)
-
+        self.user_input = {'mode': 0,
+                           'source': 0,
+                           'amplitude': '',
+                           'rms': 0,
+                           'frequency': '',
+                           'samples': 0,
+                           'cycles': 0,
+                           'filter': 0
+                           }
         self.panel_1 = wx.Panel(self, wx.ID_ANY)
         self.notebook = wx.Notebook(self.panel_1, wx.ID_ANY)
         self.notebook_analyzer = wx.Panel(self.notebook, wx.ID_ANY)
@@ -74,10 +79,10 @@ class TestFrame(wx.Frame):
         self.btn_config = wx.Button(self.panel_3, wx.ID_ANY, "Config")
 
         self.checkbox_1 = wx.CheckBox(self.panel_3, wx.ID_ANY, "Control Source")
-        self.text_amplitude = wx.TextCtrl(self.panel_4, wx.ID_ANY, "1.2A")
+        self.text_amplitude = wx.TextCtrl(self.panel_4, wx.ID_ANY, "10uA")
         self.combo_box_1 = wx.ComboBox(self.panel_4, wx.ID_ANY, choices=["RMS", "Peak"],
                                        style=wx.CB_DROPDOWN | wx.CB_READONLY)
-        self.text_frequency = wx.TextCtrl(self.panel_4, wx.ID_ANY, "5000")
+        self.text_frequency = wx.TextCtrl(self.panel_4, wx.ID_ANY, "1000")
         self.text_samples = wx.TextCtrl(self.panel_3, wx.ID_ANY, "40000")
         self.text_cycles = wx.TextCtrl(self.panel_3, wx.ID_ANY, "70")
         self.combo_filter = wx.ComboBox(self.panel_3, wx.ID_ANY, choices=["None", "100kHz", "3MHz"],
@@ -100,12 +105,18 @@ class TestFrame(wx.Frame):
         # Menu Bar -----------------------------------------------------------------------------------------------------
         self.frame_menubar = wx.MenuBar()
         wxglade_tmp_menu = wx.Menu()
-        wxglade_tmp_menu.Append(wx.ID_ANY, "Export Data", "")
+        self.menu_export = wxglade_tmp_menu.Append(wx.ID_ANY, "Export Data", "")
         self.frame_menubar.Append(wxglade_tmp_menu, "File")
         wxglade_tmp_menu = wx.Menu()
-        wxglade_tmp_menu.Append(wx.ID_ANY, "configure instruments", "")
-        self.frame_menubar.Append(wxglade_tmp_menu, "Instruments")
+        self.menu_config = wxglade_tmp_menu.Append(wx.ID_ANY, "Configure instruments", "")
+        # self.menu_brkpts = wxglade_tmp_menu.Append(wx.ID_ANY, "Open Breakpoints", "")
+        self.frame_menubar.Append(wxglade_tmp_menu, "Settings")
         self.SetMenuBar(self.frame_menubar)
+
+        # Menu Bar Bind Events -----------------------------------------------------------------------------------------
+        self.Bind(wx.EVT_MENU, self.grid_1.export, self.menu_export)
+        self.Bind(wx.EVT_MENU, self.config, self.menu_config)
+        # self.Bind(wx.EVT_MENU, self.open_breakpoints, self.menu_brkpts)
 
         # Configure Instruments ----------------------------------------------------------------------------------------
         on_connect = lambda event: self.on_connect_instr(event)
@@ -138,6 +149,11 @@ class TestFrame(wx.Frame):
 
     def __set_properties(self):
         self.SetTitle("Distortion Analyzer")
+        self.SetBackgroundColour(wx.Colour(227, 227, 227))
+        self.notebook.SetBackgroundColour(wx.Colour(227, 227, 227))
+        self.notebook_analyzer.SetBackgroundColour(wx.Colour(255, 255, 255))
+        self.notebook_data.SetBackgroundColour(wx.Colour(255, 255, 255))
+
         self.text_DUT_report.SetMinSize((200, 23))
         self.text_DMM_report.SetMinSize((200, 23))
         self.canvas.SetMinSize((700, 490))
@@ -306,10 +322,10 @@ class TestFrame(wx.Frame):
         self.get_values()
         if not self.t.is_alive() and self.flag_complete:
             # start new thread
-            self.thread_this(self.da.start, (self.params,))
+            self.thread_this(self.da.start, (self.user_input,))
             self.btn_start.SetLabel('STOP')
 
-        elif self.t.is_alive() and self.params['mode'] == 4:
+        elif self.t.is_alive() and self.user_input['mode'] == 4:
             # stop continuous
             # https://stackoverflow.com/a/36499538
             self.t.do_run = False
@@ -378,73 +394,29 @@ class TestFrame(wx.Frame):
         source = self.checkbox_1.GetValue()
         samples = int(self.text_samples.GetValue())
         rms = self.combo_box_1.GetSelection()
-        cycles = float(self.text_cycles.GetValue())
+        cycles = int(self.text_cycles.GetValue())
         filter = self.combo_filter.GetStringSelection()
 
         amp_string = self.text_amplitude.GetValue()
         freq_string = self.text_frequency.GetValue()
-        amplitude, units, ft = self.get_string_value(amp_string, freq_string)
 
-        self.params = {'mode': mode,
-                       'source': source,
-                       'amplitude': amplitude,
-                       'units': units.capitalize(),
-                       'rms': rms,
-                       'ft': ft,
-                       'samples': samples,
-                       'cycles': cycles,
-                       'filter': filter
-                       }
+        self.user_input = {'mode': mode,
+                           'source': source,
+                           'amplitude': amp_string,
+                           'rms': rms,
+                           'frequency': freq_string,
+                           'samples': samples,
+                           'cycles': cycles,
+                           'filter': filter
+                           }
 
-    def get_string_value(self, amp_string, freq_string):
-        # https://stackoverflow.com/a/35610194
-        amplitude = 0.0
-        frequency = 0.0
-        units = ''
-        prefix = {'p': 1e-12, 'n': 1e-9, 'u': 1e-6, 'm': 1e-3}
-        units_list = ("A", "a", "V", "v")
-        s_split = re.findall(r'[0-9.]+|\D', amp_string)
-
-        # CHECK IF AMPLITUDE USER INPUT IS VALID
-        try:
-            if len(s_split) == 3 and s_split[1] in prefix.keys() and s_split[2] in units_list:
-                amplitude = float(s_split[0]) * prefix[s_split[1]]
-                units = s_split[2].capitalize()
-                self.amplitude_good = True
-            elif len(s_split) == 2 and s_split[1] in units_list:
-                amplitude = float(s_split[0])
-                units = s_split[1].capitalize()
-                self.amplitude_good = True
-
-            elif len(s_split) == 2 and s_split[1]:
-                self.error_dialog('prefix used, but units not specified!')
-                self.amplitude_good = False
-            elif len(s_split) == 1:
-                self.error_dialog('units not specified!')
-                self.amplitude_good = False
-            else:
-                self.error_dialog('improper prefix used!')
-                self.amplitude_good = False
-        except ValueError:
-            self.error_dialog('Invalid amplitude entered!')
-            self.amplitude_good = False
-            pass
-
-        # CHECK IF FREQUENCY USER INPUT IS VALID
-        try:
-            frequency = float(freq_string)
-        except ValueError:
-            frequency = self.text_frequency.GetValue()
-            self.error_dialog(f"The value {frequency} is not a valid frequency!")
-            self.frequency_good = False
-        else:
-            self.frequency_good = True
-
-        return amplitude, units, frequency
+    # def open_breakpoints(self, evt):
+    #     fileName = 'distortion_breakpoints.csv'
+    #     os.system("notepad.exe " + fileName)
 
     def error_dialog(self, error_message):
         print(error_message)
-        dial = wx.MessageDialog(None, error_message, 'Error', wx.OK | wx.ICON_ERROR)
+        dial = wx.MessageDialog(None, str(error_message), 'Error', wx.OK | wx.ICON_ERROR)
         dial.ShowModal()
 
     def OnCloseWindow(self, evt):
@@ -452,7 +424,7 @@ class TestFrame(wx.Frame):
         self.Destroy()
 
     def __do_table_header(self):
-        header = ['Amplitude', 'Frequency', 'RMS', 'THDN', 'THD', 'RMS NOISE', 'Fs', 'Aperture']
+        header = [['Amplitude', 'Frequency', 'RMS', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'Aperture']]
         self.grid_1.append_rows(header)
 
     def results_update(self, results):
@@ -470,11 +442,11 @@ class TestFrame(wx.Frame):
         self.label_fs_report.SetLabelText(str(fs))
         self.label_aperture_report.SetLabelText(str(aperture))
         self.text_rms_report.SetValue(f"{rms}{units}")
-        self.text_thdn_report.SetValue(f"{round(thdn*100, 3)}% or {round(np.log10(thdn), 1)}dB")
-        self.text_thd_report.SetValue(f"{round(thd*100, 3)}% or {round(np.log10(thd), 1)}dB")
+        self.text_thdn_report.SetValue(f"{round(thdn * 100, 3)}% or {round(np.log10(thdn), 1)}dB")
+        self.text_thd_report.SetValue(f"{round(thd * 100, 3)}% or {round(np.log10(thd), 1)}dB")
 
         # self.grid_1.append_rows({k: results[k] for k in set(list(results.keys())) - {'units'}})
-        self.grid_1.append_rows([amplitude, frequency, rms, thdn, thd, rms_noise, fs, aperture])
+        self.grid_1.append_rows([[amplitude, frequency, rms, thdn, thd, rms_noise, fs, aperture]])
 
     # ------------------------------------------------------------------------------------------------------------------
     def __do_plot_layout(self):

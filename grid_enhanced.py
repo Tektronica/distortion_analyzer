@@ -342,46 +342,54 @@ class MyGrid(wx.grid.Grid):
 
     def append_rows(self, rows=None):
         if rows is not None:
+            # If the row (or rows) are a dictionary ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
             if isinstance(rows, dict):
-                # creates headers if empty data
+                # creates headers if empty data ------------------------------------------------------------------------
                 if not bool(len(self.data.keys())):
                     self.write_header(list(rows.keys()))
 
+                # Checks if value in dictionary is a list (multiple rows) else handled as scalar (one row) -------------
                 if isinstance(list(rows.values())[0], list):
                     # make more rows if run out
                     rows_to_add = len(list(rows.values())[0])
                     if rows_to_add >= self.GetNumberRows() - rows_to_add:
                         self.AppendRows(10)
 
-                    # writes data to rows
+                    # writes data to rows ------------------------------------------------------------------------------
                     for col, (key, values) in enumerate(rows.items()):
                         self.data[key].extend(values)
                         for new_row, val in enumerate(values):
                             self.SetCellValue(self.row + new_row, col, str(val))
                     self.row += rows_to_add + 1
+
+                # ...else handled as scalar and not list. Only one value to be appended. ===============================
                 else:
                     # make more rows if run out
                     rows_to_add = 1
                     if rows_to_add >= self.GetNumberRows() - rows_to_add:
                         self.AppendRows(10)
 
-                    # writes data to rows
+                    # writes data to rows ------------------------------------------------------------------------------
                     for col, (key, value) in enumerate(rows.items()):
                         self.data[key].append(value)
                         self.SetCellValue(self.row, col, str(value))
                     self.row += rows_to_add + 1
 
+            # If the row (or rows) are a list ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
             elif isinstance(rows, list):
+                # creates headers if empty data ------------------------------------------------------------------------
+                if not bool(len(self.data.keys())):
+                    self.write_header(rows)
+                    rows = rows[1:]
+
                 # make more rows if run out
                 rows_to_add = len(rows)
                 if rows_to_add >= self.GetNumberRows() - rows_to_add:
                     self.AppendRows(10)
 
-                if isinstance(rows[0], list):
-                    # creates headers if empty data
-                    if not bool(len(self.data.keys())):
-                        self.write_header(rows)
-                        rows = rows[1:]
+                # Checks if list of lists (multiple rows) else handled as scalar (one row) =============================
+                if rows and isinstance(rows[0], list):
+                    # writes data to rows ------------------------------------------------------------------------------
                     for row, values in enumerate(rows):
                         for col, val in enumerate(values):
                             self.SetCellValue(self.row, col, str(val))
@@ -389,23 +397,21 @@ class MyGrid(wx.grid.Grid):
                             self.data[list(self.data.keys())[col]].append(values)
                         self.row += 1
 
+                # ...else handled as scalar and not list. Only one row to be appended. ---------------------------------
                 else:
-                    # creates headers if empty data
-                    if not bool(len(self.data.keys())):
-                        self.write_header(rows)
-                    else:
-                        for col, value in enumerate(rows):
-                            self.SetCellValue(self.row, col, str(value))
-                            # TODO: don't ever implicitly populate an unordered dict this way again...
-                            self.data[list(self.data.keys())[col]].append(value)
-                        self.row += 1
+                    # writes data to rows ------------------------------------------------------------------------------
+                    for col, value in enumerate(rows):
+                        self.SetCellValue(self.row, col, str(value))
+                        # TODO: don't ever implicitly populate an unordered dict this way again...
+                        self.data[list(self.data.keys())[col]].append(value)
+                    self.row += 1
             else:
                 print('append list or rows only.')
                 pass
         else:
             print('No row data written. data appears empty.')
 
-    def export(self, e):
+    def export(self):
         with wx.FileDialog(self, "Save csv file", wildcard="CSV files (*.csv)|*.csv",
                            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fileDialog:
 

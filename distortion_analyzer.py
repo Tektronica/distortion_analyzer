@@ -9,8 +9,9 @@ from pathlib import Path
 import threading
 import datetime
 import os
+import re
 
-DUMMY_DATA = True
+DUMMY_DATA = False
 
 
 ########################################################################################################################
@@ -31,7 +32,7 @@ class Instruments(f5560A_instrument, f8588A_instrument):
     def __init__(self, parent):
         f5560A_instrument.__init__(self)
         f8588A_instrument.__init__(self)
-        self.parent = parent
+        self.analyzer = parent
         self.measurement = []
         self.connected = False
 
@@ -43,15 +44,18 @@ class Instruments(f5560A_instrument, f8588A_instrument):
             self.connect_to_f5560A(f5560A_id)
             self.connect_to_f8588A(f8588A_id)
 
-            if self.f5560A.okay and self.f8588A.okay:
+            if self.f5560A.healthy and self.f8588A.healthy:
                 self.connected = True
-                idn_dict = {'DUT': self.f5560A_IDN, 'DMM': self.f8588A_IDN}
-                self.parent.parent.set_ident(idn_dict)
-                self.setup_source()
+                try:
+                    idn_dict = {'DUT': self.f5560A_IDN, 'DMM': self.f8588A_IDN}
+                    self.analyzer.frame.set_ident(idn_dict)
+                    self.setup_source()
+                except ValueError:
+                    raise
             else:
                 print('\nUnable to connect to all instruments.\n')
-        except Exception:
-            print('Could not connect. Timeout error occured.')
+        except ValueError:
+            raise ValueError('Could not connect. Timeout error occurred.')
 
     def close_instruments(self):
         time.sleep(1)
@@ -62,12 +66,12 @@ class Instruments(f5560A_instrument, f8588A_instrument):
 class DistortionAnalyzer:
     # ------------------------------------------------------------------------------------------------------------------
     def __init__(self, parent):
-        super().__init__()
-        self.user_input = {'mode': 0, 'source': 0, 'amplitude': '',
-                           'rms': 0, 'frequency': 0.0, 'samples': 0,
-                           'cycles': 0.0, 'filter': ''}
+        self.parent = parent
+        self.amplitude_good = False  # Flag indicates user input for amplitude value is good (True)
+        self.frequency_good = False  # Flag indicates user input for frequency value is good (True)
+
         self.params = {'mode': 0, 'source': 0, 'amplitude': '', 'units': '',
-                       'rms': 0, 'ft': 0.0, 'samples': 0,
+                       'rms': 0, 'frequency': 0.0, 'samples': 0,
                        'cycles': 0.0, 'filter': ''}
         self.data = {'xt': [0], 'yt': [0],
                      'xf': [0], 'yf': [0]}
@@ -83,97 +87,134 @@ class DistortionAnalyzer:
     def connect(self, instruments):
         self.M.close_instruments()
         time.sleep(2)
-        self.M.connect(instruments)
+        try:
+            self.M.connect(instruments)
+        except ValueError as e:
+            self.frame.error_dialog(e)
 
     # ------------------------------------------------------------------------------------------------------------------
-    def start(self, params):
-        self.params = params
-        selection = self.params['mode']
-        source = self.params['source']
-        if self.M.connected:
-            # TODO: Why did I do this?
-            if selection in (1, 3):
-                self.run_selected_function(selection)
-            elif not source or (self.frame.amplitude_good and self.frame.frequency_good):
+    def start(self, user_input):
+        selection = user_input['mode']
+        source = user_input['source']
+        amplitude, units, ft = self.get_string_value(user_input['amplitude'], user_input['frequency'])
+        self.params = {'mode': user_input['mode'],
+                       'source': user_input['source'],
+                       'amplitude': amplitude,
+                       'units': units.capitalize(),
+                       'rms': user_input['rms'],
+                       'frequency': ft,
+                       'samples': user_input['samples'],
+                       'cycles': user_input['cycles'],
+                       'filter': filter
+                       }
+        try:
+            if self.M.connected:
+                # TODO: Why did I do this?
+                if selection in (1, 3):
+                    self.run_selected_function(selection)
+                elif not source or (self.amplitude_good and self.frequency_good):
+                    self.run_selected_function(selection)
+                else:
+                    self.frame.error_dialog('\nCheck amplitude and frequency values.')
+            elif DUMMY_DATA:
                 self.run_selected_function(selection)
             else:
-                self.frame.error_dialog('\nCheck amplitude and frequency values.')
-        elif DUMMY_DATA:
-            self.run_selected_function(selection)
-        else:
-            self.frame.error_dialog('\nFirst connect to instruments.')
+                self.frame.error_dialog('\nConnect to nstruments first.')
+            self.frame.btn_start.SetLabel('START')
 
-        self.frame.btn_start.SetLabel('START')
+        except ValueError as e:
+            self.frame.flag_complete = True
+            self.frame.btn_start.SetLabel('START')
+            self.frame.error_dialog(e)
 
     def run_selected_function(self, selection):
-        # run single
-        if selection == 0:
-            print('Running single')
-            self.run_single(self.test)
+        try:
+            # run single
+            if selection == 0:
+                print('Running single')
+                self.run_single(self.test)
 
-        # run sweep
-        elif selection == 1:
-            print('Running sweep')
-            df = pd.read_csv('distortion_breakpoints.csv')
-            self.run_sweep(df, self.test)
+            # run sweep
+            elif selection == 1:
+                print('Running sweep')
+                df = pd.read_csv('distortion_breakpoints.csv')
+                self.run_sweep(df, self.test)
 
-        # run single shunt voltage implied current measurement
-        elif selection == 2:
-            print('Running single measurement measuring current from shunt voltage')
-            self.run_single(self.test_analyze_shunt_voltage)
+            # run single shunt voltage implied current measurement
+            elif selection == 2:
+                print('Running single measurement measuring current from shunt voltage')
+                self.run_single(self.test_analyze_shunt_voltage)
 
-        # run swept shunt voltage implied current measurement
-        elif selection == 3:
-            print('Running sweep measuring current from shunt voltage')
-            df = pd.read_csv('distortion_breakpoints.csv')
-            self.run_sweep(df, self.test_analyze_shunt_voltage)
+            # run swept shunt voltage implied current measurement
+            elif selection == 3:
+                print('Running sweep measuring current from shunt voltage')
+                df = pd.read_csv('distortion_breakpoints.csv')
+                self.run_sweep(df, self.test_analyze_shunt_voltage)
 
-        # run continuous
-        elif selection == 4:
-            self.run_continuous(self.test)
+            # run continuous
+            elif selection == 4:
+                self.run_continuous(self.test)
 
-        else:
-            print('Nothing happened.')
+            else:
+                print('Nothing happened.')
+
+        except ValueError:
+            raise
 
     # ------------------------------------------------------------------------------------------------------------------
     def run_single(self, func):
         print('\nrun_single!')
         self.frame.toggle_controls()
-        self.flag_complete = False
-        func(setup=True)
-        if not DUMMY_DATA:
-            self.M.standby()
+        self.frame.flag_complete = False
+        try:
+            func(setup=True)
+            if not DUMMY_DATA:
+                self.M.standby()
+        except ValueError:
+            raise
+
         self.frame.toggle_controls()
-        self.flag_complete = True
+        self.frame.flag_complete = True
 
     def run_sweep(self, df, func):
-        self.flag_complete = False
+        self.frame.flag_complete = False
 
-        headers = ['amplitude', 'frequency', 'rms', 'THDN', 'THD', 'RMS NOISE', 'Fs', 'aperture']
+        headers = ['amplitude', 'frequency', 'rms', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'aperture']
         results = np.zeros(shape=(len(df.index), len(headers)))
         for idx, row in df.iterrows():
             self.frame.text_amplitude.SetValue(str(row.amplitude))
             self.frame.text_frequency.SetValue(str(row.frequency))
 
-            self.params['amplitude'] = row.amplitude
-            self.params['frequency'] = row.frequency
-            results[idx] = func(setup=True)
-            self.M.standby()
+            amplitude, units, ft = self.get_string_value(row.amplitude, str(row.frequency))
+
+            self.params['amplitude'] = amplitude
+            self.params['frequency'] = ft
+            self.params['units'] = units
+
+            try:
+                results[idx] = func(setup=True)
+                self.M.standby()
+            except ValueError:
+                raise
 
         # https://stackoverflow.com/a/28356566
         # https://stackoverflow.com/a/28058264
         results_df = pd.DataFrame(results, columns=headers)
         results_df.to_csv(path_or_buf=_getFilepath(), sep=',', index=False)
+        self.frame.flag_complete = True
 
     def run_continuous(self, func):
         print('\nrun_continuous!')
-        self.flag_complete = False
+        self.frame.flag_complete = False
         t = threading.currentThread()
         setup = True
         while getattr(t, "do_run", True):
-            func(setup=True)
-            setup = False
-            time.sleep(0.1)
+            try:
+                func(setup=setup)
+                setup = False
+                time.sleep(0.1)
+            except ValueError:
+                raise
 
         if not DUMMY_DATA:
             self.M.standby()
@@ -189,7 +230,7 @@ class DistortionAnalyzer:
             amplitude = amplitude / np.sqrt(2)
             print('Provided amplitude converted to RMS.')
 
-        Ft = params['ft']
+        Ft = params['frequency']
         suffix = params['units']
         time.sleep(1)
 
@@ -221,9 +262,9 @@ class DistortionAnalyzer:
         # DIGITIZED SIGNAL =============================================================================================
         if Ft == 0:
             N = 20000
-            cycles = 10
+            cycles = 100
             lpf = 10e3
-            hpf = 1e4  # low pass filter cutoff frequency
+            hpf = 3  # high pass filter cutoff frequency
             aperture, Fs, runtime = get_aperture(10, N, cycles)
         else:
             if filter_val == '100kHz':
@@ -243,8 +284,17 @@ class DistortionAnalyzer:
             if setup:
                 self.M.setup_digitizer(suffix, oper_range, filter_val, N, aperture)
             if params['source']:
-                self.M.run_source(suffix, amplitude, Ft)
-                y = self.M.retrieve_digitize()
+                try:
+                    self.M.run_source(suffix, amplitude, Ft)
+                    try:
+                        y = self.M.retrieve_digitize()
+                    except ValueError:
+                        print('error occurred while connecting to DMM. Placing 5560 in Standby.')
+                        self.M.standby()
+                        raise
+                except ValueError:
+                    print('error occurred while connecting to DUT. Exiting current measurement.')
+                    raise
             else:
                 y = self.M.retrieve_digitize()
             pd.DataFrame(data=y, columns=['ydata']).to_csv('results/y_data.csv')
@@ -263,7 +313,7 @@ class DistortionAnalyzer:
             amplitude = amplitude / np.sqrt(2)
             print('Provided amplitude converted to RMS.')
 
-        Ft = params['ft']
+        Ft = params['frequency']
         suffix = params['units']
         self.M.run_source(suffix, amplitude, Ft)
         time.sleep(1)
@@ -297,9 +347,9 @@ class DistortionAnalyzer:
         # DIGITIZED SIGNAL =============================================================================================
         if Ft == 0:
             N = 20000
-            cycles = 10
+            cycles = 100
             lpf = 10e3
-            hpf = 1e4  # low pass filter cutoff frequency
+            hpf = 3  # high pass filter cutoff frequency
             aperture, Fs, runtime = get_aperture(10, N, cycles)
         else:
             if filter_val == '100kHz':
@@ -337,7 +387,7 @@ class DistortionAnalyzer:
 
         results_row = {'Amplitude': amplitude, 'Frequency': Ft, 'RMS': round(yrms, 4),
                        'THDN': round(thdn, 5), 'THD': round(thd, 5), 'RMS NOISE': noise_rms,
-                       'Fs': round(Fs, 2), 'Aperture': f'{round(aperture * 1e6, 4)}us'}
+                       'Fs': f'{round(Fs / 1000, 2)} kHz', 'Aperture': f'{round(aperture * 1e6, 4)}us'}
 
         for key, value in results_row.items():
             self.results[key].append(value)
@@ -384,3 +434,49 @@ class DistortionAnalyzer:
     def close_instruments(self):
         if hasattr(self.M, 'DUT') and hasattr(self.M, 'DMM'):
             self.M.close_instruments()
+
+    # ------------------------------------------------------------------------------------------------------------------
+    def get_string_value(self, amp_string, freq_string):
+        # https://stackoverflow.com/a/35610194
+        amplitude = 0.0
+        frequency = 0.0
+        units = ''
+        prefix = {'p': 1e-12, 'n': 1e-9, 'u': 1e-6, 'm': 1e-3}
+        units_list = ("A", "a", "V", "v")
+        s_split = re.findall(r'[0-9.]+|\D', amp_string)
+
+        # CHECK IF AMPLITUDE USER INPUT IS VALID
+        try:
+            if len(s_split) == 3 and s_split[1] in prefix.keys() and s_split[2] in units_list:
+                amplitude = float(s_split[0]) * prefix[s_split[1]]
+                units = s_split[2].capitalize()
+                self.amplitude_good = True
+            elif len(s_split) == 2 and s_split[1] in units_list:
+                amplitude = float(s_split[0])
+                units = s_split[1].capitalize()
+                self.amplitude_good = True
+
+            elif len(s_split) == 2 and s_split[1]:
+                self.parent.error_dialog('prefix used, but units not specified!')
+                self.amplitude_good = False
+            elif len(s_split) == 1:
+                self.parent.error_dialog('units not specified!')
+                self.amplitude_good = False
+            else:
+                self.parent.error_dialog('improper prefix used!')
+                self.amplitude_good = False
+        except ValueError:
+            self.parent.error_dialog('Invalid amplitude entered!')
+            self.amplitude_good = False
+            pass
+
+        # CHECK IF FREQUENCY USER INPUT IS VALID
+        try:
+            frequency = float(freq_string)
+        except ValueError:
+            self.parent.error_dialog(f"The value {freq_string} is not a valid frequency!")
+            self.frequency_good = False
+        else:
+            self.frequency_good = True
+
+        return amplitude, units, frequency
