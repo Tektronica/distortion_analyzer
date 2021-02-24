@@ -71,6 +71,8 @@ class VisaClient:
                 # https://github.com/pyvisa/pyvisa-py/issues/146#issuecomment-453695057
                 print(f'[attempt {attempt + 1}/5] - retrying connection to instrument')
                 self.healthy = False
+            except Exception:
+                raise ValueError('Could not connect. Session timed out.')
             else:
                 break
 

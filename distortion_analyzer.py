@@ -119,7 +119,7 @@ class DistortionAnalyzer:
             elif DUMMY_DATA:
                 self.run_selected_function(selection)
             else:
-                self.frame.error_dialog('\nConnect to nstruments first.')
+                self.frame.error_dialog('\nConnect to instruments first.')
             self.frame.btn_start.SetLabel('START')
 
         except ValueError as e:
