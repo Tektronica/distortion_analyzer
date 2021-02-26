@@ -82,9 +82,12 @@ def THDN(y, fs, hpf=0, lpf=100e3):
     freqs = np.fft.rfftfreq(len(yf))
 
     # FIND FUNDAMENTAL (peak of frequency spectrum)
-    idx = np.argmax(np.abs(yf))
-    freq = freqs[idx]  # no units
-    f0 = freq * fs / 2  # in hertz
+    try:
+        idx = np.argmax(np.abs(yf))
+        freq = freqs[idx]  # no units
+        f0 = freq * fs / 2  # in hertz
+    except IndexError:
+        raise ValueError('Failed to find fundamental. Most likely index was outside of bounds.')
 
     # APPLY HIGH PASS FILTERING
     if not (hpf == 0) and (hpf < lpf):
@@ -112,7 +115,7 @@ def THDN(y, fs, hpf=0, lpf=100e3):
 
     THDN = noise_rms / total_rms
 
-    return THDN, f0, yf, round(1e6*noise_rms, 2)
+    return THDN, f0, yf, round(1e6 * noise_rms, 2)
 
 
 ########################################################################################################################
@@ -125,21 +128,54 @@ def THD(y, Fs):
     yf = np.fft.rfft(y * w)
 
     # FIND FUNDAMENTAL (peak of frequency spectrum)
-    idx = np.argmax(np.abs(yf))
-    freqs = np.fft.rfftfreq(len(yf))
-    freq = freqs[idx]  # no units
-    F0 = freq * Fs / 2  # in hertz
+    try:
+        idx = np.argmax(np.abs(yf))
+        freqs = np.fft.rfftfreq(len(yf))
+        freq = freqs[idx]  # no units
+        F0 = freq * Fs / 2  # in hertz
+    except IndexError:
+        raise ValueError('Failed to find fundamental for computing the THD.\nMost likely related to a zero-size array.')
 
     if idx != 0:
-        n_harmonics = int((Fs/2) / F0)  # find maximum number of harmonics
-
+        n_harmonics = int((Fs / 2) / F0)  # find maximum number of harmonics
         amplitude = np.zeros(n_harmonics)
         for h in range(n_harmonics):
             local = int(idx * (h + 1))
-            amplitude[h] = np.max(np.abs(yf[local - 4:local + 4])) / ypeak
+            try:
+                amplitude[h] = np.max(np.abs(yf[local - 4:local + 4])) / ypeak
+            except ValueError:
+                raise ValueError('Failed to capture all peaks for calculating THD.\nMost likely zero-size array.')
         thd = np.sqrt(np.sum(np.abs(amplitude[1:]) ** 2)) / np.abs(amplitude[0])
     else:
         print('Check the damn connection, you husk of an oat!')
         thd = 1  # bad input usually. Check connection.
 
     return thd
+
+
+def rms_noise(yf, fs, N, hpf=0, lpf=100e3):
+    # APPLY HIGH PASS FILTERING
+    if not (hpf == 0) and (hpf < lpf):
+        fc = int(hpf * N / fs)
+        yf[:fc] = 1e-10
+
+    # APPLY LOW PASS FILTERING
+    if lpf != 0:
+        fc = int(lpf * N / fs)
+        yf[fc:] = 1e-10
+
+    return yf
+
+
+def flicker_noise(yf, fs, N, hpf=0.1, lpf=10):
+    # APPLY HIGH PASS FILTERING
+    if not (hpf == 0) and (hpf < lpf):
+        fc = int(hpf * N / fs)
+        yf[:fc] = 1e-10
+
+    # APPLY LOW PASS FILTERING
+    if lpf != 0:
+        fc = int(lpf * N / fs)
+        yf[fc:] = 1e-10
+
+    return yf

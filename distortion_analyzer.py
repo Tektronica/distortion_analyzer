@@ -66,7 +66,7 @@ class Instruments(f5560A_instrument, f8588A_instrument):
 class DistortionAnalyzer:
     # ------------------------------------------------------------------------------------------------------------------
     def __init__(self, parent):
-        self.parent = parent
+        self.frame = parent
         self.amplitude_good = False  # Flag indicates user input for amplitude value is good (True)
         self.frequency_good = False  # Flag indicates user input for frequency value is good (True)
 
@@ -79,7 +79,6 @@ class DistortionAnalyzer:
                         'THDN': [], 'THD': [], 'RMS NOISE': [],
                         'Fs': [], 'Aperture': []}
 
-        self.frame = parent
         self.M = Instruments(self)
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -171,6 +170,7 @@ class DistortionAnalyzer:
             if not DUMMY_DATA:
                 self.M.standby()
         except ValueError:
+            self.frame.toggle_controls()
             raise
 
         self.frame.toggle_controls()
@@ -373,17 +373,18 @@ class DistortionAnalyzer:
 
     def fft(self, y, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft):
         yrms = rms_flat(y)
-
         # FFT ==========================================================================================================
         x = np.arange(0.0, runtime, aperture + 200e-9)
         # xf = np.linspace(0.0, Fs / 2, int(N / 2 + 1))
         xf = np.linspace(0.0, Fs, N)
         ywf = windowed_fft(y, N, 'blackman')
-
         # Find %THD+N
-        thdn, f0, yf, noise_rms = THDN(y, Fs, hpf, lpf)
-        thd = THD(y, Fs)
-        data = {'x': x, 'y': y, 'xf': xf, 'ywf': ywf, 'RMS': yrms, 'N': N, 'runtime': runtime, 'Fs': Fs, 'f0': f0}
+        try:
+            thdn, f0, yf, noise_rms = THDN(y, Fs, hpf, lpf)
+            thd = THD(y, Fs)
+            data = {'x': x, 'y': y, 'xf': xf, 'ywf': ywf, 'RMS': yrms, 'N': N, 'runtime': runtime, 'Fs': Fs, 'f0': f0}
+        except ValueError as e:
+            raise
 
         results_row = {'Amplitude': amplitude, 'Frequency': Ft, 'RMS': round(yrms, 4),
                        'THDN': round(thdn, 5), 'THD': round(thd, 5), 'RMS NOISE': noise_rms,
@@ -457,16 +458,16 @@ class DistortionAnalyzer:
                 self.amplitude_good = True
 
             elif len(s_split) == 2 and s_split[1]:
-                self.parent.error_dialog('prefix used, but units not specified!')
+                self.frame.error_dialog('prefix used, but units not specified!')
                 self.amplitude_good = False
             elif len(s_split) == 1:
-                self.parent.error_dialog('units not specified!')
+                self.frame.error_dialog('units not specified!')
                 self.amplitude_good = False
             else:
-                self.parent.error_dialog('improper prefix used!')
+                self.frame.error_dialog('improper prefix used!')
                 self.amplitude_good = False
         except ValueError:
-            self.parent.error_dialog('Invalid amplitude entered!')
+            self.frame.error_dialog('Invalid amplitude entered!')
             self.amplitude_good = False
             pass
 
@@ -474,7 +475,7 @@ class DistortionAnalyzer:
         try:
             frequency = float(freq_string)
         except ValueError:
-            self.parent.error_dialog(f"The value {freq_string} is not a valid frequency!")
+            self.frame.error_dialog(f"The value {freq_string} is not a valid frequency!")
             self.frequency_good = False
         else:
             self.frequency_good = True
