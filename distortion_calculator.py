@@ -54,6 +54,45 @@ def find_range(f, x):
     return lowermin, uppermin
 
 
+def getSamplingFrequency(bw=100e3):
+    """
+    The maximum detectable frequency resolved by an FFT is defined as half the sampling frequency.
+    :param bw: the maximum resolved frequency of the fft.
+    :return: sampling rate, fs
+    """
+    fs = bw * 2
+    return fs
+
+
+def getWindowLength(f0=10e3, fs=2.5e6, windfunc='blackman', error=0.1):
+    """
+    Computes the window length of the measurement. An error is expressed since the main lobe width is directly
+    proportional to the number of cycles captured. The minimum value of M correlates to the lowest detectable frequency
+    by the windowing function. For instance, blackman requires a minimum of 6 period cycles of the frequency of interest
+    in order to express content of that lobe in the DFT. Sampling frequency does not play a role in the width of the
+    lobe, only the resolution of the lobe.
+
+    :param f0: fundamental frequency of signal
+    :param fs: sampling frequency
+    :param windfunc: "Rectangular", "Bartlett", "Hanning", "Hamming", "Blackman"
+    :param error: 100% error suggests the lowest detectable frequency is the fundamental
+    :return: window length of integer value (number of time series samples collected)
+    """
+    # lowest detectable frequency by window
+    ldf = f0 * error
+
+    if windfunc == 'Rectangular':
+        M = int(fs / ldf)
+    elif windfunc in ('Bartlett', 'Hanning', 'Hamming'):
+        M = int(4 * (fs / ldf))
+    elif windfunc == 'blackman':
+        M = int(6 * (fs / ldf))
+    else:
+        raise ValueError('Not a valid windowing function.')
+
+    return M
+
+
 ########################################################################################################################
 def windowed_fft(y, N, windfunc='blackman'):
     w = blackman(N)
@@ -100,7 +139,7 @@ def THDN(y, fs, hpf=0, lpf=100e3):
         yf[fc:] = 1e-10
 
     # RMS from frequency domain
-    # https: // stackoverflow.com / questions / 23341935 / find - rms - value - in -frequency - domain
+    # https://stackoverflow.com/questions/ 23341935/find-rms-value-in-frequency-domain
     total_rms = np.sqrt(np.sum(np.abs(yf / N) ** 2))  # Parseval'amp_string Theorem
 
     # NOTCH REJECT FUNDAMENTAL AND MEASURE NOISE

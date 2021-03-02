@@ -1,6 +1,7 @@
 import VisaClient
 import time
 
+DIGITIZER_SAMPLING_FREQUENCY = 5e6
 instruments = {'f8588A': {'address': '10.205.92.156', 'port': '3490', 'gpib': '6', 'mode': 'SOCKET'}}
 
 
@@ -15,7 +16,7 @@ def to_float(s):
     return f
 
 
-def get_aperture(Ft, N, cycles):
+def get_aperture(Fs, N):
     """
     The aperture is the duration after trigger where samples at a rate of 5 MHz are averaged together.
 
@@ -46,9 +47,10 @@ def get_aperture(Ft, N, cycles):
 
     """
 
-    Fs_digitize = 5e6
+    """
     Fs = Ft * N / cycles  # The desired sampling frequency
-    Navg = max(round(Fs_digitize / Fs), 1)  # The number of samples averaged per trigger
+    """
+    Navg = max(round(DIGITIZER_SAMPLING_FREQUENCY / Fs), 1)  # The number of samples averaged per trigger
 
     # The duration of the digitizer averaging per trigger
     aperture = max(200e-9 * (Navg - 1), 0)
@@ -56,7 +58,7 @@ def get_aperture(Ft, N, cycles):
         aperture = max(100e-6 * (Navg - 1), 0)
 
     runtime = N * (aperture + 200e-9)  # The total runtime
-    Fs = Fs_digitize / Navg  # The calculated sampling frequency
+    Fs = DIGITIZER_SAMPLING_FREQUENCY / Navg  # The calculated sampling frequency
     return aperture, Fs, runtime
 
 

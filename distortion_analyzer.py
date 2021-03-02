@@ -27,6 +27,14 @@ def _getFilepath():
     return f'results/{filename}.csv'
 
 
+def get_FFT_parameters(Ft, lpf, error):
+    Fs = getSamplingFrequency(lpf)
+    N = getWindowLength(f0=Ft, fs=Fs, windfunc='blackman', error=error)
+    aperture, Fs, runtime = get_aperture(Fs, N)
+    N = getWindowLength(f0=Ft, fs=Fs, windfunc='blackman', error=error)
+    return Fs, N, aperture, runtime
+
+
 ########################################################################################################################
 class Instruments(f5560A_instrument, f8588A_instrument):
     def __init__(self, parent):
@@ -71,7 +79,7 @@ class DistortionAnalyzer:
         self.frequency_good = False  # Flag indicates user input for frequency value is good (True)
 
         self.params = {'mode': 0, 'source': 0, 'amplitude': '', 'units': '',
-                       'rms': 0, 'frequency': 0.0, 'samples': 0,
+                       'rms': 0, 'frequency': 0.0, 'error': 0.0,
                        'cycles': 0.0, 'filter': ''}
         self.data = {'xt': [0], 'yt': [0],
                      'xf': [0], 'yf': [0]}
@@ -102,9 +110,9 @@ class DistortionAnalyzer:
                        'units': units.capitalize(),
                        'rms': user_input['rms'],
                        'frequency': ft,
-                       'samples': user_input['samples'],
+                       'error': user_input['error'],
                        'cycles': user_input['cycles'],
-                       'filter': filter
+                       'filter': user_input['filter']
                        }
         try:
             if self.M.connected:
@@ -223,6 +231,7 @@ class DistortionAnalyzer:
     # ------------------------------------------------------------------------------------------------------------------
     def test(self, setup):
         params = self.params
+
         # SOURCE
         amplitude = params['amplitude']
         rms = params['rms']
@@ -235,8 +244,8 @@ class DistortionAnalyzer:
         time.sleep(1)
 
         # DIGITIZER
-        N = params['samples']
-        cycles = params['cycles']
+        error = params['error']
+
         filter_val = params['filter']
 
         # SIGNAL SOURCE ================================================================================================
@@ -261,12 +270,12 @@ class DistortionAnalyzer:
 
         # DIGITIZED SIGNAL =============================================================================================
         if Ft == 0:
-            N = 20000
-            cycles = 100
+
             lpf = 10e3
             hpf = 3  # high pass filter cutoff frequency
-            aperture, Fs, runtime = get_aperture(10, N, cycles)
+            Fs, N, aperture, runtime = get_FFT_parameters(Ft=10, lpf=lpf, error=error)
         else:
+            print(f'filter_val: {filter_val}')
             if filter_val == '100kHz':
                 lpf = 100e3  # low pass filter cutoff frequency
             elif filter_val == '3MHz':
@@ -275,7 +284,8 @@ class DistortionAnalyzer:
                 lpf = 0
 
             hpf = 0
-            aperture, Fs, runtime = get_aperture(Ft, N, cycles)
+
+            Fs, N, aperture, runtime = get_FFT_parameters(Ft=Ft, lpf=lpf, error=error)
 
         # START DATA COLLECTION ----------------------------------------------------------------------------------------
         # TODO
@@ -324,8 +334,8 @@ class DistortionAnalyzer:
         meter_mode = 'V'
 
         # DIGITIZER
-        N = params['samples']
-        cycles = params['cycles']
+        error = params['error']
+
         filter_val = params['filter']
 
         # SIGNAL SOURCE ================================================================================================
@@ -350,7 +360,7 @@ class DistortionAnalyzer:
             cycles = 100
             lpf = 10e3
             hpf = 3  # high pass filter cutoff frequency
-            aperture, Fs, runtime = get_aperture(10, N, cycles)
+            Fs, N, aperture, runtime = get_FFT_parameters(Ft=Ft, lpf=lpf, error=error)
         else:
             if filter_val == '100kHz':
                 lpf = 100e3  # low pass filter cutoff frequency
@@ -360,7 +370,8 @@ class DistortionAnalyzer:
                 lpf = 0
 
             hpf = 0
-            aperture, Fs, runtime = get_aperture(Ft, N, cycles)
+
+            Fs, N, aperture, runtime = get_FFT_parameters(Ft=Ft, lpf=lpf, error=error)
 
         # START DATA COLLECTION ----------------------------------------------------------------------------------------
         if setup:

@@ -5,8 +5,9 @@ from instruments_RWConfig import *
 from grid_enhanced import MyGrid
 
 import wx
-import re
-import time
+import wx.html
+import webbrowser
+
 import numpy as np
 
 import matplotlib.pyplot as plt
@@ -37,9 +38,12 @@ class TestFrame(wx.Frame):
     def __init__(self, *args, **kwds):
         kwds["style"] = kwds.get("style", 0) | wx.DEFAULT_FRAME_STYLE
         wx.Frame.__init__(self, *args, **kwds)
+
         self.SetSize((1055, 640))
         # https://stackoverflow.com/a/24704039/3382269
-        self.SetSizeHints(1055, 640, -1, -1)
+        # Sets minimum window dimensions
+        # self.SetSizeHints(1055, 640, -1, -1)
+
         self.flag_complete = True  # Flag indicates any active threads (False) or thread completed (True)
         self.t = threading.Thread()
         self.da = da(self)
@@ -48,7 +52,7 @@ class TestFrame(wx.Frame):
                            'amplitude': '',
                            'rms': 0,
                            'frequency': '',
-                           'samples': 0,
+                           'error': 0,
                            'cycles': 0,
                            'filter': 0
                            }
@@ -56,6 +60,9 @@ class TestFrame(wx.Frame):
         self.notebook = wx.Notebook(self.panel_1, wx.ID_ANY)
         self.notebook_analyzer = wx.Panel(self.notebook, wx.ID_ANY)
         self.notebook_data = wx.Panel(self.notebook, wx.ID_ANY)
+        self.notebook_history = wx.Panel(self.notebook)
+        self.notebook_information = wx.Panel(self.notebook, wx.ID_ANY)
+
         self.panel_3 = wx.Panel(self.notebook_analyzer, wx.ID_ANY)  # left panel
         self.panel_4 = wx.Panel(self.panel_3, wx.ID_ANY)  # amplitude/frequency panel
         self.panel_5 = wx.Panel(self.notebook_analyzer, wx.ID_ANY, style=wx.SIMPLE_BORDER)  # plot panel
@@ -83,7 +90,7 @@ class TestFrame(wx.Frame):
         self.combo_box_1 = wx.ComboBox(self.panel_4, wx.ID_ANY, choices=["RMS", "Peak"],
                                        style=wx.CB_DROPDOWN | wx.CB_READONLY)
         self.text_frequency = wx.TextCtrl(self.panel_4, wx.ID_ANY, "1000")
-        self.text_samples = wx.TextCtrl(self.panel_3, wx.ID_ANY, "40000")
+        self.text_error = wx.TextCtrl(self.panel_3, wx.ID_ANY, "0.1")
         self.text_cycles = wx.TextCtrl(self.panel_3, wx.ID_ANY, "70")
         self.combo_filter = wx.ComboBox(self.panel_3, wx.ID_ANY, choices=["None", "100kHz", "3MHz"],
                                         style=wx.CB_DROPDOWN | wx.CB_READONLY)
@@ -101,6 +108,9 @@ class TestFrame(wx.Frame):
         # Data panel for displaying raw output -------------------------------------------------------------------------
         self.grid_1 = MyGrid(self.notebook_data)
         self.btn_export = wx.Button(self.notebook_data, wx.ID_ANY, "Export")
+
+        # Information Panel ------------------ -------------------------------------------------------------------------
+        self.html = AboutDlg(self.notebook_information)
 
         # Menu Bar -----------------------------------------------------------------------------------------------------
         self.frame_menubar = wx.MenuBar()
@@ -153,6 +163,8 @@ class TestFrame(wx.Frame):
         self.notebook.SetBackgroundColour(wx.Colour(227, 227, 227))
         self.notebook_analyzer.SetBackgroundColour(wx.Colour(255, 255, 255))
         self.notebook_data.SetBackgroundColour(wx.Colour(255, 255, 255))
+        self.notebook_history.SetBackgroundColour(wx.Colour(255, 255, 255))
+        self.notebook_information.SetBackgroundColour(wx.Colour(255, 0, 255))
 
         self.text_DUT_report.SetMinSize((200, 23))
         self.text_DMM_report.SetMinSize((200, 23))
@@ -177,6 +189,8 @@ class TestFrame(wx.Frame):
         grid_sizer_4 = wx.GridBagSizer(0, 0)
         grid_sizer_5 = wx.FlexGridSizer(2, 1, 0, 0)
         grid_sizer_6 = wx.GridSizer(1, 3, 0, 0)
+        grid_sizer_7 = wx.GridBagSizer(0, 0)
+        grid_sizer_8 = wx.BoxSizer(wx.VERTICAL)
 
         # TITLE --------------------------------------------------------------------------------------------------------
         label_1 = wx.StaticText(self.panel_3, wx.ID_ANY, "DISTORTION ANALYZER")
@@ -234,7 +248,7 @@ class TestFrame(wx.Frame):
         grid_sizer_2.Add(self.panel_4, (7, 0), (1, 2), wx.EXPAND, 0)
 
         # MEASURE ------------------------------------------------------------------------------------------------------
-        label_samples = wx.StaticText(self.panel_3, wx.ID_ANY, "Samples (N):")
+        label_samples = wx.StaticText(self.panel_3, wx.ID_ANY, "Error:")
         label_cycles = wx.StaticText(self.panel_3, wx.ID_ANY, "Cycles:")
         label_filter = wx.StaticText(self.panel_3, wx.ID_ANY, "Filter:")
         label_fs = wx.StaticText(self.panel_3, wx.ID_ANY, "Fs:")
@@ -247,7 +261,7 @@ class TestFrame(wx.Frame):
         static_line_7.SetMinSize((300, 2))
         grid_sizer_2.Add(static_line_7, (9, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
         grid_sizer_2.Add(label_samples, (10, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.text_samples, (10, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_2.Add(self.text_error, (10, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
         grid_sizer_2.Add(label_cycles, (11, 0), (1, 1), 0, 0)
         grid_sizer_2.Add(self.text_cycles, (11, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
         grid_sizer_2.Add(label_filter, (12, 0), (1, 1), 0, 0)
@@ -294,12 +308,17 @@ class TestFrame(wx.Frame):
         grid_sizer_5.AddGrowableRow(0)
         grid_sizer_5.AddGrowableCol(0)
 
+        self.notebook_history.SetSizer(grid_sizer_7)
+        self.notebook_information.SetSizer(grid_sizer_8)
+
         grid_sizer_1.AddGrowableRow(0)
         grid_sizer_1.AddGrowableCol(1)
         grid_sizer_4.AddGrowableRow(0)
         grid_sizer_4.AddGrowableCol(0)
         self.notebook.AddPage(self.notebook_analyzer, "Analyzer")
         self.notebook.AddPage(self.notebook_data, "Data")
+        self.notebook.AddPage(self.notebook_history, "History")
+        self.notebook.AddPage(self.notebook_information, "Information")
         sizer_8.Add(self.notebook, 1, wx.ALL | wx.EXPAND, 10)
         self.panel_1.SetSizer(sizer_8)
         sizer_7.Add(self.panel_1, 1, wx.EXPAND, 0)
@@ -392,10 +411,10 @@ class TestFrame(wx.Frame):
     def get_values(self):
         mode = self.combo_mode.GetSelection()
         source = self.checkbox_1.GetValue()
-        samples = int(self.text_samples.GetValue())
+        error = float(self.text_error.GetValue())
         rms = self.combo_box_1.GetSelection()
         cycles = int(self.text_cycles.GetValue())
-        filter = self.combo_filter.GetStringSelection()
+        filter = self.combo_filter.GetValue()
 
         amp_string = self.text_amplitude.GetValue()
         freq_string = self.text_frequency.GetValue()
@@ -405,7 +424,7 @@ class TestFrame(wx.Frame):
                            'amplitude': amp_string,
                            'rms': rms,
                            'frequency': freq_string,
-                           'samples': samples,
+                           'error': error,
                            'cycles': cycles,
                            'filter': filter
                            }
@@ -498,6 +517,159 @@ class TestFrame(wx.Frame):
         self.toolbar.update()  # Not sure why this is needed - ADS
         self.canvas.draw()
         self.canvas.flush_events()
+
+
+########################################################################################################################
+class wxHTML(wx.html.HtmlWindow):
+    def OnLinkClicked(self, link):
+        webbrowser.open(link.GetHref())
+
+
+class AboutDlg(wx.Panel):
+    def __init__(self, frame):
+        wx.Panel.__init__(self, frame, wx.ID_ANY)
+        self.sizer = wx.BoxSizer(wx.VERTICAL)
+        self.html = wx.html.HtmlWindow(self, -1, size=(1000, 500), style=wx.html.HW_SCROLLBAR_AUTO | wx.TE_READONLY)
+
+        self.html.SetPage(
+            ''
+            """
+                <h2>About The Distortion Analyzer</h2>
+                <p>
+                The size of the FFT, the length of the window, or the duration of the measurement, should be at least 
+                six times longer than the period of the signal for a Blackman windowing filter.
+                </p>
+                <p>
+                The lowest detectable frequency by the FFT is determined by the size (duration) of the window. This is 
+                also considered the bandwidth of the main lobe of the FFT.
+                </p>
+                <p>
+                M is the number of samples captured for a measurement of time series data. M refers to the length of 
+                the windowing filter applied to the. M≤N where N samples refers to the length of the FFT. When N is 
+                greater than M, zero padding is employed, which does not introduce new data to the FFT, but only 
+                increases the resolution of the FFT.
+                </p>
+                <p>
+                Increasing the length of M for a given sample frequency reduces the width of the main lobe. In other 
+                words, in situations where zero padding is not involved and M=N, the main lobe width is reduced by 
+                increasing the number of samples for a given sampling frequency.
+                </p>
+                <p>
+                The effective data length of captured period cycles is equal for window shapes where M is scaled "
+                appropriately.
+
+                </p>
+
+                <table align="left" style="border-collapse: collapse;">
+                    <thead>
+                    <tr>
+                        <th>Window Shape</th>
+                        <th>Relative Peak Side Lobe Magnitude</th>
+                        <th>Approx. Main Lobe Width (Hz)</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr style="border-bottom: 1px solid black;">
+                        <td>Rectangular/boxcar</td>
+                        <td>-13 dB</td>
+                        <td>2/M</td>
+                    </tr>
+                    <tr>
+                        <td>Bartlett (triangle)</td>
+                        <td>-26 dB</td>
+                        <td>4/M</td>
+                    </tr>
+                    <tr>
+                        <td>Hanning (raised cosine)</td>
+                        <td>-31 dB</td>
+                        <td>4/M</td>
+                    </tr>
+                    <tr>
+                        <td>Hamming (raised cosine on pedestal)</td>
+                        <td>-42 dB</td>
+                        <td>4/M</td>
+                    </tr>
+                    <tr>
+                        <td>Blackman</td>
+                        <td>-58 dB</td>
+                        <td>6/M</td>
+                    </tr>
+                    </tbody>
+                </table>
+
+                <p><b>Fluke 8588A Aperture Parameters</b></p>
+                <p>
+                The aperture is the duration after each trigger where samples at a rate of 5 MHz are averaged together. 
+                </p>
+                <p>
+                The aperture can be set from 0 ns to 3 ms in 200 ns increments up to 1 ms, and 100 μs increments from 
+                1 ms to 3 ms.
+                </p>
+                <p>
+                Since the minimum duration to trigger one sample is 200ns, an aperture length greater than 0 ns allows 
+                more than one sample to be captured and averaged by the digitizer. In a sense, increasing the aperture 
+                lowers the sampling frequency of the digitizer."
+                </p>
+                <p>
+                The entire process for one reading is 200 ns, which gives a maximum trigger rate of 5 MHz. The aperture 
+                can be set from 0 ns to 3 ms in 200 ns increments up to 1 ms, and 100 μs increments from 1 ms to 3 ms. 
+                Greater aperture length decreases sample rate.
+                </p>
+
+                <table align="left">
+                    <tr>
+                        <th>Aperture</th>
+                        <th>Time</th>
+                        <th>Samples Averaged (#)</th>
+                        <th>Fs</th>
+                    </tr>
+                    <tr>
+                        <td>0ns</td>
+                        <td>200ns</td>
+                        <td>1</td>
+                        <td>5 MHz</td>
+                    </tr>
+                    <tr>
+                        <td>200ns</td>
+                        <td>200ns + 200ns</td>
+                        <td>2</td>
+                        <td>2.5 MHz</td>
+                    </tr>
+                    <tr>
+                        <td>400ns</td>
+                        <td>400ns + 200ns</td>
+                        <td>3</td>
+                        <td>1.6667 MHz</td>
+                    </tr>
+                    <tr>
+                        <td>600ns</td> 
+                        <td>600ns + 200ns</td>
+                        <td>4</td>
+                        <td>1.25 MHz</td>
+                    </tr>
+                    <tr>
+                        <td>800ns</td> 
+                        <td>800ns + 200ns</td>
+                        <td>5</td>
+                        <td>833.33 kHz</td>
+                    </tr>
+                    <tr>
+                        <td>1us</td> 
+                        <td>1us + 0.2us</td>
+                        <td>6</td>
+                        <td>833.33 kHz</td>
+                    </tr>
+                </table>
+            """
+            "<p><b>Software used in making this demo:</b></p><b>"
+            '<p><b><a href="http://www.python.org">Python 2.4</a></b></p>'
+            '<p><b><a href="http://www.wxpython.org">wxPython 2.8</a></b></p>'
+        )
+
+        self.sizer.Add(self.html, 1, wx.EXPAND)
+
+        self.SetSizer(self.sizer)
+        self.Fit()
 
 
 ########################################################################################################################
