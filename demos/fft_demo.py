@@ -113,7 +113,7 @@ def THDN_scipy(y, fs, lpf):
     # instead
     noise = irfft(f)
     THDN = rms_flat(noise) / total_rms
-    print("GITHUB: THD+N:     %.4f%% or %.1f dB" % (THDN * 100, 20 * np.log10(THDN)))
+    print("DEMO: THD+N:     %.4f%% or %.1f dB" % (THDN * 100, 20 * np.log10(THDN)))
 
 
 def plot_temporal(x, y, title=''):
