@@ -384,8 +384,8 @@ class MyGrid(wx.grid.Grid):
 
                 # make more rows if run out
                 rows_to_add = len(rows)
-                if rows_to_add >= self.GetNumberRows() - rows_to_add:
-                    self.AppendRows(10)
+                if self.GetNumberRows() - (len(self.data) + rows_to_add) >= self.GetNumberRows():
+                    self.AppendRows(20)
 
                 # Checks if list of lists (multiple rows) else handled as scalar (one row) =============================
                 if rows and isinstance(rows[0], list):
@@ -411,7 +411,7 @@ class MyGrid(wx.grid.Grid):
         else:
             print('No row data written. data appears empty.')
 
-    def export(self):
+    def export(self, e):
         with wx.FileDialog(self, "Save csv file", wildcard="CSV files (*.csv)|*.csv",
                            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fileDialog:
 

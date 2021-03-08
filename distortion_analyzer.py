@@ -1,5 +1,5 @@
-from dmm_f8588A import *
-from dut_f5560A import *
+import dmm_f8588A as dmm
+import dut_f5560A as dut
 from distortion_calculator import *
 
 import time
@@ -10,6 +10,7 @@ import threading
 import datetime
 import os
 import re
+from decimal import Decimal
 
 DUMMY_DATA = False
 
@@ -28,18 +29,19 @@ def _getFilepath():
 
 
 def get_FFT_parameters(Ft, lpf, error):
-    Fs = getSamplingFrequency(lpf)
+    Fs = dmm.getSamplingFrequency(Ft, lpf)
+
     N = getWindowLength(f0=Ft, fs=Fs, windfunc='blackman', error=error)
-    aperture, Fs, runtime = get_aperture(Fs, N)
-    N = getWindowLength(f0=Ft, fs=Fs, windfunc='blackman', error=error)
+    aperture, runtime = dmm.get_aperture(Fs, N)
+
     return Fs, N, aperture, runtime
 
 
 ########################################################################################################################
-class Instruments(f5560A_instrument, f8588A_instrument):
+class Instruments(dut.f5560A_instrument, dmm.f8588A_instrument):
     def __init__(self, parent):
-        f5560A_instrument.__init__(self)
-        f8588A_instrument.__init__(self)
+        dut.f5560A_instrument.__init__(self)
+        dmm.f8588A_instrument.__init__(self)
         self.analyzer = parent
         self.measurement = []
         self.connected = False
@@ -85,7 +87,7 @@ class DistortionAnalyzer:
                      'xf': [0], 'yf': [0]}
         self.results = {'Amplitude': [], 'Frequency': [], 'RMS': [],
                         'THDN': [], 'THD': [], 'RMS NOISE': [],
-                        'Fs': [], 'Aperture': []}
+                        'N': [], 'Fs': [], 'Aperture': []}
 
         self.M = Instruments(self)
 
@@ -111,9 +113,10 @@ class DistortionAnalyzer:
                        'rms': user_input['rms'],
                        'frequency': ft,
                        'error': user_input['error'],
-                       'cycles': user_input['cycles'],
+
                        'filter': user_input['filter']
                        }
+        print(f"{amplitude} {units} @ {ft} Hz ------------------------------------------------------------------------")
         try:
             if self.M.connected:
                 # TODO: Why did I do this?
@@ -130,9 +133,12 @@ class DistortionAnalyzer:
             self.frame.btn_start.SetLabel('START')
 
         except ValueError as e:
+
+            print(f"finished with errors. ----------------------------------------------------------------------------")
             self.frame.flag_complete = True
             self.frame.btn_start.SetLabel('START')
             self.frame.error_dialog(e)
+        print(f"done. ------------------------------------------------------------------------------------------------")
 
     def run_selected_function(self, selection):
         try:
@@ -385,10 +391,13 @@ class DistortionAnalyzer:
     def fft(self, y, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft):
         yrms = rms_flat(y)
         # FFT ==========================================================================================================
-        x = np.arange(0.0, runtime, aperture + 200e-9)
+        # x = np.arange(0.0, runtime, aperture + 200e-9)  # rounding issues for runtime=8ms, aperture=4.8us
+        sample_duration = aperture + 200e-9
+        x = np.linspace(0, runtime, int(runtime / sample_duration))
         # xf = np.linspace(0.0, Fs / 2, int(N / 2 + 1))
         xf = np.linspace(0.0, Fs, N)
         ywf = windowed_fft(y, N, 'blackman')
+
         # Find %THD+N
         try:
             thdn, f0, yf, noise_rms = THDN(y, Fs, hpf, lpf)
@@ -397,9 +406,10 @@ class DistortionAnalyzer:
         except ValueError as e:
             raise
 
-        results_row = {'Amplitude': amplitude, 'Frequency': Ft, 'RMS': round(yrms, 4),
+        results_row = {'Amplitude': amplitude, 'Frequency': Ft,
+                       'RMS': yrms,
                        'THDN': round(thdn, 5), 'THD': round(thd, 5), 'RMS NOISE': noise_rms,
-                       'Fs': f'{round(Fs / 1000, 2)} kHz', 'Aperture': f'{round(aperture * 1e6, 4)}us'}
+                       'N': N, 'Fs': f'{round(Fs / 1000, 2)} kHz', 'Aperture': f'{round(aperture * 1e6, 4)}us'}
 
         for key, value in results_row.items():
             self.results[key].append(value)
@@ -453,14 +463,14 @@ class DistortionAnalyzer:
         amplitude = 0.0
         frequency = 0.0
         units = ''
-        prefix = {'p': 1e-12, 'n': 1e-9, 'u': 1e-6, 'm': 1e-3}
+        prefix = {'p': '1e-12', 'n': '1e-9', 'u': '1e-6', 'm': '1e-3'}
         units_list = ("A", "a", "V", "v")
         s_split = re.findall(r'[0-9.]+|\D', amp_string)
 
         # CHECK IF AMPLITUDE USER INPUT IS VALID
         try:
             if len(s_split) == 3 and s_split[1] in prefix.keys() and s_split[2] in units_list:
-                amplitude = float(s_split[0]) * prefix[s_split[1]]
+                amplitude = float(Decimal(s_split[0]) * Decimal(prefix[s_split[1]]))
                 units = s_split[2].capitalize()
                 self.amplitude_good = True
             elif len(s_split) == 2 and s_split[1] in units_list:

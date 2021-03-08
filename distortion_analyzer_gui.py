@@ -53,7 +53,7 @@ class TestFrame(wx.Frame):
                            'rms': 0,
                            'frequency': '',
                            'error': 0,
-                           'cycles': 0,
+
                            'filter': 0
                            }
         self.panel_1 = wx.Panel(self, wx.ID_ANY)
@@ -91,10 +91,12 @@ class TestFrame(wx.Frame):
                                        style=wx.CB_DROPDOWN | wx.CB_READONLY)
         self.text_frequency = wx.TextCtrl(self.panel_4, wx.ID_ANY, "1000")
         self.text_error = wx.TextCtrl(self.panel_3, wx.ID_ANY, "0.1")
-        self.text_cycles = wx.TextCtrl(self.panel_3, wx.ID_ANY, "70")
+
         self.combo_filter = wx.ComboBox(self.panel_3, wx.ID_ANY, choices=["None", "100kHz", "3MHz"],
                                         style=wx.CB_DROPDOWN | wx.CB_READONLY)
+
         self.label_fs_report = wx.StaticText(self.panel_3, wx.ID_ANY, "--")
+        self.label_samples_report = wx.StaticText(self.panel_3, wx.ID_ANY, "--")
         self.label_aperture_report = wx.StaticText(self.panel_3, wx.ID_ANY, "--")
         self.text_rms_report = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
         self.text_thdn_report = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
@@ -117,16 +119,23 @@ class TestFrame(wx.Frame):
         wxglade_tmp_menu = wx.Menu()
         self.menu_export = wxglade_tmp_menu.Append(wx.ID_ANY, "Export Data", "")
         self.frame_menubar.Append(wxglade_tmp_menu, "File")
+
         wxglade_tmp_menu = wx.Menu()
         self.menu_config = wxglade_tmp_menu.Append(wx.ID_ANY, "Configure instruments", "")
         # self.menu_brkpts = wxglade_tmp_menu.Append(wx.ID_ANY, "Open Breakpoints", "")
         self.frame_menubar.Append(wxglade_tmp_menu, "Settings")
+
+        wxglade_tmp_menu = wx.Menu()
+        self.menu_reset_view = wxglade_tmp_menu.Append(wx.ID_ANY, "Reset Window Size", "")
+        # self.menu_brkpts = wxglade_tmp_menu.Append(wx.ID_ANY, "Open Breakpoints", "")
+        self.frame_menubar.Append(wxglade_tmp_menu, "View")
         self.SetMenuBar(self.frame_menubar)
 
         # Menu Bar Bind Events -----------------------------------------------------------------------------------------
         self.Bind(wx.EVT_MENU, self.grid_1.export, self.menu_export)
         self.Bind(wx.EVT_MENU, self.config, self.menu_config)
         # self.Bind(wx.EVT_MENU, self.open_breakpoints, self.menu_brkpts)
+        self.Bind(wx.EVT_MENU, self.reset_view, self.menu_reset_view)
 
         # Configure Instruments ----------------------------------------------------------------------------------------
         on_connect = lambda event: self.on_connect_instr(event)
@@ -248,10 +257,11 @@ class TestFrame(wx.Frame):
         grid_sizer_2.Add(self.panel_4, (7, 0), (1, 2), wx.EXPAND, 0)
 
         # MEASURE ------------------------------------------------------------------------------------------------------
-        label_samples = wx.StaticText(self.panel_3, wx.ID_ANY, "Error:")
-        label_cycles = wx.StaticText(self.panel_3, wx.ID_ANY, "Cycles:")
+        label_error = wx.StaticText(self.panel_3, wx.ID_ANY, "Error:")
+
         label_filter = wx.StaticText(self.panel_3, wx.ID_ANY, "Filter:")
         label_fs = wx.StaticText(self.panel_3, wx.ID_ANY, "Fs:")
+        label_samples = wx.StaticText(self.panel_3, wx.ID_ANY, "Samples:")
         label_aperture = wx.StaticText(self.panel_3, wx.ID_ANY, "Aperture:")
 
         label_measure.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
@@ -260,14 +270,14 @@ class TestFrame(wx.Frame):
 
         static_line_7.SetMinSize((300, 2))
         grid_sizer_2.Add(static_line_7, (9, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
-        grid_sizer_2.Add(label_samples, (10, 0), (1, 1), 0, 0)
+        grid_sizer_2.Add(label_error, (10, 0), (1, 1), 0, 0)
         grid_sizer_2.Add(self.text_error, (10, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        grid_sizer_2.Add(label_cycles, (11, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.text_cycles, (11, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        grid_sizer_2.Add(label_filter, (12, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.combo_filter, (12, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        grid_sizer_2.Add(label_fs, (13, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.label_fs_report, (13, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_2.Add(label_filter, (11, 0), (1, 1), 0, 0)
+        grid_sizer_2.Add(self.combo_filter, (11, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_2.Add(label_fs, (12, 0), (1, 1), 0, 0)
+        grid_sizer_2.Add(self.label_fs_report, (12, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_2.Add(label_samples, (13, 0), (1, 1), 0, 0)
+        grid_sizer_2.Add(self.label_samples_report, (13, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
         grid_sizer_2.Add(label_aperture, (14, 0), (1, 1), 0, 0)
         grid_sizer_2.Add(self.label_aperture_report, (14, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
 
@@ -352,6 +362,9 @@ class TestFrame(wx.Frame):
         else:
             print('thread already running.')
 
+    def reset_view(self, evt):
+        self.SetSize((1055, 640))
+
     def config(self, evt):
         dlg = InstrumentDialog(self, None, wx.ID_ANY, "")
         dlg.ShowModal()
@@ -413,7 +426,7 @@ class TestFrame(wx.Frame):
         source = self.checkbox_1.GetValue()
         error = float(self.text_error.GetValue())
         rms = self.combo_box_1.GetSelection()
-        cycles = int(self.text_cycles.GetValue())
+
         filter = self.combo_filter.GetValue()
 
         amp_string = self.text_amplitude.GetValue()
@@ -425,7 +438,7 @@ class TestFrame(wx.Frame):
                            'rms': rms,
                            'frequency': freq_string,
                            'error': error,
-                           'cycles': cycles,
+
                            'filter': filter
                            }
 
@@ -443,7 +456,7 @@ class TestFrame(wx.Frame):
         self.Destroy()
 
     def __do_table_header(self):
-        header = [['Amplitude', 'Frequency', 'RMS', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'Aperture']]
+        header = [['Amplitude', 'Frequency', 'RMS', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'Samples', 'Aperture']]
         self.grid_1.append_rows(header)
 
     def results_update(self, results):
@@ -451,6 +464,7 @@ class TestFrame(wx.Frame):
         frequency = results['Frequency']
 
         fs = results['Fs']
+        N = results['N']
         aperture = results['Aperture']
         rms = results['RMS']
         units = results['units']
@@ -459,13 +473,14 @@ class TestFrame(wx.Frame):
         rms_noise = results['RMS NOISE']
 
         self.label_fs_report.SetLabelText(str(fs))
+        self.label_samples_report.SetLabelText(str(N))
         self.label_aperture_report.SetLabelText(str(aperture))
-        self.text_rms_report.SetValue(f"{rms}{units}")
+        self.text_rms_report.SetValue(f"{'{:0.3e}'.format(rms)} {units}")
         self.text_thdn_report.SetValue(f"{round(thdn * 100, 3)}% or {round(np.log10(thdn), 1)}dB")
         self.text_thd_report.SetValue(f"{round(thd * 100, 3)}% or {round(np.log10(thd), 1)}dB")
 
         # self.grid_1.append_rows({k: results[k] for k in set(list(results.keys())) - {'units'}})
-        self.grid_1.append_rows([[amplitude, frequency, rms, thdn, thd, rms_noise, fs, aperture]])
+        self.grid_1.append_rows([[amplitude, frequency, rms, thdn, thd, rms_noise, fs, N, aperture]])
 
     # ------------------------------------------------------------------------------------------------------------------
     def __do_plot_layout(self):
@@ -493,7 +508,11 @@ class TestFrame(wx.Frame):
         yt_tick = params['yt_tick']
 
         self.ax1.set_yticks(np.arange(yt_start, yt_end, yt_tick))
-        self.ax1.relim()  # recompute the ax.dataLim
+        try:
+            self.ax1.relim()  # recompute the ax.dataLim
+        except ValueError:
+            print(f'Are the lengths of xt: {len(xt)} and yt: {len(yt)} mismatched?')
+            raise
         self.ax1.autoscale()
         self.ax1.set_xlim([xt_start, xt_end])
 
@@ -529,7 +548,7 @@ class AboutDlg(wx.Panel):
     def __init__(self, frame):
         wx.Panel.__init__(self, frame, wx.ID_ANY)
         self.sizer = wx.BoxSizer(wx.VERTICAL)
-        self.html = wx.html.HtmlWindow(self, -1, size=(1000, 500), style=wx.html.HW_SCROLLBAR_AUTO | wx.TE_READONLY)
+        self.html = wx.html.HtmlWindow(self, -1, size=(1013, 533), style=wx.html.HW_SCROLLBAR_AUTO | wx.TE_READONLY)
 
         self.html.SetPage(
             ''

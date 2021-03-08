@@ -54,16 +54,6 @@ def find_range(f, x):
     return lowermin, uppermin
 
 
-def getSamplingFrequency(bw=100e3):
-    """
-    The maximum detectable frequency resolved by an FFT is defined as half the sampling frequency.
-    :param bw: the maximum resolved frequency of the fft.
-    :return: sampling rate, fs
-    """
-    fs = bw * 2
-    return fs
-
-
 def getWindowLength(f0=10e3, fs=2.5e6, windfunc='blackman', error=0.1):
     """
     Computes the window length of the measurement. An error is expressed since the main lobe width is directly
@@ -130,12 +120,13 @@ def THDN(y, fs, hpf=0, lpf=100e3):
 
     # APPLY HIGH PASS FILTERING
     if not (hpf == 0) and (hpf < lpf):
+        print('>>applying high pass filter<<')
         fc = int(hpf * N / fs)
         yf[:fc] = 1e-10
 
     # APPLY LOW PASS FILTERING
     if lpf != 0:
-        fc = int(lpf * N / fs)
+        fc = int(lpf * N / fs) + 1
         yf[fc:] = 1e-10
 
     # RMS from frequency domain

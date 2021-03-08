@@ -16,6 +16,21 @@ def to_float(s):
     return f
 
 
+def getSamplingFrequency(F0, bw=100e3):
+    """
+    The maximum detectable frequency resolved by an FFT is defined as half the sampling frequency.
+    :param bw: the maximum resolved frequency of the fft.
+    :return: sampling rate, fs
+    """
+    # Ideal sampling frequency
+    _Fs = max(bw, 100 * F0)
+
+    # An integer number of samples averaged per measurement determines actual sampling frequency
+    N = max(round(DIGITIZER_SAMPLING_FREQUENCY / _Fs), 1)
+    Fs = DIGITIZER_SAMPLING_FREQUENCY / N
+    return Fs
+
+
 def get_aperture(Fs, N):
     """
     The aperture is the duration after trigger where samples at a rate of 5 MHz are averaged together.
@@ -58,8 +73,8 @@ def get_aperture(Fs, N):
         aperture = max(100e-6 * (Navg - 1), 0)
 
     runtime = N * (aperture + 200e-9)  # The total runtime
-    Fs = DIGITIZER_SAMPLING_FREQUENCY / Navg  # The calculated sampling frequency
-    return aperture, Fs, runtime
+
+    return aperture, runtime
 
 
 class f8588A_instrument:
