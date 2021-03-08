@@ -141,7 +141,7 @@ def plot_spectrum(xf, yf, title=''):
     plt.show()
 
 
-data = pd.read_csv('results/y_data.csv')
+data = pd.read_csv('./demos/y_data.csv')
 # TODO: For some reason, df.to_numpy(np.complex) doesn't work
 # yf = np.array((data['yf_old'].dropna()).tolist()).astype(np.complex)
 # yf_filtered = np.array((data['yf_filter'].dropna()).tolist()).astype(np.complex)
