@@ -11,21 +11,12 @@ import datetime
 import os
 import re
 from decimal import Decimal
+import csv
 
-DUMMY_DATA = False
+DUMMY_DATA = True
 
 
 ########################################################################################################################
-def _getFilepath():
-    Path('results').mkdir(parents=True, exist_ok=True)
-    date = datetime.date.today().strftime("%Y%m%d")
-    filename = f'distortion_{date}'
-    index = 0
-
-    while os.path.isfile('results/' + filename + "_" + str(index).zfill(2) + '.csv'):
-        index += 1
-    filename = filename + "_" + str(index).zfill(2)
-    return f'results/{filename}.csv'
 
 
 def get_FFT_parameters(Ft, lpf, error):
@@ -35,6 +26,29 @@ def get_FFT_parameters(Ft, lpf, error):
     aperture, runtime = dmm.get_aperture(Fs, N)
 
     return Fs, N, aperture, runtime
+
+
+def _getFilepath(directory, fname):
+    Path(directory).mkdir(parents=True, exist_ok=True)
+    date = datetime.date.today().strftime("%Y%m%d")
+    filename = f'{fname}_{date}'
+    index = 0
+
+    while os.path.isfile(f'{directory}/{filename}_{str(index).zfill(3)}.csv'):
+        index += 1
+    filename = filename + "_" + str(index).zfill(3)
+    return f'{directory}/{filename}.csv'
+
+
+def write_to_csv(path, fname, header, *args):
+    table = list(zip(*args))
+    pathname = _getFilepath(path, fname)
+    with open(pathname, 'w', newline='') as outfile:
+        writer = csv.writer(outfile, delimiter=',')
+        if header:
+            writer.writerow(header)
+        for row in table:
+            writer.writerow(row)
 
 
 ########################################################################################################################
@@ -138,7 +152,8 @@ class DistortionAnalyzer:
             self.frame.flag_complete = True
             self.frame.btn_start.SetLabel('START')
             self.frame.error_dialog(e)
-        print(f"done. ------------------------------------------------------------------------------------------------")
+        else:
+            print(f"done. ------------------------------------------------------------------------------------------------")
 
     def run_selected_function(self, selection):
         try:
@@ -200,21 +215,26 @@ class DistortionAnalyzer:
             self.frame.text_frequency.SetValue(str(row.frequency))
 
             amplitude, units, ft = self.get_string_value(row.amplitude, str(row.frequency))
+            if not DUMMY_DATA:
+                self.params['amplitude'] = amplitude
+                self.params['frequency'] = ft
+                self.params['units'] = units
 
-            self.params['amplitude'] = amplitude
-            self.params['frequency'] = ft
-            self.params['units'] = units
-
-            try:
+                try:
+                    results[idx] = func(setup=True)
+                    self.M.standby()
+                except ValueError:
+                    raise
+            else:
+                self.params['amplitude'] = 1
+                self.params['frequency'] = 1000
+                self.params['units'] = 'A'
                 results[idx] = func(setup=True)
-                self.M.standby()
-            except ValueError:
-                raise
 
         # https://stackoverflow.com/a/28356566
         # https://stackoverflow.com/a/28058264
         results_df = pd.DataFrame(results, columns=headers)
-        results_df.to_csv(path_or_buf=_getFilepath(), sep=',', index=False)
+        results_df.to_csv(path_or_buf=_getFilepath('results', 'distortion'), sep=',', index=False)
         self.frame.flag_complete = True
 
     def run_continuous(self, func):
@@ -251,7 +271,6 @@ class DistortionAnalyzer:
 
         # DIGITIZER
         error = params['error']
-
         filter_val = params['filter']
 
         # SIGNAL SOURCE ================================================================================================
@@ -281,7 +300,6 @@ class DistortionAnalyzer:
             hpf = 3  # high pass filter cutoff frequency
             Fs, N, aperture, runtime = get_FFT_parameters(Ft=10, lpf=lpf, error=error)
         else:
-            print(f'filter_val: {filter_val}')
             if filter_val == '100kHz':
                 lpf = 100e3  # low pass filter cutoff frequency
             elif filter_val == '3MHz':
@@ -313,9 +331,8 @@ class DistortionAnalyzer:
                     raise
             else:
                 y = self.M.retrieve_digitize()
-            pd.DataFrame(data=y, columns=['ydata']).to_csv('results/y_data.csv')
         else:
-            y = pd.read_csv('results/y_data.csv')['ydata'].to_numpy()
+            y = pd.read_csv('results/history/DUMMY.csv')['yt'].to_numpy()
 
         return self.fft(y, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft)
 
@@ -388,36 +405,40 @@ class DistortionAnalyzer:
 
         return self.fft(y, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft)
 
-    def fft(self, y, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft):
-        yrms = rms_flat(y)
+    def fft(self, yt, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft):
+        yrms = rms_flat(yt)
         # FFT ==========================================================================================================
-        # x = np.arange(0.0, runtime, aperture + 200e-9)  # rounding issues for runtime=8ms, aperture=4.8us
-        sample_duration = aperture + 200e-9
-        x = np.linspace(0, runtime, int(runtime / sample_duration))
-        # xf = np.linspace(0.0, Fs / 2, int(N / 2 + 1))
+        xt = np.arange(0, N, 1)/Fs
         xf = np.linspace(0.0, Fs, N)
-        ywf = windowed_fft(y, N, 'blackman')
+        ywf = windowed_fft(yt, N, 'blackman')
 
         # Find %THD+N
         try:
-            thdn, f0, yf, noise_rms = THDN(y, Fs, hpf, lpf)
-            thd = THD(y, Fs)
-            data = {'x': x, 'y': y, 'xf': xf, 'ywf': ywf, 'RMS': yrms, 'N': N, 'runtime': runtime, 'Fs': Fs, 'f0': f0}
+            thdn, f0, yf, noise_rms = THDN(yt, Fs, hpf, lpf)
+            thd = THD(yt, Fs)
+            data = {'x': xt, 'y': yt, 'xf': xf, 'ywf': ywf, 'RMS': yrms, 'N': N, 'runtime': runtime, 'Fs': Fs, 'f0': f0}
         except ValueError as e:
             raise
-
         results_row = {'Amplitude': amplitude, 'Frequency': Ft,
                        'RMS': yrms,
                        'THDN': round(thdn, 5), 'THD': round(thd, 5), 'RMS NOISE': noise_rms,
                        'N': N, 'Fs': f'{round(Fs / 1000, 2)} kHz', 'Aperture': f'{round(aperture * 1e6, 4)}us'}
 
+        # TODO: is this action necessary still?
+        # append units column ------------------------------------------------------------------------------------------
         for key, value in results_row.items():
             self.results[key].append(value)
         results_row['units'] = self.params['units']
 
+        # report results to main panel ---------------------------------------------------------------------------------
         self.frame.results_update(results_row)
+
+        # save measurement to csv --------------------------------------------------------------------------------------
+        header = ['xt', 'yt', 'xf', 'yf']
+        write_to_csv('results/history', 'measurement', header, xt, yt, xf, ywf)
         self.plot(data)
 
+        # TODO: we don't need to return anything
         return [amplitude, Ft, yrms, thdn, thd, noise_rms, Fs, aperture]
 
     def plot(self, data):

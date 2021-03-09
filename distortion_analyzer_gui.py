@@ -1,4 +1,5 @@
 from distortion_analyzer import DistortionAnalyzer as da
+from distortion_calculator import *
 
 from instruments_dialog_gui import *
 from instruments_RWConfig import *
@@ -9,7 +10,7 @@ import wx.html
 import webbrowser
 
 import numpy as np
-
+import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
@@ -53,7 +54,6 @@ class TestFrame(wx.Frame):
                            'rms': 0,
                            'frequency': '',
                            'error': 0,
-
                            'filter': 0
                            }
         self.panel_1 = wx.Panel(self, wx.ID_ANY)
@@ -108,11 +108,14 @@ class TestFrame(wx.Frame):
                                       style=wx.CB_DROPDOWN)
 
         # Data panel for displaying raw output -------------------------------------------------------------------------
-        self.grid_1 = MyGrid(self.notebook_data)
-        self.btn_export = wx.Button(self.notebook_data, wx.ID_ANY, "Export")
+        self.tab_data = DataTab(self.notebook_data)
+        self.grid_1 = self.tab_data.spreadsheet
+
+        # Data panel for displaying raw output -------------------------------------------------------------------------
+        self.tab_history = HistoryTab(self.notebook_history)
 
         # Information Panel ------------------ -------------------------------------------------------------------------
-        self.html = AboutDlg(self.notebook_information)
+        self.tab_about = AboutTab(self.notebook_information)
 
         # Menu Bar -----------------------------------------------------------------------------------------------------
         self.frame_menubar = wx.MenuBar()
@@ -154,9 +157,6 @@ class TestFrame(wx.Frame):
         on_combo_select = lambda event: self.lock_controls(event)
         self.Bind(wx.EVT_COMBOBOX_CLOSEUP, on_combo_select, self.combo_mode)
 
-        # export grid data ---------------------------------------------------------------------------------------------
-        self.Bind(wx.EVT_BUTTON, self.grid_1.export, self.btn_export)
-
         self.Bind(wx.EVT_CLOSE, self.OnCloseWindow)
 
         self.Freeze()
@@ -185,9 +185,6 @@ class TestFrame(wx.Frame):
         self.combo_filter.SetSelection(1)
         self.combo_mode.SetSelection(0)
 
-        self.grid_1.CreateGrid(100, 60)
-        self.grid_1.SetMinSize((1024, 50))
-
     def __do_layout(self):
         sizer_7 = wx.BoxSizer(wx.VERTICAL)
         sizer_8 = wx.BoxSizer(wx.VERTICAL)
@@ -196,9 +193,9 @@ class TestFrame(wx.Frame):
         grid_sizer_2 = wx.GridBagSizer(0, 0)
         grid_sizer_3 = wx.GridBagSizer(0, 0)
         grid_sizer_4 = wx.GridBagSizer(0, 0)
-        grid_sizer_5 = wx.FlexGridSizer(2, 1, 0, 0)
-        grid_sizer_6 = wx.GridSizer(1, 3, 0, 0)
-        grid_sizer_7 = wx.GridBagSizer(0, 0)
+
+        grid_sizer_5 = wx.BoxSizer(wx.VERTICAL)
+        grid_sizer_7 = wx.BoxSizer(wx.VERTICAL)
         grid_sizer_8 = wx.BoxSizer(wx.VERTICAL)
 
         # TITLE --------------------------------------------------------------------------------------------------------
@@ -309,16 +306,13 @@ class TestFrame(wx.Frame):
         grid_sizer_1.Add(self.panel_5, (0, 1), (1, 1), wx.EXPAND, 0)
         self.notebook_analyzer.SetSizer(grid_sizer_1)
 
-        grid_sizer_6.Add(self.btn_export, 0, wx.ALL, 5)
-        grid_sizer_6.Add((0, 0), 0, 0, 0)
-        grid_sizer_6.Add((0, 0), 0, 0, 0)
-        grid_sizer_5.Add(self.grid_1, 0, wx.EXPAND, 0)
-        grid_sizer_5.Add(grid_sizer_6, 1, wx.EXPAND, 0)
+        grid_sizer_5.Add(self.tab_data, 1, wx.EXPAND, 0)
         self.notebook_data.SetSizer(grid_sizer_5)
-        grid_sizer_5.AddGrowableRow(0)
-        grid_sizer_5.AddGrowableCol(0)
 
+        grid_sizer_7.Add(self.tab_history, 1, wx.EXPAND, 0)
         self.notebook_history.SetSizer(grid_sizer_7)
+
+        grid_sizer_8.Add(self.tab_about, 1, wx.EXPAND, 0)
         self.notebook_information.SetSizer(grid_sizer_8)
 
         grid_sizer_1.AddGrowableRow(0)
@@ -438,7 +432,6 @@ class TestFrame(wx.Frame):
                            'rms': rms,
                            'frequency': freq_string,
                            'error': error,
-
                            'filter': filter
                            }
 
@@ -456,7 +449,7 @@ class TestFrame(wx.Frame):
         self.Destroy()
 
     def __do_table_header(self):
-        header = [['Amplitude', 'Frequency', 'RMS', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'Samples', 'Aperture']]
+        header = ['Amplitude', 'Frequency', 'RMS', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'Samples', 'Aperture']
         self.grid_1.append_rows(header)
 
     def results_update(self, results):
@@ -480,7 +473,7 @@ class TestFrame(wx.Frame):
         self.text_thd_report.SetValue(f"{round(thd * 100, 3)}% or {round(np.log10(thd), 1)}dB")
 
         # self.grid_1.append_rows({k: results[k] for k in set(list(results.keys())) - {'units'}})
-        self.grid_1.append_rows([[amplitude, frequency, rms, thdn, thd, rms_noise, fs, N, aperture]])
+        self.grid_1.append_rows([amplitude, frequency, rms, thdn, thd, rms_noise, fs, N, aperture])
 
     # ------------------------------------------------------------------------------------------------------------------
     def __do_plot_layout(self):
@@ -539,151 +532,226 @@ class TestFrame(wx.Frame):
 
 
 ########################################################################################################################
+class DataTab(wx.Panel):
+    def __init__(self, parent):
+        wx.Panel.__init__(self, parent, wx.ID_ANY)
+
+        # Data panel for displaying raw output -------------------------------------------------------------------------
+        self.spreadsheet = MyGrid(self)
+        self.btn_export = wx.Button(self, wx.ID_ANY, "Export")
+
+        # export grid data ---------------------------------------------------------------------------------------------
+        self.Bind(wx.EVT_BUTTON, self.spreadsheet.export, self.btn_export)
+
+        self.__set_properties()
+        self.__do_layout()
+
+    def __set_properties(self):
+        # self.SetBackgroundColour(wx.Colour(127, 255, 0))
+        self.spreadsheet.CreateGrid(100, 60)
+        self.spreadsheet.SetMinSize((1024, 50))
+
+    def __do_layout(self):
+        sizer_2 = wx.GridSizer(1, 1, 0, 0)
+        grid_sizer_1 = wx.FlexGridSizer(2, 1, 0, 0)
+
+        grid_sizer_1.Add(self.spreadsheet, 1, wx.EXPAND, 0)
+        grid_sizer_1.Add(self.btn_export, 0, 0, 0)
+        grid_sizer_1.AddGrowableRow(0)
+        grid_sizer_1.AddGrowableCol(0)
+        sizer_2.Add(grid_sizer_1, 0, wx.EXPAND, 0)
+        self.SetSizer(sizer_2)
+        self.Layout()
+
+
+class HistoryTab(wx.Panel):
+    def __init__(self, parent):
+        wx.Panel.__init__(self, parent, wx.ID_ANY)
+
+        # PLOT Panel ---------------------------------------------------------------------------------------------------
+        self.figure = plt.figure(figsize=(1, 1))  # look into Figure((5, 4), 75)
+        self.canvas = FigureCanvas(self, -1, self.figure)
+        self.toolbar = NavigationToolbar(self.canvas)
+        self.toolbar.Realize()
+
+        self.ax1 = self.figure.add_subplot(211)
+        self.ax2 = self.figure.add_subplot(212)
+
+        self.temporal, = self.ax1.plot([], [], linestyle='-')
+        self.spectral, = self.ax2.plot([], [], color='#C02942')
+
+        # Open history dialog ------------------------------------------------------------------------------------------
+        self.btn_openHistory = wx.Button(self, wx.ID_ANY, "Open History")
+        self.Bind(wx.EVT_BUTTON, self.OnOpen, self.btn_openHistory)
+
+        self.text_ctrl_fs = wx.TextCtrl(self, wx.ID_ANY, "")
+        self.text_ctrl_samples = wx.TextCtrl(self, wx.ID_ANY, "")
+        self.text_ctrl_rms = wx.TextCtrl(self, wx.ID_ANY, "")
+        self.text_ctrl_thdn = wx.TextCtrl(self, wx.ID_ANY, "")
+        self.text_ctrl_thd = wx.TextCtrl(self, wx.ID_ANY, "")
+
+        self.__set_properties()
+        self.__do_layout()
+        self.__do_plot_layout()
+
+    def __set_properties(self):
+        self.SetBackgroundColour(wx.Colour(240, 240, 240))
+        self.canvas.SetMinSize((700, 490))
+
+    def __do_layout(self):
+        sizer_2 = wx.GridSizer(1, 1, 0, 0)
+        grid_sizer_1 = wx.FlexGridSizer(1, 2, 0, 0)
+        grid_sizer_plot = wx.GridBagSizer(0, 0)
+        grid_sizer_report = wx.GridBagSizer(0, 0)
+
+        # LEFT PANEL ---------------------------------------------------------------------------------------------------
+        lbl_fs = wx.StaticText(self, wx.ID_ANY, "Fs:")
+        lbl_samples = wx.StaticText(self, wx.ID_ANY, "Samples:")
+        lbl_rms = wx.StaticText(self, wx.ID_ANY, "RMS:")
+        lbl_thdn = wx.StaticText(self, wx.ID_ANY, "THD+N:")
+        lbl_THD = wx.StaticText(self, wx.ID_ANY, "THD:")
+
+        static_line_1 = wx.StaticLine(self, wx.ID_ANY)
+        static_line_1.SetMinSize((180, 2))
+        static_line_2 = wx.StaticLine(self, wx.ID_ANY)
+        static_line_2.SetMinSize((180, 2))
+
+        grid_sizer_report.Add(self.btn_openHistory, (0, 0), (1, 2), wx.LEFT | wx.TOP, 5)
+        grid_sizer_report.Add(static_line_2, (1, 0), (1, 2), wx.ALL, 5)
+        grid_sizer_report.Add(lbl_fs, (2, 0), (1, 1), wx.LEFT | wx.RIGHT, 5)
+        grid_sizer_report.Add(self.text_ctrl_fs, (2, 1), (1, 1), wx.BOTTOM, 5)
+        grid_sizer_report.Add(lbl_samples, (3, 0), (1, 1), wx.LEFT | wx.RIGHT, 5)
+        grid_sizer_report.Add(self.text_ctrl_samples, (3, 1), (1, 1), wx.BOTTOM, 5)
+        grid_sizer_report.Add(static_line_1, (4, 0), (1, 2), wx.ALL, 5)
+        grid_sizer_report.Add(lbl_rms, (5, 0), (1, 1), wx.LEFT | wx.RIGHT, 5)
+        grid_sizer_report.Add(self.text_ctrl_rms, (5, 1), (1, 1), wx.BOTTOM, 5)
+        grid_sizer_report.Add(lbl_thdn, (6, 0), (1, 1), wx.LEFT | wx.RIGHT, 5)
+        grid_sizer_report.Add(self.text_ctrl_thdn, (6, 1), (1, 1), wx.BOTTOM, 5)
+        grid_sizer_report.Add(lbl_THD, (7, 0), (1, 1), wx.LEFT | wx.RIGHT, 5)
+        grid_sizer_report.Add(self.text_ctrl_thd, (7, 1), (1, 1), 0, 0)
+        grid_sizer_1.Add(grid_sizer_report, 1, wx.EXPAND, 0)
+
+        # PLOT PANEL ---------------------------------------------------------------------------------------------------
+        grid_sizer_plot.Add(self.canvas, (0, 0), (1, 1), wx.ALL | wx.EXPAND)
+        grid_sizer_plot.Add(self.toolbar, (1, 0), (1, 1), wx.ALL | wx.EXPAND)
+        grid_sizer_plot.AddGrowableRow(0)
+        grid_sizer_plot.AddGrowableCol(0)
+        grid_sizer_1.Add(grid_sizer_plot, 1, wx.BOTTOM | wx.EXPAND, 5)
+
+        grid_sizer_1.AddGrowableRow(0)
+        grid_sizer_1.AddGrowableCol(1)
+
+        sizer_2.Add(grid_sizer_1, 0, wx.EXPAND, 0)
+
+        self.SetSizer(sizer_2)
+        self.Layout()
+
+    def OnOpen(self, event):
+        # if self.contentNotSaved:
+        #     if wx.MessageBox("Current content has not been saved! Proceed?", "Please confirm",
+        #                      wx.ICON_QUESTION | wx.YES_NO, self) == wx.NO:
+        #         return
+
+        # otherwise ask the user what new file to open
+        with wx.FileDialog(self, "Open CSV file", wildcard="CSV files (*.csv)|*.csv",
+                           style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as fileDialog:
+
+            if fileDialog.ShowModal() == wx.ID_CANCEL:
+                return  # the user changed their mind
+
+            # Proceed loading the file chosen by the user
+            pathname = fileDialog.GetPath()
+            try:
+                with open(pathname, 'r') as file:
+                    self.open_history(file)
+            except IOError:
+                wx.LogError("Cannot open file '%s'." % pathname)
+
+    def open_history(self, file):
+        df = pd.read_csv(file)
+
+        xt = df['xt'].to_numpy()
+        yt = df['yt'].to_numpy()
+        xf = df['xf'].to_numpy()
+
+        # https://stackoverflow.com/a/18919965/3382269
+        # https://stackoverflow.com/a/51725795/3382269
+        df['yf'] = df['yf'].str.replace('i', 'j').apply(lambda x: np.complex(x))
+        yf = df['yf'].to_numpy()
+        yrms = np.sqrt(np.mean(np.absolute(yt) ** 2))
+
+        N = len(xt)
+        Fs = round(1 / (xt[1] - xt[0]), 2)
+        thdn, *_ = THDN(yt, Fs)
+        thd = THD(yt, Fs)
+        self.plot(xt, yt, yrms, xf, yf, N)
+        self.results_update(Fs, N, yrms, thdn, thd)
+
+    # ------------------------------------------------------------------------------------------------------------------
+    def __do_plot_layout(self):
+        self.ax1.set_title('SAMPLED TIMED SERIES DATA')
+        self.ax1.set_xlabel('TIME (ms)')
+        self.ax1.set_ylabel('AMPLITUDE')
+        self.ax2.set_title('DIGITIZED WAVEFORM SPECTRAL RESPONSE')
+        self.ax2.set_xlabel('FREQUENCY (kHz)')
+        self.ax2.set_ylabel('MAGNITUDE (dB)')
+        self.ax2.grid()
+        self.figure.align_ylabels([self.ax1, self.ax2])
+        self.figure.tight_layout()
+
+    def plot(self, xt, yt, yrms, xf, yf, N):
+        # TEMPORAL -----------------------------------------------------------------------------------------------------
+        self.temporal.set_data(xt, yt)
+
+        try:
+            self.ax1.relim()  # recompute the ax.dataLim
+        except ValueError:
+            print(f'Are the lengths of xt: {len(xt)} and yt: {len(yt)} mismatched?')
+            raise
+        self.ax1.autoscale()
+
+        # SPECTRAL -----------------------------------------------------------------------------------------------------
+        xf_scaled = xf[0:N] / 1000
+        yf_scaled = 20 * np.log10(2 * np.abs(yf[0:N] / (yrms * N)))
+        self.spectral.set_data(xf_scaled, yf_scaled)
+        try:
+            self.ax2.relim()  # recompute the ax.dataLim
+        except ValueError:
+            print(f'Are the lengths of xt: {len(xf_scaled)} and yt: {len(yf_scaled)} mismatched?')
+            raise
+        self.ax2.autoscale()
+
+        xf_start = 0
+        xf_end = xf_scaled[int(N / 2)]
+        self.ax2.set_xlim([xf_start, xf_end])
+
+        # UPDATE PLOT FEATURES -----------------------------------------------------------------------------------------
+        self.figure.tight_layout()
+
+        self.toolbar.update()  # Not sure why this is needed - ADS
+        self.canvas.draw()
+        self.canvas.flush_events()
+
+    def results_update(self, Fs, N, yrms, thdn, thd):
+        self.text_ctrl_fs.SetLabelText(str(Fs))
+        self.text_ctrl_samples.SetLabelText(str(N))
+        self.text_ctrl_rms.SetValue(f"{'{:0.3e}'.format(yrms)}")
+        self.text_ctrl_thdn.SetValue(f"{round(thdn * 100, 3)}% or {round(np.log10(thdn), 1)}dB")
+        self.text_ctrl_thd.SetValue(f"{round(thd * 100, 3)}% or {round(np.log10(thd), 1)}dB")
+
+
 class wxHTML(wx.html.HtmlWindow):
     def OnLinkClicked(self, link):
         webbrowser.open(link.GetHref())
 
 
-class AboutDlg(wx.Panel):
+class AboutTab(wx.Panel):
     def __init__(self, frame):
         wx.Panel.__init__(self, frame, wx.ID_ANY)
         self.sizer = wx.BoxSizer(wx.VERTICAL)
         self.html = wx.html.HtmlWindow(self, -1, size=(1013, 533), style=wx.html.HW_SCROLLBAR_AUTO | wx.TE_READONLY)
 
-        self.html.SetPage(
-            ''
-            """
-                <h2>About The Distortion Analyzer</h2>
-                <p>
-                The size of the FFT, the length of the window, or the duration of the measurement, should be at least 
-                six times longer than the period of the signal for a Blackman windowing filter.
-                </p>
-                <p>
-                The lowest detectable frequency by the FFT is determined by the size (duration) of the window. This is 
-                also considered the bandwidth of the main lobe of the FFT.
-                </p>
-                <p>
-                M is the number of samples captured for a measurement of time series data. M refers to the length of 
-                the windowing filter applied to the. M≤N where N samples refers to the length of the FFT. When N is 
-                greater than M, zero padding is employed, which does not introduce new data to the FFT, but only 
-                increases the resolution of the FFT.
-                </p>
-                <p>
-                Increasing the length of M for a given sample frequency reduces the width of the main lobe. In other 
-                words, in situations where zero padding is not involved and M=N, the main lobe width is reduced by 
-                increasing the number of samples for a given sampling frequency.
-                </p>
-                <p>
-                The effective data length of captured period cycles is equal for window shapes where M is scaled "
-                appropriately.
-
-                </p>
-
-                <table align="left" style="border-collapse: collapse;">
-                    <thead>
-                    <tr>
-                        <th>Window Shape</th>
-                        <th>Relative Peak Side Lobe Magnitude</th>
-                        <th>Approx. Main Lobe Width (Hz)</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <tr style="border-bottom: 1px solid black;">
-                        <td>Rectangular/boxcar</td>
-                        <td>-13 dB</td>
-                        <td>2/M</td>
-                    </tr>
-                    <tr>
-                        <td>Bartlett (triangle)</td>
-                        <td>-26 dB</td>
-                        <td>4/M</td>
-                    </tr>
-                    <tr>
-                        <td>Hanning (raised cosine)</td>
-                        <td>-31 dB</td>
-                        <td>4/M</td>
-                    </tr>
-                    <tr>
-                        <td>Hamming (raised cosine on pedestal)</td>
-                        <td>-42 dB</td>
-                        <td>4/M</td>
-                    </tr>
-                    <tr>
-                        <td>Blackman</td>
-                        <td>-58 dB</td>
-                        <td>6/M</td>
-                    </tr>
-                    </tbody>
-                </table>
-
-                <p><b>Fluke 8588A Aperture Parameters</b></p>
-                <p>
-                The aperture is the duration after each trigger where samples at a rate of 5 MHz are averaged together. 
-                </p>
-                <p>
-                The aperture can be set from 0 ns to 3 ms in 200 ns increments up to 1 ms, and 100 μs increments from 
-                1 ms to 3 ms.
-                </p>
-                <p>
-                Since the minimum duration to trigger one sample is 200ns, an aperture length greater than 0 ns allows 
-                more than one sample to be captured and averaged by the digitizer. In a sense, increasing the aperture 
-                lowers the sampling frequency of the digitizer."
-                </p>
-                <p>
-                The entire process for one reading is 200 ns, which gives a maximum trigger rate of 5 MHz. The aperture 
-                can be set from 0 ns to 3 ms in 200 ns increments up to 1 ms, and 100 μs increments from 1 ms to 3 ms. 
-                Greater aperture length decreases sample rate.
-                </p>
-
-                <table align="left">
-                    <tr>
-                        <th>Aperture</th>
-                        <th>Time</th>
-                        <th>Samples Averaged (#)</th>
-                        <th>Fs</th>
-                    </tr>
-                    <tr>
-                        <td>0ns</td>
-                        <td>200ns</td>
-                        <td>1</td>
-                        <td>5 MHz</td>
-                    </tr>
-                    <tr>
-                        <td>200ns</td>
-                        <td>200ns + 200ns</td>
-                        <td>2</td>
-                        <td>2.5 MHz</td>
-                    </tr>
-                    <tr>
-                        <td>400ns</td>
-                        <td>400ns + 200ns</td>
-                        <td>3</td>
-                        <td>1.6667 MHz</td>
-                    </tr>
-                    <tr>
-                        <td>600ns</td> 
-                        <td>600ns + 200ns</td>
-                        <td>4</td>
-                        <td>1.25 MHz</td>
-                    </tr>
-                    <tr>
-                        <td>800ns</td> 
-                        <td>800ns + 200ns</td>
-                        <td>5</td>
-                        <td>833.33 kHz</td>
-                    </tr>
-                    <tr>
-                        <td>1us</td> 
-                        <td>1us + 0.2us</td>
-                        <td>6</td>
-                        <td>833.33 kHz</td>
-                    </tr>
-                </table>
-            """
-            "<p><b>Software used in making this demo:</b></p><b>"
-            '<p><b><a href="http://www.python.org">Python 2.4</a></b></p>'
-            '<p><b><a href="http://www.wxpython.org">wxPython 2.8</a></b></p>'
-        )
+        self.html.LoadPage("about.html")
 
         self.sizer.Add(self.html, 1, wx.EXPAND)
 

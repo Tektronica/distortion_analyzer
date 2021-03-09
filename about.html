@@ -1,0 +1,130 @@
+<h2>About The Distortion Analyzer</h2>
+<p>
+The size of the FFT, the length of the window, or the duration of the measurement, should be at least 
+six times longer than the period of the signal for a Blackman windowing filter.
+</p>
+<p>
+The lowest detectable frequency by the FFT is determined by the size (duration) of the window. This is 
+also considered the bandwidth of the main lobe of the FFT.
+</p>
+<p>
+M is the number of samples captured for a measurement of time series data. M refers to the length of 
+the windowing filter applied to the. M≤N where N samples refers to the length of the FFT. When N is 
+greater than M, zero padding is employed, which does not introduce new data to the FFT, but only 
+increases the resolution of the FFT.
+</p>
+<p>
+Increasing the length of M for a given sample frequency reduces the width of the main lobe. In other 
+words, in situations where zero padding is not involved and M=N, the main lobe width is reduced by 
+increasing the number of samples for a given sampling frequency.
+</p>
+<p>
+The effective data length of captured period cycles is equal for window shapes where M is scaled "
+appropriately.
+
+</p>
+
+<table align="left" style="border-collapse: collapse;">
+	<thead>
+	<tr>
+		<th>Window Shape</th>
+		<th>Relative Peak Side Lobe Magnitude</th>
+		<th>Approx. Main Lobe Width (Hz)</th>
+	</tr>
+	</thead>
+	<tbody>
+	<tr style="border-bottom: 1px solid black;">
+		<td>Rectangular/boxcar</td>
+		<td>-13 dB</td>
+		<td>2/M</td>
+	</tr>
+	<tr>
+		<td>Bartlett (triangle)</td>
+		<td>-26 dB</td>
+		<td>4/M</td>
+	</tr>
+	<tr>
+		<td>Hanning (raised cosine)</td>
+		<td>-31 dB</td>
+		<td>4/M</td>
+	</tr>
+	<tr>
+		<td>Hamming (raised cosine on pedestal)</td>
+		<td>-42 dB</td>
+		<td>4/M</td>
+	</tr>
+	<tr>
+		<td>Blackman</td>
+		<td>-58 dB</td>
+		<td>6/M</td>
+	</tr>
+	</tbody>
+</table>
+
+<p><b>Fluke 8588A Aperture Parameters</b></p>
+<p>
+The aperture is the duration after each trigger where samples at a rate of 5 MHz are averaged together. 
+</p>
+<p>
+The aperture can be set from 0 ns to 3 ms in 200 ns increments up to 1 ms, and 100 μs increments from 
+1 ms to 3 ms.
+</p>
+<p>
+Since the minimum duration to trigger one sample is 200ns, an aperture length greater than 0 ns allows 
+more than one sample to be captured and averaged by the digitizer. In a sense, increasing the aperture 
+lowers the sampling frequency of the digitizer."
+</p>
+<p>
+The entire process for one reading is 200 ns, which gives a maximum trigger rate of 5 MHz. The aperture 
+can be set from 0 ns to 3 ms in 200 ns increments up to 1 ms, and 100 μs increments from 1 ms to 3 ms. 
+Greater aperture length decreases sample rate.
+</p>
+
+<table align="left">
+	<tr>
+		<th>Aperture</th>
+		<th>Time</th>
+		<th>Samples Averaged (#)</th>
+		<th>Fs</th>
+	</tr>
+	<tr>
+		<td>0ns</td>
+		<td>200ns</td>
+		<td>1</td>
+		<td>5 MHz</td>
+	</tr>
+	<tr>
+		<td>200ns</td>
+		<td>200ns + 200ns</td>
+		<td>2</td>
+		<td>2.5 MHz</td>
+	</tr>
+	<tr>
+		<td>400ns</td>
+		<td>400ns + 200ns</td>
+		<td>3</td>
+		<td>1.6667 MHz</td>
+	</tr>
+	<tr>
+		<td>600ns</td> 
+		<td>600ns + 200ns</td>
+		<td>4</td>
+		<td>1.25 MHz</td>
+	</tr>
+	<tr>
+		<td>800ns</td> 
+		<td>800ns + 200ns</td>
+		<td>5</td>
+		<td>833.33 kHz</td>
+	</tr>
+	<tr>
+		<td>1us</td> 
+		<td>1us + 0.2us</td>
+		<td>6</td>
+		<td>833.33 kHz</td>
+	</tr>
+</table>
+
+<p><b>Software used in making this demo:</b></p><b>
+<p><b><a href="http://www.python.org">Python 2.4</a></b></p>
+<p><b><a href="http://www.wxpython.org">wxPython 2.8</a></b></p>

@@ -23,7 +23,7 @@ def getSamplingFrequency(F0, bw=100e3):
     :return: sampling rate, fs
     """
     # Ideal sampling frequency
-    _Fs = max(bw, 100 * F0)
+    _Fs = max(2*bw, 100 * F0)
 
     # An integer number of samples averaged per measurement determines actual sampling frequency
     N = max(round(DIGITIZER_SAMPLING_FREQUENCY / _Fs), 1)
