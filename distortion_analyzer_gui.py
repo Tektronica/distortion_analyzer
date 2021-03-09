@@ -348,7 +348,7 @@ class TestFrame(wx.Frame):
             self.thread_this(self.da.start, (self.user_input,))
             self.btn_start.SetLabel('STOP')
 
-        elif self.t.is_alive() and self.user_input['mode'] == 4:
+        elif self.t.is_alive() and self.user_input['mode'] in (1, 4):
             # stop continuous
             # https://stackoverflow.com/a/36499538
             self.t.do_run = False
@@ -568,6 +568,8 @@ class HistoryTab(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent, wx.ID_ANY)
 
+        self.parent = parent
+
         # PLOT Panel ---------------------------------------------------------------------------------------------------
         self.figure = plt.figure(figsize=(1, 1))  # look into Figure((5, 4), 75)
         self.canvas = FigureCanvas(self, -1, self.figure)
@@ -646,6 +648,11 @@ class HistoryTab(wx.Panel):
         self.SetSizer(sizer_2)
         self.Layout()
 
+    def error_dialog(self, error_message):
+        print(error_message)
+        dial = wx.MessageDialog(None, str(error_message), 'Error', wx.OK | wx.ICON_ERROR)
+        dial.ShowModal()
+
     def OnOpen(self, event):
         # if self.contentNotSaved:
         #     if wx.MessageBox("Current content has not been saved! Proceed?", "Please confirm",
@@ -664,20 +671,26 @@ class HistoryTab(wx.Panel):
             try:
                 with open(pathname, 'r') as file:
                     self.open_history(file)
-            except IOError:
+            except (IOError, ValueError) as e:
                 wx.LogError("Cannot open file '%s'." % pathname)
+                self.error_dialog(e)
 
     def open_history(self, file):
         df = pd.read_csv(file)
 
-        xt = df['xt'].to_numpy()
-        yt = df['yt'].to_numpy()
-        xf = df['xf'].to_numpy()
+        try:
+            xt = df['xt'].to_numpy()
+            yt = df['yt'].to_numpy()
+            xf = df['xf'].to_numpy()
 
-        # https://stackoverflow.com/a/18919965/3382269
-        # https://stackoverflow.com/a/51725795/3382269
-        df['yf'] = df['yf'].str.replace('i', 'j').apply(lambda x: np.complex(x))
-        yf = df['yf'].to_numpy()
+            # https://stackoverflow.com/a/18919965/3382269
+            # https://stackoverflow.com/a/51725795/3382269
+            df['yf'] = df['yf'].str.replace('i', 'j').apply(lambda x: np.complex(x))
+            yf = df['yf'].to_numpy()
+        except KeyError:
+            raise ValueError('Incorrect file attempted to be opened. '
+                             '\nCheck data headers. xt, yt, xf, yf should be present')
+
         yrms = np.sqrt(np.mean(np.absolute(yt) ** 2))
 
         N = len(xt)

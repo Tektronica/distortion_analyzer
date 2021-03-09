@@ -130,7 +130,10 @@ class DistortionAnalyzer:
 
                        'filter': user_input['filter']
                        }
-        print(f"{amplitude} {units} @ {ft} Hz ------------------------------------------------------------------------")
+
+        message = f"{amplitude} {units} @ {ft} Hz"
+        print(f"\n{message} {'-' * (100 - len(message))}")
+
         try:
             if self.M.connected:
                 # TODO: Why did I do this?
@@ -147,35 +150,35 @@ class DistortionAnalyzer:
             self.frame.btn_start.SetLabel('START')
 
         except ValueError as e:
+            message = 'finished with errors.'
+            print(f"{message} {'-' * (100-len(message))}")
 
-            print(f"finished with errors. ----------------------------------------------------------------------------")
             self.frame.flag_complete = True
             self.frame.btn_start.SetLabel('START')
             self.frame.error_dialog(e)
         else:
-            print(f"done. ------------------------------------------------------------------------------------------------")
+            message = 'done'
+            print(f"{message} {'-' * (100-len(message))}")
 
     def run_selected_function(self, selection):
         try:
             # run single
             if selection == 0:
-                print('Running single')
                 self.run_single(self.test)
 
             # run sweep
             elif selection == 1:
-                print('Running sweep')
                 df = pd.read_csv('distortion_breakpoints.csv')
                 self.run_sweep(df, self.test)
 
             # run single shunt voltage implied current measurement
             elif selection == 2:
-                print('Running single measurement measuring current from shunt voltage')
+                print('Running single measurement measuring current from shunt voltage.')
                 self.run_single(self.test_analyze_shunt_voltage)
 
             # run swept shunt voltage implied current measurement
             elif selection == 3:
-                print('Running sweep measuring current from shunt voltage')
+                print('Running sweep measuring current from shunt voltage.')
                 df = pd.read_csv('distortion_breakpoints.csv')
                 self.run_sweep(df, self.test_analyze_shunt_voltage)
 
@@ -191,7 +194,7 @@ class DistortionAnalyzer:
 
     # ------------------------------------------------------------------------------------------------------------------
     def run_single(self, func):
-        print('\nrun_single!')
+        print('Running Single Measurement.')
         self.frame.toggle_controls()
         self.frame.flag_complete = False
         try:
@@ -206,30 +209,33 @@ class DistortionAnalyzer:
         self.frame.flag_complete = True
 
     def run_sweep(self, df, func):
+        print('Running Sweep.')
         self.frame.flag_complete = False
 
         headers = ['amplitude', 'frequency', 'rms', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'aperture']
         results = np.zeros(shape=(len(df.index), len(headers)))
+        t = threading.currentThread()
         for idx, row in df.iterrows():
-            self.frame.text_amplitude.SetValue(str(row.amplitude))
-            self.frame.text_frequency.SetValue(str(row.frequency))
+            while getattr(t, "do_run", True):
+                self.frame.text_amplitude.SetValue(str(row.amplitude))
+                self.frame.text_frequency.SetValue(str(row.frequency))
 
-            amplitude, units, ft = self.get_string_value(row.amplitude, str(row.frequency))
-            if not DUMMY_DATA:
-                self.params['amplitude'] = amplitude
-                self.params['frequency'] = ft
-                self.params['units'] = units
+                amplitude, units, ft = self.get_string_value(row.amplitude, str(row.frequency))
+                if not DUMMY_DATA:
+                    self.params['amplitude'] = amplitude
+                    self.params['frequency'] = ft
+                    self.params['units'] = units
 
-                try:
+                    try:
+                        results[idx] = func(setup=True)
+                        self.M.standby()
+                    except ValueError:
+                        raise
+                else:
+                    self.params['amplitude'] = 1
+                    self.params['frequency'] = 1000
+                    self.params['units'] = 'A'
                     results[idx] = func(setup=True)
-                    self.M.standby()
-                except ValueError:
-                    raise
-            else:
-                self.params['amplitude'] = 1
-                self.params['frequency'] = 1000
-                self.params['units'] = 'A'
-                results[idx] = func(setup=True)
 
         # https://stackoverflow.com/a/28356566
         # https://stackoverflow.com/a/28058264
@@ -238,7 +244,7 @@ class DistortionAnalyzer:
         self.frame.flag_complete = True
 
     def run_continuous(self, func):
-        print('\nrun_continuous!')
+        print('Running a continuous run!')
         self.frame.flag_complete = False
         t = threading.currentThread()
         setup = True
