@@ -158,6 +158,7 @@ class DistortionAnalyzer:
         else:
             message = 'done'
             print(f"{message} {'-' * (100-len(message))}")
+            self.frame.flag_complete = True
 
     def run_selected_function(self, selection):
         try:
@@ -216,11 +217,11 @@ class DistortionAnalyzer:
         t = threading.currentThread()
         for idx, row in df.iterrows():
             while getattr(t, "do_run", True):
-                self.frame.text_amplitude.SetValue(str(row.amplitude))
-                self.frame.text_frequency.SetValue(str(row.frequency))
-
-                amplitude, units, ft = self.get_string_value(row.amplitude, str(row.frequency))
                 if not self.DUMMY_DATA:
+                    self.frame.text_amplitude.SetValue(str(row.amplitude))
+                    self.frame.text_frequency.SetValue(str(row.frequency))
+                    amplitude, units, ft = self.get_string_value(row.amplitude, str(row.frequency))
+
                     self.params['amplitude'] = amplitude
                     self.params['frequency'] = ft
                     self.params['units'] = units
@@ -416,10 +417,9 @@ class DistortionAnalyzer:
         xt = np.arange(0, N, 1)/Fs
 
         xf_fft, yf_fft, xf_rfft, yf_rfft = windowed_fft(yt, Fs, N, 'blackman')
-        print(len(yf_fft), len(yf_rfft))
+
         # Find %THD+N
         try:
-
             thdn, f0, noise_rms = THDN(yf_rfft, Fs, N, hpf, lpf)
             thd = THD(yt, Fs)
             data = {'x': xt, 'y': yt, 'xf': xf_rfft, 'ywf': yf_rfft, 'RMS': yrms, 'N': N, 'runtime': runtime, 'Fs': Fs, 'f0': f0}

@@ -9,6 +9,7 @@ import wx
 import wx.html
 import webbrowser
 
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -580,10 +581,11 @@ class HistoryTab(wx.Panel):
         wx.Panel.__init__(self, parent, wx.ID_ANY)
 
         self.parent = parent
+        self.plot_panel = wx.Panel(self, wx.ID_ANY, style=wx.SIMPLE_BORDER)
 
         # PLOT Panel ---------------------------------------------------------------------------------------------------
         self.figure = plt.figure(figsize=(1, 1))  # look into Figure((5, 4), 75)
-        self.canvas = FigureCanvas(self, -1, self.figure)
+        self.canvas = FigureCanvas(self.plot_panel, -1, self.figure)
         self.toolbar = NavigationToolbar(self.canvas)
         self.toolbar.Realize()
 
@@ -649,7 +651,8 @@ class HistoryTab(wx.Panel):
         grid_sizer_plot.Add(self.toolbar, (1, 0), (1, 1), wx.ALL | wx.EXPAND)
         grid_sizer_plot.AddGrowableRow(0)
         grid_sizer_plot.AddGrowableCol(0)
-        grid_sizer_1.Add(grid_sizer_plot, 1, wx.BOTTOM | wx.EXPAND, 5)
+        self.plot_panel.SetSizer(grid_sizer_plot)
+        grid_sizer_1.Add(self.plot_panel, 1, wx.EXPAND, 5)
 
         grid_sizer_1.AddGrowableRow(0)
         grid_sizer_1.AddGrowableCol(1)
@@ -665,12 +668,7 @@ class HistoryTab(wx.Panel):
         dial.ShowModal()
 
     def OnOpen(self, event):
-        # if self.contentNotSaved:
-        #     if wx.MessageBox("Current content has not been saved! Proceed?", "Please confirm",
-        #                      wx.ICON_QUESTION | wx.YES_NO, self) == wx.NO:
-        #         return
-
-        # otherwise ask the user what new file to open
+        Path("results/history").mkdir(parents=True, exist_ok=True)
         with wx.FileDialog(self, "Open previous measurement:", wildcard="CSV files (*.csv)|*.csv",
                            defaultDir="results/history",
                            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as fileDialog:

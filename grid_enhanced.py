@@ -1,7 +1,7 @@
 import wx
 import wx.grid
 import csv
-import sys
+from pathlib import Path
 
 
 class MyGrid(wx.grid.Grid):
@@ -323,7 +323,6 @@ class MyGrid(wx.grid.Grid):
         return list_data
 
     def write_header(self, header):
-        print(header)
         if isinstance(header, list):
             for col, item in enumerate(header):
                 self.SetCellValue(0, col, str(item))
@@ -365,6 +364,7 @@ class MyGrid(wx.grid.Grid):
             print('No row data written. data appears empty.')
 
     def export(self, e):
+        Path("results").mkdir(parents=True, exist_ok=True)
         with wx.FileDialog(self, "Export spreadsheet as csv:", wildcard="CSV files (*.csv)|*.csv",
                            defaultDir="results",
                            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fileDialog:
