@@ -13,8 +13,6 @@ import re
 from decimal import Decimal
 import csv
 
-DUMMY_DATA = True
-
 
 ########################################################################################################################
 
@@ -91,6 +89,7 @@ class DistortionAnalyzer:
     # ------------------------------------------------------------------------------------------------------------------
     def __init__(self, parent):
         self.frame = parent
+        self.DUMMY_DATA = False  # can be toggled by the gui
         self.amplitude_good = False  # Flag indicates user input for amplitude value is good (True)
         self.frequency_good = False  # Flag indicates user input for frequency value is good (True)
 
@@ -143,7 +142,7 @@ class DistortionAnalyzer:
                     self.run_selected_function(selection)
                 else:
                     self.frame.error_dialog('\nCheck amplitude and frequency values.')
-            elif DUMMY_DATA:
+            elif self.DUMMY_DATA:
                 self.run_selected_function(selection)
             else:
                 self.frame.error_dialog('\nConnect to instruments first.')
@@ -199,7 +198,7 @@ class DistortionAnalyzer:
         self.frame.flag_complete = False
         try:
             func(setup=True)
-            if not DUMMY_DATA:
+            if not self.DUMMY_DATA:
                 self.M.standby()
         except ValueError:
             self.frame.toggle_controls()
@@ -221,7 +220,7 @@ class DistortionAnalyzer:
                 self.frame.text_frequency.SetValue(str(row.frequency))
 
                 amplitude, units, ft = self.get_string_value(row.amplitude, str(row.frequency))
-                if not DUMMY_DATA:
+                if not self.DUMMY_DATA:
                     self.params['amplitude'] = amplitude
                     self.params['frequency'] = ft
                     self.params['units'] = units
@@ -256,7 +255,7 @@ class DistortionAnalyzer:
             except ValueError:
                 raise
 
-        if not DUMMY_DATA:
+        if not self.DUMMY_DATA:
             self.M.standby()
         print('Ending continuous run_source process.')
 
@@ -320,7 +319,7 @@ class DistortionAnalyzer:
         # START DATA COLLECTION ----------------------------------------------------------------------------------------
         # TODO
         # This is for internal debugging only. Not user facing.
-        if not DUMMY_DATA:
+        if not self.DUMMY_DATA:
             if setup:
                 self.M.setup_digitizer(suffix, oper_range, filter_val, N, aperture)
             if params['source']:
@@ -340,7 +339,7 @@ class DistortionAnalyzer:
         else:
             y = pd.read_csv('results/history/DUMMY.csv')['yt'].to_numpy()
 
-        return self.fft(y, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft)
+        self.fft(y, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft)
 
     # ------------------------------------------------------------------------------------------------------------------
     def test_analyze_shunt_voltage(self, setup):
@@ -409,20 +408,21 @@ class DistortionAnalyzer:
 
         pd.DataFrame(data=y, columns=['ydata']).to_csv('results/y_data.csv')
 
-        return self.fft(y, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft)
+        self.fft(y, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft)
 
     def fft(self, yt, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft):
         yrms = rms_flat(yt)
         # FFT ==========================================================================================================
         xt = np.arange(0, N, 1)/Fs
-        xf = np.linspace(0.0, Fs, N)
-        ywf = windowed_fft(yt, N, 'blackman')
 
+        xf_fft, yf_fft, xf_rfft, yf_rfft = windowed_fft(yt, Fs, N, 'blackman')
+        print(len(yf_fft), len(yf_rfft))
         # Find %THD+N
         try:
-            thdn, f0, yf, noise_rms = THDN(yt, Fs, hpf, lpf)
+
+            thdn, f0, noise_rms = THDN(yf_rfft, Fs, N, hpf, lpf)
             thd = THD(yt, Fs)
-            data = {'x': xt, 'y': yt, 'xf': xf, 'ywf': ywf, 'RMS': yrms, 'N': N, 'runtime': runtime, 'Fs': Fs, 'f0': f0}
+            data = {'x': xt, 'y': yt, 'xf': xf_rfft, 'ywf': yf_rfft, 'RMS': yrms, 'N': N, 'runtime': runtime, 'Fs': Fs, 'f0': f0}
         except ValueError as e:
             raise
         results_row = {'Amplitude': amplitude, 'Frequency': Ft,
@@ -441,11 +441,8 @@ class DistortionAnalyzer:
 
         # save measurement to csv --------------------------------------------------------------------------------------
         header = ['xt', 'yt', 'xf', 'yf']
-        write_to_csv('results/history', 'measurement', header, xt, yt, xf, ywf)
+        write_to_csv('results/history', 'measurement', header, xt, yt, xf_fft, yf_fft)
         self.plot(data)
-
-        # TODO: we don't need to return anything
-        return [amplitude, Ft, yrms, thdn, thd, noise_rms, Fs, aperture]
 
     def plot(self, data):
         F0 = data['f0']

@@ -1,6 +1,5 @@
 import numpy as np
-from scipy.signal.windows import hann, blackman, blackmanharris
-from scipy.fftpack import fft
+import matplotlib.pyplot as plt
 
 """
 FFT Fundamentals
@@ -84,14 +83,41 @@ def getWindowLength(f0=10e3, fs=2.5e6, windfunc='blackman', error=0.1):
 
 
 ########################################################################################################################
-def windowed_fft(y, N, windfunc='blackman'):
-    w = blackman(N)
-    ywf = fft(y * w)
-    return ywf
+def windowed_fft(yt, Fs, N, windfunc='blackman'):
+    # remove DC offset
+    yt -= np.mean(yt)
+
+    if windfunc == 'bartlett':
+        w = np.bartlett(N)
+    elif windfunc == 'hanning':
+        w = np.hanning(N)
+    elif windfunc == 'hamming':
+        w = np.hamming(N)
+    elif windfunc == 'blackman':
+        w = np.blackman(N)
+    else:
+        w = np.kaiser(N)
+
+    # https://numpy.org/doc/stable/reference/generated/numpy.fft.rfft.html
+    # function does not compute the negative frequency terms
+    yf_fft = np.fft.fft(yt * w)
+
+    if (N % 2) == 0:
+        # for even values of N: length is (N / 2) + 1
+        length = int(N / 2) + 1
+    else:
+        # for odd values of N: length is (N + 1) / 2
+        length = int((N + 2) / 2)
+
+    yf_rfft = yf_fft[:length]
+    xf_fft = np.linspace(0.0, Fs, N)
+    xf_rfft = np.linspace(0.0, Fs/2, length)
+
+    return xf_fft, yf_fft, xf_rfft, yf_rfft
 
 
 ########################################################################################################################
-def THDN(y, fs, hpf=0, lpf=100e3):
+def THDN(yf, fs, N, hpf=0, lpf=100e3):
     """
     Performs a windowed fft of a time-series signal y and calculate THDN.
         + Estimates fundamental frequency by finding peak value in fft
@@ -101,51 +127,57 @@ def THDN(y, fs, hpf=0, lpf=100e3):
 
     :returns: THD and fundamental frequency
     """
-    # PERFORM FFT
-    # TODO: Do this in the frequency domain, and take any skirts with it?
-    y -= np.mean(y)
-    N = len(y)
+    _yf = np.array(yf, copy=True)  # protects yf from mutation
+    freqs = np.fft.rfftfreq(len(_yf))
 
-    w = blackman(N)  # TODO Kaiser?
-    yf = np.fft.rfft(y * w)  # length is N/2 + 1
-    freqs = np.fft.rfftfreq(len(yf))
-
-    # FIND FUNDAMENTAL (peak of frequency spectrum)
+    # FIND FUNDAMENTAL (peak of frequency spectrum) --------------------------------------------------------------------
     try:
-        idx = np.argmax(np.abs(yf))
+        idx = np.argmax(np.abs(_yf))
         freq = freqs[idx]  # no units
         f0 = freq * fs / 2  # in hertz
     except IndexError:
         raise ValueError('Failed to find fundamental. Most likely index was outside of bounds.')
 
-    # APPLY HIGH PASS FILTERING
+    # APPLY HIGH PASS FILTERING ----------------------------------------------------------------------------------------
     if not (hpf == 0) and (hpf < lpf):
         print('>>applying high pass filter<<')
         fc = int(hpf * N / fs)
-        yf[:fc] = 1e-10
+        _yf[:fc] = 1e-10
 
-    # APPLY LOW PASS FILTERING
+    # APPLY LOW PASS FILTERING -----------------------------------------------------------------------------------------
     if lpf != 0:
         fc = int(lpf * N / fs) + 1
-        yf[fc:] = 1e-10
+        _yf[fc:] = 1e-10
 
-    # RMS from frequency domain
+    # RMS from frequency domain ----------------------------------------------------------------------------------------
     # https://stackoverflow.com/questions/ 23341935/find-rms-value-in-frequency-domain
-    total_rms = np.sqrt(np.sum(np.abs(yf / N) ** 2))  # Parseval'amp_string Theorem
+    total_rms = np.sqrt(np.sum(np.abs(_yf / N) ** 2))  # Parseval'amp_string Theorem
 
-    # NOTCH REJECT FUNDAMENTAL AND MEASURE NOISE
+    # NOTCH REJECT FUNDAMENTAL AND MEASURE NOISE -----------------------------------------------------------------------
     # Find local minimas around fundamental frequency and throw away values within boundaries of minima window.
     # TODO: Calculate mainlobe width of the windowing function rather than finding local minimas?
-    lowermin, uppermin = find_range(abs(yf), idx)
-    # print(f'Boundary window: {lowermin * fs / len(y)} and {uppermin * fs / len(y)}')
-    yf[lowermin:uppermin] = 1e-10
+    lowermin, uppermin = find_range(abs(_yf), idx)
+    _yf[lowermin:uppermin] = 1e-10
+    # __yf = np.array(_yf, copy=True)  # TODO: used for internal plotting only
 
-    # RMS from frequency domain
-    noise_rms = np.sqrt(np.sum(np.abs(yf / N) ** 2))  # Parseval'amp_string Theorem
+    # RMS from frequency domain ----------------------------------------------------------------------------------------
+    noise_rms = np.sqrt(np.sum(np.abs(_yf / N) ** 2))  # Parseval'amp_string Theorem
 
     THDN = noise_rms / total_rms
 
-    return THDN, f0, yf, round(1e6 * noise_rms, 2)
+    """    
+    # TODO: Uncomment to save plots (can only save one temporal and spectrum plot per run)
+    xt = np.arange(0, N, 1)
+    xf = np.linspace(0.0, fs/2, int(N/2)+1)/1000
+    plot_temporal(xt, y, title='Sampled Data')
+    plot_temporal(xt, w, title='Blackman Window')
+    plot_temporal(xt, yt * w, title='Sampled Data with imposed Blackman Window')
+    plot_spectrum(xf, 20 * np.log10(2 * np.abs(yf_first[0:N] / N)), title='FFT of Windowed Data')
+    plot_spectrum(xf, 20 * np.log10(2 * np.abs(yf_second[0:N] / N)),
+                  title='FFT of Windowed Data with Rejected Fundamental Frequency')
+    """
+
+    return THDN, f0, round(1e6 * total_rms, 2)
 
 
 ########################################################################################################################
@@ -154,7 +186,7 @@ def THD(y, Fs):
     # TODO: Do this in the frequency domain, and take any skirts with it?
     # y -= np.mean(y)
     ypeak = np.max(y)
-    w = blackman(len(y))  # TODO Kaiser?
+    w = np.blackman(len(y))  # TODO Kaiser?
     yf = np.fft.rfft(y * w)
 
     # FIND FUNDAMENTAL (peak of frequency spectrum)
@@ -209,3 +241,29 @@ def flicker_noise(yf, fs, N, hpf=0.1, lpf=10):
         yf[fc:] = 1e-10
 
     return yf
+
+
+# TODO: These methods are used only for internal plotting! -------------------------------------------------------------
+def plot_temporal(x, y, title=''):
+    fig, ax = plt.subplots(1, 1, constrained_layout=True)
+    ax.plot(x, y, '-')  # scaling is applied.
+
+    # ax.legend(['data'])
+    ax.set_title(title)
+    ax.set_xlabel('Samples (#)')
+    ax.set_ylabel('Amplitude')
+    ax.grid()
+    plt.savefig('images/static/a.jpg')
+
+
+def plot_spectrum(xf, yf, title=''):
+    fig, ax = plt.subplots(1, 1, constrained_layout=True)
+    ax.plot(xf, yf, '-')  # scaling is applied.
+
+    # ax.set_xlim(20, 100000)
+    # ax.legend(['FFT'])
+    ax.set_title(title)
+    ax.set_xlabel('frequency (kHz)')
+    ax.set_ylabel('magnitude (dB)')
+    ax.grid()
+    plt.savefig('images/static/b.jpg')

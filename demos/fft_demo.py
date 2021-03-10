@@ -118,7 +118,7 @@ def THDN_scipy(y, fs, lpf):
 
 def plot_temporal(x, y, title=''):
     fig, ax = plt.subplots(1, 1, constrained_layout=True)
-    ax.plot(x, y, '-b')  # scaling is applied.
+    ax.plot(x, y, '-')  # scaling is applied.
 
     # ax.legend(['data'])
     ax.set_title(title)
@@ -130,7 +130,7 @@ def plot_temporal(x, y, title=''):
 
 def plot_spectrum(xf, yf, title=''):
     fig, ax = plt.subplots(1, 1, constrained_layout=True)
-    ax.plot(xf, yf, '-b')  # scaling is applied.
+    ax.plot(xf, yf, '-')  # scaling is applied.
 
     # ax.set_xlim(20, 100000)
     # ax.legend(['FFT'])

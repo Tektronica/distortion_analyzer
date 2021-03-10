@@ -125,6 +125,7 @@ class TestFrame(wx.Frame):
 
         wxglade_tmp_menu = wx.Menu()
         self.menu_config = wxglade_tmp_menu.Append(wx.ID_ANY, "Configure instruments", "")
+        self.menu_DUMMY = wxglade_tmp_menu.AppendCheckItem(wx.ID_ANY, "Use DUMMY Data?")
         # self.menu_brkpts = wxglade_tmp_menu.Append(wx.ID_ANY, "Open Breakpoints", "")
         self.frame_menubar.Append(wxglade_tmp_menu, "Settings")
 
@@ -137,6 +138,7 @@ class TestFrame(wx.Frame):
         # Menu Bar Bind Events -----------------------------------------------------------------------------------------
         self.Bind(wx.EVT_MENU, self.grid_1.export, self.menu_export)
         self.Bind(wx.EVT_MENU, self.config, self.menu_config)
+        self.Bind(wx.EVT_MENU, self.OnDummyChecked, self.menu_DUMMY)
         # self.Bind(wx.EVT_MENU, self.open_breakpoints, self.menu_brkpts)
         self.Bind(wx.EVT_MENU, self.reset_view, self.menu_reset_view)
 
@@ -328,6 +330,15 @@ class TestFrame(wx.Frame):
         sizer_7.Add(self.panel_1, 1, wx.EXPAND, 0)
         self.SetSizer(sizer_7)
         self.Layout()
+
+    # ------------------------------------------------------------------------------------------------------------------
+    def OnDummyChecked(self, event):
+        if self.menu_DUMMY.IsChecked():
+            self.da.DUMMY_DATA = True
+            print('using DUMMY data.')
+        else:
+            print('No longer using DUMMY data.')
+            self.da.DUMMY_DATA = False
 
     # ------------------------------------------------------------------------------------------------------------------
     def thread_this(self, func, arg=()):
@@ -660,7 +671,8 @@ class HistoryTab(wx.Panel):
         #         return
 
         # otherwise ask the user what new file to open
-        with wx.FileDialog(self, "Open CSV file", wildcard="CSV files (*.csv)|*.csv",
+        with wx.FileDialog(self, "Open previous measurement:", wildcard="CSV files (*.csv)|*.csv",
+                           defaultDir="results/history",
                            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as fileDialog:
 
             if fileDialog.ShowModal() == wx.ID_CANCEL:
@@ -691,13 +703,25 @@ class HistoryTab(wx.Panel):
             raise ValueError('Incorrect file attempted to be opened. '
                              '\nCheck data headers. xt, yt, xf, yf should be present')
 
-        yrms = np.sqrt(np.mean(np.absolute(yt) ** 2))
+        self.process_raw_input(xt, yt, xf, yf)
 
+    def process_raw_input(self, xt, yt, xf, yf):
+        yrms = np.sqrt(np.mean(np.absolute(yt) ** 2))
         N = len(xt)
         Fs = round(1 / (xt[1] - xt[0]), 2)
-        thdn, *_ = THDN(yt, Fs)
+
+        # SPECTRAL -----------------------------------------------------------------------------------------------------
+        if (N % 2) == 0:
+            # for even values of N: length is (N / 2) + 1
+            fft_length = int(N / 2) + 1
+        else:
+            # for odd values of N: length is (N + 1) / 2
+            fft_length = int((N + 2) / 2)
+
+        thdn, *_ = THDN(yf[:fft_length], Fs, N, )
         thd = THD(yt, Fs)
-        self.plot(xt, yt, yrms, xf, yf, N)
+
+        self.plot(xt, yt, yrms, fft_length, xf, yf)
         self.results_update(Fs, N, yrms, thdn, thd)
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -712,7 +736,7 @@ class HistoryTab(wx.Panel):
         self.figure.align_ylabels([self.ax1, self.ax2])
         self.figure.tight_layout()
 
-    def plot(self, xt, yt, yrms, xf, yf, N):
+    def plot(self, xt, yt, yrms, fft_length, xf, yf):
         # TEMPORAL -----------------------------------------------------------------------------------------------------
         self.temporal.set_data(xt, yt)
 
@@ -724,8 +748,8 @@ class HistoryTab(wx.Panel):
         self.ax1.autoscale()
 
         # SPECTRAL -----------------------------------------------------------------------------------------------------
-        xf_scaled = xf[0:N] / 1000
-        yf_scaled = 20 * np.log10(2 * np.abs(yf[0:N] / (yrms * N)))
+        xf_scaled = xf[0:fft_length] / 1000
+        yf_scaled = 20 * np.log10(2 * np.abs(yf[0:fft_length] / (yrms * fft_length)))
         self.spectral.set_data(xf_scaled, yf_scaled)
         try:
             self.ax2.relim()  # recompute the ax.dataLim
@@ -735,7 +759,7 @@ class HistoryTab(wx.Panel):
         self.ax2.autoscale()
 
         xf_start = 0
-        xf_end = xf_scaled[int(N / 2)]
+        xf_end = xf_scaled[fft_length - 1]
         self.ax2.set_xlim([xf_start, xf_end])
 
         # UPDATE PLOT FEATURES -----------------------------------------------------------------------------------------

@@ -365,7 +365,8 @@ class MyGrid(wx.grid.Grid):
             print('No row data written. data appears empty.')
 
     def export(self, e):
-        with wx.FileDialog(self, "Save csv file", wildcard="CSV files (*.csv)|*.csv",
+        with wx.FileDialog(self, "Export spreadsheet as csv:", wildcard="CSV files (*.csv)|*.csv",
+                           defaultDir="results",
                            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fileDialog:
 
             if fileDialog.ShowModal() == wx.ID_CANCEL:
