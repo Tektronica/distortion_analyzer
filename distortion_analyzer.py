@@ -211,12 +211,11 @@ class DistortionAnalyzer:
     def run_sweep(self, df, func):
         print('Running Sweep.')
         self.frame.flag_complete = False
-
         headers = ['amplitude', 'frequency', 'rms', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'aperture']
         results = np.zeros(shape=(len(df.index), len(headers)))
         t = threading.currentThread()
         for idx, row in df.iterrows():
-            while getattr(t, "do_run", True):
+            if getattr(t, "do_run", True):
                 if not self.DUMMY_DATA:
                     self.frame.text_amplitude.SetValue(str(row.amplitude))
                     self.frame.text_frequency.SetValue(str(row.frequency))
@@ -236,6 +235,8 @@ class DistortionAnalyzer:
                     self.params['frequency'] = 1000
                     self.params['units'] = 'A'
                     results[idx] = func(setup=True)
+            else:
+                break
 
         # https://stackoverflow.com/a/28356566
         # https://stackoverflow.com/a/28058264
