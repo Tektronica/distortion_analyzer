@@ -78,7 +78,7 @@ cost of wider main lobe width. However, the main lobe width is equal to
 to resolve at least the frequency of interest and nothing lower. By
 increasing the sample length, additional cycles are captured, which help
 reduce the main lobe error width. Additional information on windowing
-can be found in section E further down on this page. \
+can be found in section E further down on this page.
 
 Increasing the length of M for a given sampling frequency reduces the
 width of the main lobe. In other words, in situations where zero padding
