@@ -33,8 +33,6 @@ average by the digitizer.
 2.  **samples\_to\_average** = int( 5MHz / \_Fs )= **25**
 3.  **Fs** = 5MHz / samples\_to\_average = **200kHz**
 
-\
- \
 Next, the sample length, **N**, is computed by finding the window length
 of the measurement. An error is expressed since the main lobe width is
 directly proportional to the number of cycles captured. The minimum
@@ -43,7 +41,7 @@ windowing function. For instance, blackman requires a minimum of 6
 period cycles of the frequency of interest in order to express content
 of that lobe in the DFT. Sampling frequency does not play a role in the
 width of the lobe, only the resolution of the lobe. \
- \
+
 In this example, an error of 10% is specified. For a 1kHz fundamental,
 the main lobe width will maximally be 100Hz, the lowest detectable
 frequency, **ldf**.
@@ -52,17 +50,12 @@ frequency, **ldf**.
 2.  **ldf** = f0 \* error = **100Hz**
 3.  **N** = int(6 \* (fs / ldf)) = **12,000 samples**
 
-\
- \
 Finally, the aperture is calculated. For this discussion, however, this
 won't be covered. Please review **Section F** to better understand how
 to compute the aperture provided the sampling frequency, Fs.
 
 1.  **aperture** = max(200e-9 \* (samples\_to\_average - 1), 0) =
     **4.8us**
-
-\
- \
 
 ![](images/static/00_sampled_data.jpg)
 
@@ -171,13 +164,13 @@ a Hanning or Hamming window where only 4 cycles must be obtained. \
 -   A longer window results in a narrower main lobe.
 -   A longer window improves the frequency resolution.
 
-  Window Shape                          Relative Peak Side Lobe Magnitude   Approx. Main Lobe Width (Hz)
-  ------------------------------------- ----------------------------------- ------------------------------
-  Rectangular/boxcar                    -13 dB                              2/M
-  Bartlett (triangle)                   -26 dB                              4/M
-  Hanning (raised cosine)               -31 dB                              4/M
-  Hamming (raised cosine on pedestal)   -42 dB                              4/M
-  Blackman                              -58 dB                              6/M
+  | Window Shape                          | Relative Peak Side Lobe Magnitude   | Approx. Main Lobe Width (Hz)
+  | ------------------------------------- | ----------------------------------- | ------------------------------
+  | Rectangular/boxcar                    | -13 dB                              | 2/M
+  | Bartlett (triangle)                   | -26 dB                              | 4/M
+  | Hanning (raised cosine)               | -31 dB                              | 4/M
+  | Hamming (raised cosine on pedestal)   | -42 dB                              | 4/M
+  | Blackman                              | -58 dB                              | 6/M
 
 F: Fluke 8588A Aperture Parameters
 ----------------------------------
@@ -199,13 +192,13 @@ ns increments up to 1 ms, and 100 μs increments from 1 ms to 3 ms.
 Greater aperture length decreases sample rate. \
  \
 
-  Aperture   Time            Samples Averaged (\#)   Fs
-  ---------- --------------- ----------------------- ------------
-  0ns        200ns           1                       5 MHz
-  200ns      200ns + 200ns   2                       2.5 MHz
-  400ns      400ns + 200ns   3                       1.6667 MHz
-  600ns      600ns + 200ns   4                       1.25 MHz
-  800ns      800ns + 200ns   5                       833.33 kHz
-  1us        1us + 0.2us     6                       833.33 kHz
+  | Aperture   | Time            | Samples Averaged (\#)   | Fs
+  | ---------- | --------------- | ----------------------- | ------------
+  | 0ns        | 200ns           | 1                       |  5 MHz
+  | 200ns      | 200ns + 200ns   | 2                       |  2.5 MHz
+  | 400ns      | 400ns + 200ns   | 3                       |  1.6667 MHz
+  | 600ns      | 600ns + 200ns   | 4                       |  1.25 MHz
+  | 800ns      | 800ns + 200ns   | 5                       |  833.33 kHz
+  | 1us        | 1us + 0.2us     | 6                       |  833.33 kHz
 
 
