@@ -41,7 +41,7 @@ twice: once more after calculating an integer number of samples to
 average by the digitizer.
 
 1.  **\_Fs** = max( (2 \* bw), (100 \* F0) )
-2.  **samples\_to\_average** = int( 5MHz / \_Fs )= **25**
+2.  **samples\_to\_average** = int( 5MHz / \_Fs ) = **25**
 3.  **Fs** = 5MHz / samples\_to\_average = **200kHz**
 
 Next, the sample length, **N**, is computed by finding the window length

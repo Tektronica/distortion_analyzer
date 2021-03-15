@@ -6,6 +6,7 @@ from instruments_RWConfig import *
 from grid_enhanced import MyGrid
 
 import wx
+import wx.adv
 import wx.html
 import webbrowser
 
@@ -18,6 +19,9 @@ from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.backends.backend_wxagg import NavigationToolbar2WxAgg as NavigationToolbar
 
 import threading
+
+APP_VERSION = 'v2.0.2'
+APP_ICON = 'images/hornet.ico'
 
 # https://stackoverflow.com/a/38251497
 # https://matplotlib.org/3.1.1/tutorials/introductory/customizing.html
@@ -135,6 +139,8 @@ class TestFrame(wx.Frame):
 
         wxglade_tmp_menu = wx.Menu()
         self.menu_reset_view = wxglade_tmp_menu.Append(wx.ID_ANY, "Reset Window Size", "")
+        wxglade_tmp_menu.AppendSeparator()
+        self.menu_about = wxglade_tmp_menu.Append(wx.ID_ANY, '&About')
         # self.menu_brkpts = wxglade_tmp_menu.Append(wx.ID_ANY, "Open Breakpoints", "")
         self.frame_menubar.Append(wxglade_tmp_menu, "View")
         self.SetMenuBar(self.frame_menubar)
@@ -150,6 +156,7 @@ class TestFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.OnDummyChecked, self.menu_DUMMY)
         # self.Bind(wx.EVT_MENU, self.open_breakpoints, self.menu_brkpts)
         self.Bind(wx.EVT_MENU, self.reset_view, self.menu_reset_view)
+        self.Bind(wx.EVT_MENU, self.OnAbout, self.menu_about)
 
         # Configure Instruments ----------------------------------------------------------------------------------------
         on_connect = lambda event: self.on_connect_instr(event)
@@ -339,6 +346,21 @@ class TestFrame(wx.Frame):
         sizer_7.Add(self.panel_1, 1, wx.EXPAND, 0)
         self.SetSizer(sizer_7)
         self.Layout()
+
+    def OnAbout(self, evt):
+        info = wx.adv.AboutDialogInfo()
+
+        description = """The distortion analyzer computes the total harmonic distortion (THD) and total harmonic 
+        distortion and noise (THD+N) using time series data collected by the Fluke 8588A Digitizer. """
+
+        info.SetIcon(wx.Icon(APP_ICON, wx.BITMAP_TYPE_ICO))
+        info.SetName('Distortion Analyzer')
+        info.SetVersion(APP_VERSION)
+        info.SetDescription(description)
+        info.SetWebSite('https://github.com/Tektronica/distortion_analyzer')
+        info.AddDeveloper('Ryan Holle')
+
+        wx.adv.AboutBox(info)
 
     # ------------------------------------------------------------------------------------------------------------------
     def OnDummyChecked(self, event):
@@ -810,7 +832,7 @@ class MyApp(wx.App):
     def OnInit(self):
         self.frame = TestFrame(None, wx.ID_ANY, "")
         self.SetTopWindow(self.frame)
-        self.frame.SetIcon(wx.Icon('images/hornet.ico'))
+        self.frame.SetIcon(wx.Icon(APP_ICON))
         self.frame.Show()
         return True
 

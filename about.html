@@ -8,7 +8,7 @@ Time series data is retrieved by the Fluke 8588A digitizer. The digitizer has a 
 <br>First the sampling frequency, Fs, is computed by selecting a frequency 100x larger than the fundamental (or frequency of interest). Note, an Fs of at least 10x larger than the frequency of interest tends to be a general rule of thumb. If the computed Fs is not equal to or larger than twice the specificed bandwidth for the given measurement, then twice the measurement bandwidth is chosen by default. However, this value of Fs may not be its final value since we still need to have an integer number of samples averaged per measurement by the digitizer to resolve this sampling frequency. Consequently, the sampling frequency is calculated twice: once more after calculating an integer number of samples to average by the digitizer.
 <ol>
   <li><b>_Fs</b> = max( (2 * bw), (100 * F0) )</li>
-  <li><b>samples_to_average</b> = int( 5MHz / _Fs )= <b>25</b></li>
+  <li><b>samples_to_average</b> = int( 5MHz / _Fs ) = <b>25</b></li>
   <li><b>Fs</b> = 5MHz / samples_to_average = <b>200kHz</b></li>
 </ol>
 <br>
