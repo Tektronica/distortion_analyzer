@@ -341,7 +341,7 @@ class DistortionAnalyzer:
         else:
             y = pd.read_csv('results/history/DUMMY.csv')['yt'].to_numpy()
 
-        self.fft(y, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft)
+        return self.fft(y, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft)
 
     # ------------------------------------------------------------------------------------------------------------------
     def test_analyze_shunt_voltage(self, setup):
@@ -410,7 +410,7 @@ class DistortionAnalyzer:
 
         pd.DataFrame(data=y, columns=['ydata']).to_csv('results/y_data.csv')
 
-        self.fft(y, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft)
+        return self.fft(y, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft)
 
     def fft(self, yt, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft):
         yrms = rms_flat(yt)
@@ -444,6 +444,8 @@ class DistortionAnalyzer:
         header = ['xt', 'yt', 'xf', 'yf']
         write_to_csv('results/history', 'measurement', header, xt, yt, xf_fft, yf_fft)
         self.plot(data)
+
+        return [amplitude, Ft, yrms, thdn, thd, noise_rms, Fs, aperture]
 
     def plot(self, data):
         F0 = data['f0']
