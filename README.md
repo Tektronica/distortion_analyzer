@@ -4,7 +4,7 @@ A. Introduction
 -------------------
 
 The distortion analyzer computes the total harmonic distortion (THD) and
-total harmonic distortion and noise (THD+N), using time series data
+total harmonic distortion and noise (THD+N) using time series data
 collected by the Fluke 8588A Digitizer.
 
 ![](images/static/gui_example.jpg)
