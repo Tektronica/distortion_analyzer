@@ -121,6 +121,9 @@ class TestFrame(wx.Frame):
         # Menu Bar -----------------------------------------------------------------------------------------------------
         self.frame_menubar = wx.MenuBar()
         wxglade_tmp_menu = wx.Menu()
+        self.menu_results = wxglade_tmp_menu.Append(wx.ID_ANY, "Open Results", "")
+        self.menu_history = wxglade_tmp_menu.Append(wx.ID_ANY, "Open History", "")
+        wxglade_tmp_menu.AppendSeparator()
         self.menu_export = wxglade_tmp_menu.Append(wx.ID_ANY, "Export Data", "")
         self.frame_menubar.Append(wxglade_tmp_menu, "File")
 
@@ -137,6 +140,11 @@ class TestFrame(wx.Frame):
         self.SetMenuBar(self.frame_menubar)
 
         # Menu Bar Bind Events -----------------------------------------------------------------------------------------
+        ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+        on_open_results_dir = lambda event: webbrowser.open('file:////' + ROOT_DIR + '/results')
+        on_open_history_dir = lambda event: webbrowser.open('file:////' + ROOT_DIR + '/results/history')
+        self.Bind(wx.EVT_MENU, on_open_results_dir, self.menu_results)
+        self.Bind(wx.EVT_MENU, on_open_history_dir, self.menu_history)
         self.Bind(wx.EVT_MENU, self.grid_1.export, self.menu_export)
         self.Bind(wx.EVT_MENU, self.config, self.menu_config)
         self.Bind(wx.EVT_MENU, self.OnDummyChecked, self.menu_DUMMY)
