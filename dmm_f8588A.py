@@ -12,8 +12,10 @@ def to_float(s):
         f = float(s)
     except ValueError:
         print('[ERROR] Measurement could not be converted to float. Possible issues with configuration.')
-        pass
-    return f
+        raise ValueError('Prospective measurement obtained by the Fluke 8588A could not be converted to float. Suspect '
+                         'null value or over-range')
+    else:
+        return f
 
 
 def getSamplingFrequency(F0, bw=100e3):
@@ -99,10 +101,6 @@ class f8588A_instrument:
         else:
             print('\nUnable to connect to the Fluke 8588A. Check software configuration, ensure instrument are in'
                   'appropriate mode, and consider power cycling the suspected instrument\n')
-
-    def hello(self, s):
-        print(f'hello, {s}')
-        print(self.f8588A)
 
     ####################################################################################################################
     def setup_meter(self, output='CURR', mode='AC'):

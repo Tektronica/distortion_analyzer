@@ -8,3 +8,8 @@ DMM:
   address: 10.205.92.183
   port: '3490'
   gpib: '6'
+f884xA:
+  mode: SOCKET
+  address: 10.205.92.183
+  port: '3490'
+  gpib: '8'

@@ -1,18 +1,18 @@
 from distortion_analyzer import DistortionAnalyzer as da
-from distortion_calculator import *
+from gui_panel_datatable import DataTab
+from gui_panel_history import HistoryTab
+from gui_panel_multimeter import MultimeterTab
+from gui_panel_aboutpage import AboutTab
 
-from instruments_dialog_gui import *
+from gui_dialog_instruments import *
 from instruments_RWConfig import *
-from grid_enhanced import MyGrid
 
 import wx
 import wx.adv
 import wx.html
 import webbrowser
 
-from pathlib import Path
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
@@ -66,6 +66,7 @@ class TestFrame(wx.Frame):
         self.notebook_analyzer = wx.Panel(self.notebook, wx.ID_ANY)
         self.notebook_data = wx.Panel(self.notebook, wx.ID_ANY)
         self.notebook_history = wx.Panel(self.notebook)
+        self.notebook_voltageshift = wx.Panel(self.notebook)
         self.notebook_information = wx.Panel(self.notebook, wx.ID_ANY)
 
         self.panel_3 = wx.Panel(self.notebook_analyzer, wx.ID_ANY)  # left panel
@@ -109,7 +110,9 @@ class TestFrame(wx.Frame):
 
         self.btn_start = wx.Button(self.panel_3, wx.ID_ANY, "RUN")
         self.combo_mode = wx.ComboBox(self.panel_3, wx.ID_ANY,
-                                      choices=["Single", "Sweep", "Single w/ shunt", "Sweep w/ shunt", "~Continuous"],
+                                      choices=["Single", "Sweep",
+                                               "Single w/ shunt", "Sweep w/ shunt",
+                                               "Continuous"],
                                       style=wx.CB_DROPDOWN)
 
         # Data panel for displaying raw output -------------------------------------------------------------------------
@@ -118,6 +121,9 @@ class TestFrame(wx.Frame):
 
         # Data panel for displaying raw output -------------------------------------------------------------------------
         self.tab_history = HistoryTab(self.notebook_history)
+
+        # Data panel for displaying raw output -------------------------------------------------------------------------
+        self.tab_voltageshift = MultimeterTab(self.notebook_voltageshift)
 
         # Information Panel ------------------ -------------------------------------------------------------------------
         self.tab_about = AboutTab(self.notebook_information)
@@ -191,6 +197,7 @@ class TestFrame(wx.Frame):
         self.notebook_analyzer.SetBackgroundColour(wx.Colour(255, 255, 255))
         self.notebook_data.SetBackgroundColour(wx.Colour(255, 255, 255))
         self.notebook_history.SetBackgroundColour(wx.Colour(255, 255, 255))
+        self.notebook_voltageshift.SetBackgroundColour(wx.Colour(255, 255, 255))
         self.notebook_information.SetBackgroundColour(wx.Colour(255, 0, 255))
 
         self.text_DUT_report.SetMinSize((200, 23))
@@ -215,6 +222,7 @@ class TestFrame(wx.Frame):
         grid_sizer_5 = wx.BoxSizer(wx.VERTICAL)
         grid_sizer_7 = wx.BoxSizer(wx.VERTICAL)
         grid_sizer_8 = wx.BoxSizer(wx.VERTICAL)
+        grid_sizer_9 = wx.BoxSizer(wx.VERTICAL)
 
         # TITLE --------------------------------------------------------------------------------------------------------
         label_1 = wx.StaticText(self.panel_3, wx.ID_ANY, "DISTORTION ANALYZER")
@@ -250,7 +258,7 @@ class TestFrame(wx.Frame):
         grid_sizer_2.Add(static_line_6, (6, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
         # SOURCE -------------------------------------------------------------------------------------------------------
-        label_source = wx.StaticText(self.panel_3, wx.ID_ANY, "Source")
+        label_source = wx.StaticText(self.panel_3, wx.ID_ANY, "5560A")
         label_source.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
         grid_sizer_2.Add(label_source, (5, 0), (1, 1), wx.TOP, 10)
         grid_sizer_2.Add(self.checkbox_1, (5, 1), (1, 1), wx.ALIGN_BOTTOM | wx.LEFT | wx.TOP, 5)
@@ -258,7 +266,7 @@ class TestFrame(wx.Frame):
         label_amplitude = wx.StaticText(self.panel_4, wx.ID_ANY, "Amplitude:")
         label_frequency = wx.StaticText(self.panel_4, wx.ID_ANY, "Frequency (Ft):")
         label_Hz = wx.StaticText(self.panel_4, wx.ID_ANY, "(Hz)")
-        label_measure = wx.StaticText(self.panel_3, wx.ID_ANY, "Measure")
+        label_measure = wx.StaticText(self.panel_3, wx.ID_ANY, "Sampling")
 
         label_frequency.SetMinSize((95, 16))
 
@@ -330,8 +338,11 @@ class TestFrame(wx.Frame):
         grid_sizer_7.Add(self.tab_history, 1, wx.EXPAND, 0)
         self.notebook_history.SetSizer(grid_sizer_7)
 
-        grid_sizer_8.Add(self.tab_about, 1, wx.EXPAND, 0)
-        self.notebook_information.SetSizer(grid_sizer_8)
+        grid_sizer_8.Add(self.tab_voltageshift, 1, wx.EXPAND, 0)
+        self.notebook_voltageshift.SetSizer(grid_sizer_8)
+
+        grid_sizer_9.Add(self.tab_about, 1, wx.EXPAND, 0)
+        self.notebook_information.SetSizer(grid_sizer_9)
 
         grid_sizer_1.AddGrowableRow(0)
         grid_sizer_1.AddGrowableCol(1)
@@ -340,6 +351,7 @@ class TestFrame(wx.Frame):
         self.notebook.AddPage(self.notebook_analyzer, "Analyzer")
         self.notebook.AddPage(self.notebook_data, "Data")
         self.notebook.AddPage(self.notebook_history, "History")
+        self.notebook.AddPage(self.notebook_voltageshift, "DMM")
         self.notebook.AddPage(self.notebook_information, "Information")
         sizer_8.Add(self.notebook, 1, wx.ALL | wx.EXPAND, 10)
         self.panel_1.SetSizer(sizer_8)
@@ -571,257 +583,6 @@ class TestFrame(wx.Frame):
         self.toolbar.update()  # Not sure why this is needed - ADS
         self.canvas.draw()
         self.canvas.flush_events()
-
-
-########################################################################################################################
-class DataTab(wx.Panel):
-    def __init__(self, parent):
-        wx.Panel.__init__(self, parent, wx.ID_ANY)
-
-        # Data panel for displaying raw output -------------------------------------------------------------------------
-        self.spreadsheet = MyGrid(self)
-        self.btn_export = wx.Button(self, wx.ID_ANY, "Export")
-
-        # export grid data ---------------------------------------------------------------------------------------------
-        self.Bind(wx.EVT_BUTTON, self.spreadsheet.export, self.btn_export)
-
-        self.__set_properties()
-        self.__do_layout()
-
-    def __set_properties(self):
-        # self.SetBackgroundColour(wx.Colour(127, 255, 0))
-        self.spreadsheet.CreateGrid(100, 60)
-        self.spreadsheet.SetMinSize((1024, 50))
-
-    def __do_layout(self):
-        sizer_2 = wx.GridSizer(1, 1, 0, 0)
-        grid_sizer_1 = wx.FlexGridSizer(2, 1, 0, 0)
-
-        grid_sizer_1.Add(self.spreadsheet, 1, wx.EXPAND, 0)
-        grid_sizer_1.Add(self.btn_export, 0, 0, 0)
-        grid_sizer_1.AddGrowableRow(0)
-        grid_sizer_1.AddGrowableCol(0)
-        sizer_2.Add(grid_sizer_1, 0, wx.EXPAND, 0)
-        self.SetSizer(sizer_2)
-        self.Layout()
-
-
-class HistoryTab(wx.Panel):
-    def __init__(self, parent):
-        wx.Panel.__init__(self, parent, wx.ID_ANY)
-
-        self.parent = parent
-        self.plot_panel = wx.Panel(self, wx.ID_ANY, style=wx.SIMPLE_BORDER)
-
-        # PLOT Panel ---------------------------------------------------------------------------------------------------
-        self.figure = plt.figure(figsize=(1, 1))  # look into Figure((5, 4), 75)
-        self.canvas = FigureCanvas(self.plot_panel, -1, self.figure)
-        self.toolbar = NavigationToolbar(self.canvas)
-        self.toolbar.Realize()
-
-        self.ax1 = self.figure.add_subplot(211)
-        self.ax2 = self.figure.add_subplot(212)
-
-        self.temporal, = self.ax1.plot([], [], linestyle='-')
-        self.spectral, = self.ax2.plot([], [], color='#C02942')
-
-        # Open history dialog ------------------------------------------------------------------------------------------
-        self.btn_openHistory = wx.Button(self, wx.ID_ANY, "Open History")
-        self.Bind(wx.EVT_BUTTON, self.OnOpen, self.btn_openHistory)
-
-        self.text_ctrl_fs = wx.TextCtrl(self, wx.ID_ANY, "")
-        self.text_ctrl_samples = wx.TextCtrl(self, wx.ID_ANY, "")
-        self.text_ctrl_rms = wx.TextCtrl(self, wx.ID_ANY, "")
-        self.text_ctrl_thdn = wx.TextCtrl(self, wx.ID_ANY, "")
-        self.text_ctrl_thd = wx.TextCtrl(self, wx.ID_ANY, "")
-
-        self.__set_properties()
-        self.__do_layout()
-        self.__do_plot_layout()
-
-    def __set_properties(self):
-        self.SetBackgroundColour(wx.Colour(240, 240, 240))
-        self.canvas.SetMinSize((700, 490))
-
-    def __do_layout(self):
-        sizer_2 = wx.GridSizer(1, 1, 0, 0)
-        grid_sizer_1 = wx.FlexGridSizer(1, 2, 0, 0)
-        grid_sizer_plot = wx.GridBagSizer(0, 0)
-        grid_sizer_report = wx.GridBagSizer(0, 0)
-
-        # LEFT PANEL ---------------------------------------------------------------------------------------------------
-        lbl_fs = wx.StaticText(self, wx.ID_ANY, "Fs:")
-        lbl_samples = wx.StaticText(self, wx.ID_ANY, "Samples:")
-        lbl_rms = wx.StaticText(self, wx.ID_ANY, "RMS:")
-        lbl_thdn = wx.StaticText(self, wx.ID_ANY, "THD+N:")
-        lbl_THD = wx.StaticText(self, wx.ID_ANY, "THD:")
-
-        static_line_1 = wx.StaticLine(self, wx.ID_ANY)
-        static_line_1.SetMinSize((180, 2))
-        static_line_2 = wx.StaticLine(self, wx.ID_ANY)
-        static_line_2.SetMinSize((180, 2))
-
-        grid_sizer_report.Add(self.btn_openHistory, (0, 0), (1, 2), wx.LEFT | wx.TOP, 5)
-        grid_sizer_report.Add(static_line_2, (1, 0), (1, 2), wx.ALL, 5)
-        grid_sizer_report.Add(lbl_fs, (2, 0), (1, 1), wx.LEFT | wx.RIGHT, 5)
-        grid_sizer_report.Add(self.text_ctrl_fs, (2, 1), (1, 1), wx.BOTTOM, 5)
-        grid_sizer_report.Add(lbl_samples, (3, 0), (1, 1), wx.LEFT | wx.RIGHT, 5)
-        grid_sizer_report.Add(self.text_ctrl_samples, (3, 1), (1, 1), wx.BOTTOM, 5)
-        grid_sizer_report.Add(static_line_1, (4, 0), (1, 2), wx.ALL, 5)
-        grid_sizer_report.Add(lbl_rms, (5, 0), (1, 1), wx.LEFT | wx.RIGHT, 5)
-        grid_sizer_report.Add(self.text_ctrl_rms, (5, 1), (1, 1), wx.BOTTOM, 5)
-        grid_sizer_report.Add(lbl_thdn, (6, 0), (1, 1), wx.LEFT | wx.RIGHT, 5)
-        grid_sizer_report.Add(self.text_ctrl_thdn, (6, 1), (1, 1), wx.BOTTOM, 5)
-        grid_sizer_report.Add(lbl_THD, (7, 0), (1, 1), wx.LEFT | wx.RIGHT, 5)
-        grid_sizer_report.Add(self.text_ctrl_thd, (7, 1), (1, 1), 0, 0)
-        grid_sizer_1.Add(grid_sizer_report, 1, wx.EXPAND, 0)
-
-        # PLOT PANEL ---------------------------------------------------------------------------------------------------
-        grid_sizer_plot.Add(self.canvas, (0, 0), (1, 1), wx.ALL | wx.EXPAND)
-        grid_sizer_plot.Add(self.toolbar, (1, 0), (1, 1), wx.ALL | wx.EXPAND)
-        grid_sizer_plot.AddGrowableRow(0)
-        grid_sizer_plot.AddGrowableCol(0)
-        self.plot_panel.SetSizer(grid_sizer_plot)
-        grid_sizer_1.Add(self.plot_panel, 1, wx.EXPAND, 5)
-
-        grid_sizer_1.AddGrowableRow(0)
-        grid_sizer_1.AddGrowableCol(1)
-
-        sizer_2.Add(grid_sizer_1, 0, wx.EXPAND, 0)
-
-        self.SetSizer(sizer_2)
-        self.Layout()
-
-    def error_dialog(self, error_message):
-        print(error_message)
-        dial = wx.MessageDialog(None, str(error_message), 'Error', wx.OK | wx.ICON_ERROR)
-        dial.ShowModal()
-
-    def OnOpen(self, event):
-        Path("results/history").mkdir(parents=True, exist_ok=True)
-        with wx.FileDialog(self, "Open previous measurement:", wildcard="CSV files (*.csv)|*.csv",
-                           defaultDir="results/history",
-                           style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as fileDialog:
-
-            if fileDialog.ShowModal() == wx.ID_CANCEL:
-                return  # the user changed their mind
-
-            # Proceed loading the file chosen by the user
-            pathname = fileDialog.GetPath()
-            try:
-                with open(pathname, 'r') as file:
-                    self.open_history(file)
-            except (IOError, ValueError) as e:
-                wx.LogError("Cannot open file '%s'." % pathname)
-                self.error_dialog(e)
-
-    def open_history(self, file):
-        df = pd.read_csv(file)
-
-        try:
-            xt = df['xt'].to_numpy()
-            yt = df['yt'].to_numpy()
-            xf = df['xf'].to_numpy()
-
-            # https://stackoverflow.com/a/18919965/3382269
-            # https://stackoverflow.com/a/51725795/3382269
-            df['yf'] = df['yf'].str.replace('i', 'j').apply(lambda x: np.complex(x))
-            yf = df['yf'].to_numpy()
-        except KeyError:
-            raise ValueError('Incorrect file attempted to be opened. '
-                             '\nCheck data headers. xt, yt, xf, yf should be present')
-
-        self.process_raw_input(xt, yt, xf, yf)
-
-    def process_raw_input(self, xt, yt, xf, yf):
-        yrms = np.sqrt(np.mean(np.absolute(yt) ** 2))
-        N = len(xt)
-        Fs = round(1 / (xt[1] - xt[0]), 2)
-
-        # SPECTRAL -----------------------------------------------------------------------------------------------------
-        if (N % 2) == 0:
-            # for even values of N: length is (N / 2) + 1
-            fft_length = int(N / 2) + 1
-        else:
-            # for odd values of N: length is (N + 1) / 2
-            fft_length = int((N + 2) / 2)
-
-        thdn, *_ = THDN(yf[:fft_length], Fs, N, )
-        thd = THD(yt, Fs)
-
-        self.plot(xt, yt, yrms, fft_length, xf, yf)
-        self.results_update(Fs, N, yrms, thdn, thd)
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def __do_plot_layout(self):
-        self.ax1.set_title('SAMPLED TIMED SERIES DATA')
-        self.ax1.set_xlabel('TIME (ms)')
-        self.ax1.set_ylabel('AMPLITUDE')
-        self.ax2.set_title('DIGITIZED WAVEFORM SPECTRAL RESPONSE')
-        self.ax2.set_xlabel('FREQUENCY (kHz)')
-        self.ax2.set_ylabel('MAGNITUDE (dB)')
-        self.ax2.grid()
-        self.figure.align_ylabels([self.ax1, self.ax2])
-        self.figure.tight_layout()
-
-    def plot(self, xt, yt, yrms, fft_length, xf, yf):
-        # TEMPORAL -----------------------------------------------------------------------------------------------------
-        self.temporal.set_data(xt, yt)
-
-        try:
-            self.ax1.relim()  # recompute the ax.dataLim
-        except ValueError:
-            print(f'Are the lengths of xt: {len(xt)} and yt: {len(yt)} mismatched?')
-            raise
-        self.ax1.autoscale()
-
-        # SPECTRAL -----------------------------------------------------------------------------------------------------
-        xf_scaled = xf[0:fft_length] / 1000
-        yf_scaled = 20 * np.log10(2 * np.abs(yf[0:fft_length] / (yrms * fft_length)))
-        self.spectral.set_data(xf_scaled, yf_scaled)
-        try:
-            self.ax2.relim()  # recompute the ax.dataLim
-        except ValueError:
-            print(f'Are the lengths of xt: {len(xf_scaled)} and yt: {len(yf_scaled)} mismatched?')
-            raise
-        self.ax2.autoscale()
-
-        xf_start = 0
-        xf_end = xf_scaled[fft_length - 1]
-        self.ax2.set_xlim([xf_start, xf_end])
-
-        # UPDATE PLOT FEATURES -----------------------------------------------------------------------------------------
-        self.figure.tight_layout()
-
-        self.toolbar.update()  # Not sure why this is needed - ADS
-        self.canvas.draw()
-        self.canvas.flush_events()
-
-    def results_update(self, Fs, N, yrms, thdn, thd):
-        self.text_ctrl_fs.SetLabelText(str(Fs))
-        self.text_ctrl_samples.SetLabelText(str(N))
-        self.text_ctrl_rms.SetValue(f"{'{:0.3e}'.format(yrms)}")
-        self.text_ctrl_thdn.SetValue(f"{round(thdn * 100, 3)}% or {round(np.log10(thdn), 1)}dB")
-        self.text_ctrl_thd.SetValue(f"{round(thd * 100, 3)}% or {round(np.log10(thd), 1)}dB")
-
-
-class wxHTML(wx.html.HtmlWindow):
-    def OnLinkClicked(self, link):
-        webbrowser.open(link.GetHref())
-
-
-class AboutTab(wx.Panel):
-    def __init__(self, frame):
-        wx.Panel.__init__(self, frame, wx.ID_ANY)
-        self.sizer = wx.BoxSizer(wx.VERTICAL)
-        self.html = wx.html.HtmlWindow(self, -1, size=(1013, 533), style=wx.html.HW_SCROLLBAR_AUTO | wx.TE_READONLY)
-
-        self.html.LoadPage("about.html")
-
-        self.sizer.Add(self.html, 1, wx.EXPAND)
-
-        self.SetSizer(self.sizer)
-        self.Fit()
 
 
 ########################################################################################################################

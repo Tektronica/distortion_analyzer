@@ -1,7 +1,5 @@
 import dut_f5560A as dut
-import dmm_f8588A as dmm
-
-from distortion_calculator import *
+import dmm_f884xA as dmm
 
 import time
 import pandas as pd
@@ -16,17 +14,6 @@ import csv
 
 
 ########################################################################################################################
-
-
-def get_FFT_parameters(Ft, lpf, error):
-    Fs = dmm.getSamplingFrequency(Ft, lpf)
-
-    N = getWindowLength(f0=Ft, fs=Fs, windfunc='blackman', error=error)
-    aperture, runtime = dmm.get_aperture(Fs, N)
-
-    return Fs, N, aperture, runtime
-
-
 def _getFilepath(directory, fname):
     Path(directory).mkdir(parents=True, exist_ok=True)
     date = datetime.date.today().strftime("%Y%m%d")
@@ -51,10 +38,10 @@ def write_to_csv(path, fname, header, *args):
 
 
 ########################################################################################################################
-class Instruments(dut.f5560A_instrument, dmm.f8588A_instrument):
+class Instruments(dut.f5560A_instrument, dmm.f884xA_instruments):
     def __init__(self, parent):
         dut.f5560A_instrument.__init__(self)
-        dmm.f8588A_instrument.__init__(self)
+        dmm.f884xA_instruments.__init__(self)
 
         self.analyzer = parent
         self.measurement = []
@@ -64,15 +51,15 @@ class Instruments(dut.f5560A_instrument, dmm.f8588A_instrument):
         try:
             # ESTABLISH COMMUNICATION TO INSTRUMENTS -------------------------------------------------------------------
             f5560A_id = instruments['DUT']
-            f8588A_id = instruments['DMM']
+            f884xA_id = instruments['DMM']
 
             self.connect_to_f5560A(f5560A_id)
-            self.connect_to_f8588A(f8588A_id)
+            self.connect_to_f884xA(f884xA_id)
 
-            if self.f5560A.healthy and self.f8588A.healthy:
+            if self.f5560A.healthy and self.f884xA.healthy:
                 self.connected = True
                 try:
-                    idn_dict = {'DUT': self.f5560A_IDN, 'DMM': self.f8588A_IDN}
+                    idn_dict = {'DUT': self.f5560A_IDN, 'DMM': self.f884xA_IDN}
                     self.analyzer.frame.set_ident(idn_dict)
                     self.setup_source()
                 except ValueError:
@@ -85,13 +72,13 @@ class Instruments(dut.f5560A_instrument, dmm.f8588A_instrument):
     def close_instruments(self):
         time.sleep(1)
         self.close_f5560A()
-        self.close_f8588A()
+        self.close_f884xA()
 
 
-class DistortionAnalyzer:
+class DMM_Measurement:
     # ------------------------------------------------------------------------------------------------------------------
     def __init__(self, parent):
-        self.frame = parent
+        self.panel = parent
         self.DUMMY_DATA = False  # can be toggled by the gui
         self.amplitude_good = False  # Flag indicates user input for amplitude value is good (True)
         self.frequency_good = False  # Flag indicates user input for frequency value is good (True)
@@ -251,25 +238,8 @@ class DistortionAnalyzer:
         results_df.to_csv(path_or_buf=_getFilepath('results', 'distortion'), sep=',', index=False)
         self.frame.flag_complete = True
 
-    def run_continuous(self, func):
-        print('Running a continuous run!')
-        self.frame.flag_complete = False
-        t = threading.currentThread()
-        setup = True
-        while getattr(t, "do_run", True):
-            try:
-                func(setup=setup)
-                setup = False
-                time.sleep(0.1)
-            except ValueError:
-                raise
-
-        if not self.DUMMY_DATA:
-            self.M.standby()
-        print('Ending continuous run_source process.')
-
     # ------------------------------------------------------------------------------------------------------------------
-    def test(self, setup):
+    def test_amplitude_only(self, setup):
         params = self.params
 
         # SOURCE
@@ -282,178 +252,30 @@ class DistortionAnalyzer:
         Ft = params['frequency']
         suffix = params['units']
         time.sleep(1)
-
-        # DIGITIZER
-        error = params['error']
-        filter_val = params['filter']
-
-        # SIGNAL SOURCE ================================================================================================
-        if suffix in ('A', 'a'):
-            if amplitude <= 1.5:
-                oper_range = 10 ** round(np.log10(amplitude))
-            elif 1.5 <= amplitude <= 10:
-                oper_range = 10
-            else:
-                oper_range = 30
-        else:
-            if amplitude <= 0.12:
-                oper_range = 0.1
-            elif amplitude <= 1.2:
-                oper_range = 1
-            elif amplitude <= 12:
-                oper_range = 10
-            elif amplitude <= 120:
-                oper_range = 100
-            else:
-                oper_range = 1000
-
-        # DIGITIZED SIGNAL =============================================================================================
-        if Ft == 0:
-
-            lpf = 10e3
-            hpf = 3  # high pass filter cutoff frequency
-            Fs, N, aperture, runtime = get_FFT_parameters(Ft=10, lpf=lpf, error=error)
-        else:
-            if filter_val == '100kHz':
-                lpf = 100e3  # low pass filter cutoff frequency
-            elif filter_val == '3MHz':
-                lpf = 3e6  # low pass filter cutoff frequency
-            else:
-                lpf = 0
-
-            hpf = 0
-
-            Fs, N, aperture, runtime = get_FFT_parameters(Ft=Ft, lpf=lpf, error=error)
-
-        # START DATA COLLECTION ----------------------------------------------------------------------------------------
-        # TODO
-        # This is for internal debugging only. Not user facing.
-        if not self.DUMMY_DATA:
-            if setup:
-                self.M.setup_digitizer(suffix, oper_range, filter_val, N, aperture)
-            if params['source']:
-                try:
-                    self.M.run_source(suffix, amplitude, Ft)
-                    try:
-                        y = self.M.retrieve_digitize()
-                    except ValueError:
-                        print('error occurred while connecting to DMM. Placing 5560 in Standby.')
-                        self.M.standby()
-                        raise
-                except ValueError:
-                    print('error occurred while connecting to DUT. Exiting current measurement.')
-                    raise
-            else:
-                y = self.M.retrieve_digitize()
-        else:
-            y = pd.read_csv('results/history/DUMMY.csv')['yt'].to_numpy()
-
-        return self.fft(y, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft)
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def test_analyze_shunt_voltage(self, setup):
-        params = self.params
-        # SOURCE
-        amplitude = params['amplitude']
-        rms = params['rms']
-        if rms != 0:
-            amplitude = amplitude / np.sqrt(2)
-            print('Provided amplitude converted to RMS.')
-
-        Ft = params['frequency']
-        suffix = params['units']
-        self.M.run_source(suffix, amplitude, Ft)
-        time.sleep(1)
-
-        # METER
-        self.M.setup_meter('VOLT', 'AC')
-        meter_outval, meter_range, meter_ft = self.M.read_meter('VOLT', 'AC')
-        meter_mode = 'V'
-
-        # DIGITIZER
-        error = params['error']
-
-        filter_val = params['filter']
-
-        # SIGNAL SOURCE ================================================================================================
-        # CURRENT
-        if meter_mode in ('A', 'a'):
-            if meter_outval <= 1.5:
-                meter_range = 10 ** round(np.log10(meter_outval))
-            elif 1.5 <= meter_outval <= 10:
-                meter_range = 10
-            else:
-                meter_range = 30
-        # VOLTAGE
-        else:
-            if meter_range <= 0.1:
-                meter_range = 0.1
-            else:
-                pass
-
-        # DIGITIZED SIGNAL =============================================================================================
-        if Ft == 0:
-            N = 20000
-            cycles = 100
-            lpf = 10e3
-            hpf = 3  # high pass filter cutoff frequency
-            Fs, N, aperture, runtime = get_FFT_parameters(Ft=Ft, lpf=lpf, error=error)
-        else:
-            if filter_val == '100kHz':
-                lpf = 100e3  # low pass filter cutoff frequency
-            elif filter_val == '3MHz':
-                lpf = 3e6  # low pass filter cutoff frequency
-            else:
-                lpf = 0
-
-            hpf = 0
-
-            Fs, N, aperture, runtime = get_FFT_parameters(Ft=Ft, lpf=lpf, error=error)
 
         # START DATA COLLECTION ----------------------------------------------------------------------------------------
         if setup:
-            self.M.setup_digitizer(meter_mode, meter_range, filter_val, N, aperture)
-        y = self.M.retrieve_digitize()
+            self.M.setup_meter(output='CURR', mode='AC')
+        if params['source']:
+            try:
+                self.M.run_source(suffix, amplitude, Ft)
+                try:
+                    outval, freqval = self.M.read_meter()
+                    data = {'x': freqval, 'y': outval}
+                except ValueError:
+                    print('error occurred while connecting to DMM. Placing 5560 in Standby.')
+                    self.M.standby()
+                    raise
+            except ValueError:
+                print('error occurred while connecting to DUT. Exiting current measurement.')
+                raise
+        else:
+            outval, freqval = self.M.read_meter()
 
-        pd.DataFrame(data=y, columns=['ydata']).to_csv('results/y_data.csv')
-
-        return self.fft(y, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft)
-
-    def fft(self, yt, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft):
-        yrms = rms_flat(yt)
-        # FFT ==========================================================================================================
-        xt = np.arange(0, N, 1) / Fs
-
-        xf_fft, yf_fft, xf_rfft, yf_rfft = windowed_fft(yt, Fs, N, 'blackman')
-
-        # Find %THD+N
-        try:
-            thdn, f0, noise_rms = THDN(yf_rfft, Fs, N, hpf, lpf)
-            thd = THD(yt, Fs)
-            data = {'x': xt, 'y': yt, 'xf': xf_rfft, 'ywf': yf_rfft, 'RMS': yrms, 'N': N, 'runtime': runtime, 'Fs': Fs,
-                    'f0': f0}
-        except ValueError as e:
-            raise
-        results_row = {'Amplitude': amplitude, 'Frequency': Ft,
-                       'RMS': yrms,
-                       'THDN': round(thdn, 5), 'THD': round(thd, 5), 'RMS NOISE': noise_rms,
-                       'N': N, 'Fs': f'{round(Fs / 1000, 2)} kHz', 'Aperture': f'{round(aperture * 1e6, 4)}us'}
-
-        # TODO: is this action necessary still?
-        # append units column ------------------------------------------------------------------------------------------
-        for key, value in results_row.items():
-            self.results[key].append(value)
-        results_row['units'] = self.params['units']
-
-        # report results to main panel ---------------------------------------------------------------------------------
-        self.frame.results_update(results_row)
-
-        # save measurement to csv --------------------------------------------------------------------------------------
-        header = ['xt', 'yt', 'xf', 'yf']
-        write_to_csv('results/history', 'measurement', header, xt, yt, xf_fft, yf_fft)
+        data = {'x': freqval, 'y': outval}
         self.plot(data)
 
-        return [amplitude, Ft, yrms, thdn, thd, noise_rms, Fs, aperture]
+        return outval, freqval
 
     def plot(self, data):
         F0 = data['f0']
@@ -486,7 +308,7 @@ class DistortionAnalyzer:
                   'yf_start': -150, 'yf_end': 0
                   }
 
-        self.frame.plot(params)
+        self.panel.plot(params)
 
     def close_instruments(self):
         if hasattr(self.M, 'DUT') and hasattr(self.M, 'DMM'):
