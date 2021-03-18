@@ -16,8 +16,6 @@ import csv
 
 
 ########################################################################################################################
-
-
 def get_FFT_parameters(Ft, lpf, error):
     Fs = dmm.getSamplingFrequency(Ft, lpf)
 
@@ -187,10 +185,6 @@ class DistortionAnalyzer:
             # run continuous
             elif selection == 4:
                 self.run_continuous(self.test)
-
-            # amplitude measurement only using fluke 884xA
-            elif selection == 5:
-                self.run_sweep(self.test_amplitude_only)
 
             else:
                 print('Nothing happened.')

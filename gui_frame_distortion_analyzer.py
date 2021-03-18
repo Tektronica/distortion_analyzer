@@ -351,7 +351,7 @@ class TestFrame(wx.Frame):
         self.notebook.AddPage(self.notebook_analyzer, "Analyzer")
         self.notebook.AddPage(self.notebook_data, "Data")
         self.notebook.AddPage(self.notebook_history, "History")
-        self.notebook.AddPage(self.notebook_multimeter, "DMM")
+        self.notebook.AddPage(self.notebook_multimeter, "Multimeter")
         self.notebook.AddPage(self.notebook_information, "Information")
         sizer_8.Add(self.notebook, 1, wx.ALL | wx.EXPAND, 10)
         self.panel_1.SetSizer(sizer_8)
