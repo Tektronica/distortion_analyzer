@@ -50,8 +50,8 @@ class Instruments(dut.f5560A_instrument, dmm.f884xA_instruments):
     def connect(self, instruments):
         try:
             # ESTABLISH COMMUNICATION TO INSTRUMENTS -------------------------------------------------------------------
-            f5560A_id = instruments['DUT']
-            f884xA_id = instruments['DMM']
+            f5560A_id = instruments['f5560A']
+            f884xA_id = instruments['f884xA']
 
             self.connect_to_f5560A(f5560A_id)
             self.connect_to_f884xA(f884xA_id)

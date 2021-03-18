@@ -7,7 +7,7 @@ class InstrumentDialog(wx.Dialog):
     """"""
 
     # ------------------------------------------------------------------------------------------------------------------
-    def __init__(self, parent, *args, **kwds):
+    def __init__(self, parent, instrs, *args, **kwds):
         kwds["style"] = kwds.get("style", 0) | wx.DEFAULT_DIALOG_STYLE
         super(InstrumentDialog, self).__init__(parent, title='Configure Instruments')
         wx.Dialog.__init__(self, *args, **kwds)
@@ -15,17 +15,13 @@ class InstrumentDialog(wx.Dialog):
         self.panel_1 = wx.Panel(self, wx.ID_ANY)
 
         # DYNAMIC DATA ENTRY PANELS ------------------------------------------------------------------------------------
-        self.panel_dut = DataEntryPanel(self.panel_1, wx.ID_ANY)
-        self.panel_dmm = DataEntryPanel(self.panel_1, wx.ID_ANY)
+        self.instr_list = instrs
+        self.panels = []
+        self.LoadConfig()
 
         # BUTTONS ------------------------------------------------------------------------------------------------------
         self.btn_save = wx.Button(self.panel_1, wx.ID_ANY, "Save")
         self.btn_save.Bind(wx.EVT_BUTTON, self.on_save)
-
-        on_combo_00 = lambda event: self.on_combo(event, self.panel_dut.mode.GetValue(), 'DUT')
-        self.Bind(wx.EVT_COMBOBOX_CLOSEUP, on_combo_00, self.panel_dut.mode)
-        on_combo_01 = lambda event: self.on_combo(event, self.panel_dmm.mode.GetValue(), 'DMM')
-        self.Bind(wx.EVT_COMBOBOX_CLOSEUP, on_combo_01, self.panel_dmm.mode)
 
         self.__set_properties()
         self.__do_layout()
@@ -38,8 +34,7 @@ class InstrumentDialog(wx.Dialog):
     def __do_layout(self):
         sizer_1 = wx.BoxSizer(wx.VERTICAL)
         grid_sizer = wx.GridBagSizer(0, 0)
-        sizer_2 = wx.BoxSizer()
-        sizer_3 = wx.BoxSizer()
+        grid_dynamic_sizer = wx.GridBagSizer(0, 0)
 
         # TITLE --------------------------------------------------------------------------------------------------------
         title_Instruments = wx.StaticText(self.panel_1, wx.ID_ANY, "INSTRUMENTS")
@@ -50,28 +45,21 @@ class InstrumentDialog(wx.Dialog):
         static_line_1.SetMinSize((292, 2))
         grid_sizer.Add(static_line_1, (1, 0), (1, 3), wx.BOTTOM | wx.TOP, 5)
 
-        # HEADERS ------------------------------------------------------------------------------------------------------
-        header_DUT = wx.StaticText(self.panel_1, wx.ID_ANY, "DUT")
-        header_DUT.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer.Add(header_DUT, (2, 0), (1, 1), wx.BOTTOM, 5)
-
-        header_dmm = wx.StaticText(self.panel_1, wx.ID_ANY, "DMM")
-        header_dmm.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer.Add(header_dmm, (3, 0), (1, 1), wx.BOTTOM, 5)
-
         # ADD DYNAMIC PANELS -------------------------------------------------------------------------------------------
-        sizer_2.Add(self.panel_dut, 1, wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)  # class add
-        sizer_3.Add(self.panel_dmm, 1, wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)  # class add
-
-        grid_sizer.Add(sizer_2, (2, 1), (1, 1), wx.ALIGN_BOTTOM | wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
-        grid_sizer.Add(sizer_3, (3, 1), (1, 1), wx.ALIGN_BOTTOM | wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
+        for idx, panel in enumerate(self.panels):
+            if panel.key in self.instr_list:
+                header = wx.StaticText(self.panel_1, wx.ID_ANY, panel.key)
+                header.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
+                grid_dynamic_sizer.Add(header, (idx, 0), (1, 1), wx.BOTTOM | wx.RIGHT, 5)
+                grid_dynamic_sizer.Add(panel, (idx, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
+        grid_sizer.Add(grid_dynamic_sizer, (2, 0), (1, 3), wx.BOTTOM | wx.TOP, 5)
 
         # ADD BUTTONS --------------------------------------------------------------------------------------------------
         static_line_2 = wx.StaticLine(self.panel_1, wx.ID_ANY)
         static_line_2.SetMinSize((292, 2))
-        grid_sizer.Add(static_line_2, (4, 0), (1, 3), wx.BOTTOM | wx.TOP, 5)
+        grid_sizer.Add(static_line_2, (3, 0), (1, 3), wx.BOTTOM | wx.TOP, 5)
 
-        grid_sizer.Add(self.btn_save, (5, 0), (1, 3), wx.ALIGN_RIGHT, 0)
+        grid_sizer.Add(self.btn_save, (4, 0), (1, 3), wx.ALIGN_RIGHT, 0)
         self.panel_1.SetSizer(grid_sizer)
 
         # ADD MAIN PANEL TO SIZER --------------------------------------------------------------------------------------
@@ -79,35 +67,24 @@ class InstrumentDialog(wx.Dialog):
         self.SetSizer(sizer_1)
         sizer_1.Fit(self)
 
-        self.LoadConfig()
-
     # ------------------------------------------------------------------------------------------------------------------
     def LoadConfig(self):
         config_dict = ReadConfig()
         # load config file into settings if available
         if isinstance(config_dict, dict):
             config = config_dict
-            dut_mode = config['DUT']['mode']
-            dmm_mode = config['DMM']['mode']
 
-            self.panel_dut.setValues(mode=dut_mode, address=config['DUT']['address'], port=config['DUT']['port'],
-                                     gpib=config['DUT']['gpib'])
-            self.panel_dmm.setValues(mode=dmm_mode, address=config['DMM']['address'], port=config['DMM']['port'],
-                                     gpib=config['DMM']['gpib'])
+            for idx, key in enumerate(config_dict.keys()):
+                mode = config[key]['mode']
 
-            self.panel_dut.toggle_panel(dut_mode)
-            self.panel_dmm.toggle_panel(dmm_mode)
-
+                self.panels.append(DataEntryPanel(self.panel_1, wx.ID_ANY, key))
+                self.panels[idx].setValues(mode=mode, address=config[key]['address'], port=config[key]['port'],
+                                           gpib=config[key]['gpib'])
+                self.panels[idx].toggle_panel(mode)
         else:
             print('no config')
 
     # ------------------------------------------------------------------------------------------------------------------
-    def on_combo(self, evt, mode, instr):
-        if instr == 'DUT':
-            self.panel_dut.toggle_panel(mode)
-        else:
-            self.panel_dmm.toggle_panel(mode)
-
     def toggle_panel(self, mode, panel, panel_gpib):
         if mode in ('SOCKET', 'SERIAL'):
             if not panel.IsShown():
@@ -122,9 +99,8 @@ class InstrumentDialog(wx.Dialog):
     # ------------------------------------------------------------------------------------------------------------------
     def on_save(self, evt):
         # Merging dictionaries: https://stackoverflow.com/a/26853961
-        config = {'DUT': self.panel_dut.get_text(),
-                  'DMM': self.panel_dmm.get_text()}
 
+        config = {panel.key: panel.get_text() for panel in self.panels}
         SaveConfig(config)
 
         if self.IsModal():
@@ -135,16 +111,20 @@ class InstrumentDialog(wx.Dialog):
 
 
 class DataEntryPanel(wx.Panel):
-    def __init__(self, parent, wxid):
+    def __init__(self, parent, wxid, key):
         super(DataEntryPanel, self).__init__(parent)
         self.panel_base = wx.Panel(self, wxid)
         self.panel_1 = wx.Panel(self.panel_base, wx.ID_ANY)
         self.panel_2 = wx.Panel(self.panel_base, wx.ID_ANY)
 
+        self.key = key
         self.mode = wx.ComboBox(self.panel_base, wx.ID_ANY, choices=["SOCKET", "GPIB", "SERIAL"], style=wx.CB_DROPDOWN)
         self.address = wx.TextCtrl(self.panel_1, wx.ID_ANY, "")
         self.port = wx.TextCtrl(self.panel_1, wx.ID_ANY, "3490")
         self.gpib = wx.TextCtrl(self.panel_2, wx.ID_ANY, "")
+
+        on_combo_00 = lambda event: self.on_combo(event, self.mode.GetValue(), self.key)
+        self.Bind(wx.EVT_COMBOBOX_CLOSEUP, on_combo_00, self.mode)
 
         self.Freeze()
         self.__set_properties()
@@ -201,6 +181,13 @@ class DataEntryPanel(wx.Panel):
         self.address.SetValue(address)
         self.port.SetValue(port)
         self.gpib.SetValue(gpib)
+
+    # ------------------------------------------------------------------------------------------------------------------
+    def on_combo(self, evt, mode, instr):
+        if instr == 'DUT':
+            self.toggle_panel(mode)
+        else:
+            self.toggle_panel(mode)
 
     # ------------------------------------------------------------------------------------------------------------------
     def toggle_panel(self, mode):

@@ -210,9 +210,28 @@ class MultimeterTab(wx.Panel):
 
     # ------------------------------------------------------------------------------------------------------------------
     def config(self, evt):
-        dlg = InstrumentDialog(self, None, wx.ID_ANY, "")
+        dlg = InstrumentDialog(self, ['f5560A', 'f884xA'], None, wx.ID_ANY,)
         dlg.ShowModal()
         dlg.Destroy()
+
+    def get_instruments(self):
+        config_dict = ReadConfig()
+
+        instruments = {'f5560A': {'address': config_dict['DUT']['address'], 'port': config_dict['DUT']['port'],
+                                  'gpib': config_dict['DUT']['gpib'], 'mode': config_dict['DUT']['mode']},
+                       'f884xA': {'address': config_dict['DMM']['address'], 'port': config_dict['DMM']['port'],
+                                  'gpib': config_dict['DMM']['gpib'], 'mode': config_dict['DMM']['mode']}}
+        return instruments
+
+    def OnCloseWindow(self, evt):
+        self.dmm.close_instruments()
+        self.Destroy()
+
+    def on_connect_instr(self, evt):
+        print('\nResetting connection. Closing communication with any connected instruments')
+        self.text_DUT_report.Clear()
+        self.text_DMM_report.Clear()
+        self.thread_this(self.dmm.connect, (self.get_instruments(),))
 
     # ------------------------------------------------------------------------------------------------------------------
     def lock_controls(self, evt):

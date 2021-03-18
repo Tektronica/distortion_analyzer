@@ -1,9 +1,9 @@
-DUT:
+f5560A:
   mode: SOCKET
   address: 129.196.136.130
   port: '3490'
   gpib: '6'
-DMM:
+f8588A:
   mode: SOCKET
   address: 10.205.92.183
   port: '3490'

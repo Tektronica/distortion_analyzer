@@ -416,17 +416,17 @@ class TestFrame(wx.Frame):
         self.SetSize((1055, 640))
 
     def config(self, evt):
-        dlg = InstrumentDialog(self, None, wx.ID_ANY, "")
+        dlg = InstrumentDialog(self, ['f5560A', 'f8588A'], None, wx.ID_ANY,)
         dlg.ShowModal()
         dlg.Destroy()
 
     def get_instruments(self):
         config_dict = ReadConfig()
 
-        instruments = {'DUT': {'address': config_dict['DUT']['address'], 'port': config_dict['DUT']['port'],
-                               'gpib': config_dict['DUT']['gpib'], 'mode': config_dict['DUT']['mode']},
-                       'DMM': {'address': config_dict['DMM']['address'], 'port': config_dict['DMM']['port'],
-                               'gpib': config_dict['DMM']['gpib'], 'mode': config_dict['DMM']['mode']}}
+        instruments = {'f5560A': {'address': config_dict['DUT']['address'], 'port': config_dict['DUT']['port'],
+                                  'gpib': config_dict['DUT']['gpib'], 'mode': config_dict['DUT']['mode']},
+                       'f8588A': {'address': config_dict['DMM']['address'], 'port': config_dict['DMM']['port'],
+                                  'gpib': config_dict['DMM']['gpib'], 'mode': config_dict['DMM']['mode']}}
         return instruments
 
     def set_ident(self, idn_dict):
