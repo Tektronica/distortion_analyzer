@@ -288,7 +288,7 @@ class MyGrid(wx.grid.Grid):
             }
             cells.append((row, col, attributes))
             self.SetCellValue(row, col, "")
-
+        print(cells)
         self.add_history({"type": "delete", "cells": cells})
 
     def onCut(self, e):
@@ -362,6 +362,20 @@ class MyGrid(wx.grid.Grid):
                 pass
         else:
             print('No row data written. data appears empty.')
+
+    def cleardata(self):
+        # remove saved contents other than headers
+        self.data = [self.data[0]]
+        cols = self.GetNumberCols()
+        rows = self.GetNumberRows()
+        for row in range(rows - 1):
+            for col in range(cols):
+                self.SetCellValue(row + 1, col, "")
+        self.row = 1
+
+        # TODO:  need to get this working to take advantage of history. As is, storing all cells in the table as
+        #  deleted is false and bloated.
+        #  self.add_history({"type": "delete", "cells": cells})
 
     def export(self, e):
         Path("results").mkdir(parents=True, exist_ok=True)

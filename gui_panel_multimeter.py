@@ -1,10 +1,9 @@
 from multimeter import DMM_Measurement as dmm
+from gui_grid_enhanced import MyGrid
 from gui_dialog_instruments import *
 from instruments_RWConfig import *
 
 import numpy as np
-import pandas as pd
-from pathlib import Path
 import threading
 
 import wx
@@ -35,8 +34,12 @@ class MultimeterTab(wx.Panel):
                                              style=wx.CB_DROPDOWN | wx.CB_READONLY)
         self.text_frequency = wx.TextCtrl(self.left_panel, wx.ID_ANY, "1000")
 
-        self.text_rms_report = wx.TextCtrl(self.left_panel, wx.ID_ANY, "", style=wx.TE_READONLY)
-        self.text_frequency_report = wx.TextCtrl(self.left_panel, wx.ID_ANY, "", style=wx.TE_READONLY)
+        # self.text_rms_report = wx.TextCtrl(self.left_panel, wx.ID_ANY, "", style=wx.TE_READONLY)
+        # self.text_frequency_report = wx.TextCtrl(self.left_panel, wx.ID_ANY, "", style=wx.TE_READONLY)
+
+        self.spreadsheet = MyGrid(self.left_panel)
+        self.btn_cleardata = wx.Button(self.left_panel, wx.ID_ANY, "Clear Data")
+        self.checkbox_errorbar = wx.CheckBox(self.left_panel, wx.ID_ANY, "Error Bars")
 
         self.btn_start = wx.Button(self.left_panel, wx.ID_ANY, "RUN")
         self.combo_mode = wx.ComboBox(self.left_panel, wx.ID_ANY, choices=["Single", "Sweep"], style=wx.CB_DROPDOWN)
@@ -47,12 +50,9 @@ class MultimeterTab(wx.Panel):
         self.toolbar = NavigationToolbar(self.canvas)
         self.toolbar.Realize()
 
-        self.ax1 = self.figure.add_subplot(111)
-
-        self.temporal, = self.ax1.plot([], [], linestyle='-')
-
         # instance variables -------------------------------------------------------------------------------------------
         self.dmm = dmm(self)
+        self.t = threading.Thread()
         self.flag_complete = True  # Flag indicates any active threads (False) or thread completed (True)
         self.user_input = {'mode': 0,
                            'amplitude': '',
@@ -60,9 +60,11 @@ class MultimeterTab(wx.Panel):
                            'frequency': '',
                            }
 
-        # Open history dialog ------------------------------------------------------------------------------------------
-        self.btn_openHistory = wx.Button(self, wx.ID_ANY, "Open History")
-        self.Bind(wx.EVT_BUTTON, self.OnOpen, self.btn_openHistory)
+        self.x, self.y, self.std = np.NaN, np.NaN, np.NaN
+        self.errorbars = True
+        self.ax1 = self.figure.add_subplot(111)
+        self.line, (self.err_top, self.err_btm), (self.bars,) = self.ax1.errorbar(np.NaN, np.NaN, yerr=np.NaN, fmt='o',
+                                                                                  ecolor='red', capsize=4)
 
         # Configure Instruments ----------------------------------------------------------------------------------------
         on_connect = lambda event: self.on_connect_instr(event)
@@ -70,6 +72,12 @@ class MultimeterTab(wx.Panel):
 
         on_config = lambda event: self.config(event)
         self.Bind(wx.EVT_BUTTON, on_config, self.btn_config)
+
+        on_cleardata = lambda event: self.cleardata(event)
+        self.Bind(wx.EVT_BUTTON, on_cleardata, self.btn_cleardata)
+
+        on_toggle_errorbar = lambda event: self.toggle_errorbar(event)
+        self.Bind(wx.EVT_CHECKBOX, on_toggle_errorbar, self.checkbox_errorbar)
 
         # Run Measurement (start subprocess) ---------------------------------------------------------------------------
         on_single_event = lambda event: self.on_run(event)
@@ -81,6 +89,7 @@ class MultimeterTab(wx.Panel):
         self.__set_properties()
         self.__do_layout()
         self.__do_plot_layout()
+        self.__do_table_header()
 
     def __set_properties(self):
         self.SetBackgroundColour(wx.Colour(255, 255, 255))
@@ -93,6 +102,14 @@ class MultimeterTab(wx.Panel):
         self.text_DMM_report.SetMinSize((200, 23))
         self.combo_rms_or_peak.SetSelection(0)
         self.combo_mode.SetSelection(0)
+        self.checkbox_errorbar.SetValue(1)
+
+        self.spreadsheet.CreateGrid(20, 3)
+        self.spreadsheet.SetMinSize((100, 195))
+        self.spreadsheet.SetRowLabelSize(40)
+        self.spreadsheet.SetColLabelValue(0, 'Value')
+        self.spreadsheet.SetColLabelValue(1, 'Frequency')
+        self.spreadsheet.SetColLabelValue(2, 'STD')
 
     def __do_layout(self):
         sizer_2 = wx.GridSizer(1, 1, 0, 0)
@@ -124,7 +141,7 @@ class MultimeterTab(wx.Panel):
         grid_sizer_left_panel.Add(self.btn_connect, (4, 0), (1, 1), wx.BOTTOM, 5)
         grid_sizer_left_panel.Add(self.btn_config, (4, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
 
-        label_source = wx.StaticText(self.left_panel, wx.ID_ANY, "Source")
+        label_source = wx.StaticText(self.left_panel, wx.ID_ANY, "5560A")
         label_source.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
         grid_sizer_left_panel.Add(label_source, (5, 0), (1, 1), wx.TOP, 10)
 
@@ -152,13 +169,16 @@ class MultimeterTab(wx.Panel):
         static_line_3.SetMinSize((300, 2))
         grid_sizer_left_panel.Add(static_line_3, (10, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
-        label_rms_report = wx.StaticText(self.left_panel, wx.ID_ANY, "RMS:")
-        label_frequency_report = wx.StaticText(self.left_panel, wx.ID_ANY, "Frequency:")
+        # label_rms_report = wx.StaticText(self.left_panel, wx.ID_ANY, "RMS:")
+        # grid_sizer_left_panel.Add(label_rms_report, (11, 0), (1, 1), 0, 0)
+        # grid_sizer_left_panel.Add(self.text_rms_report, (11, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        # label_frequency_report = wx.StaticText(self.left_panel, wx.ID_ANY, "Frequency:")
+        # grid_sizer_left_panel.Add(label_frequency_report, (12, 0), (1, 1), 0, 0)
+        # grid_sizer_left_panel.Add(self.text_frequency_report, (12, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
 
-        grid_sizer_left_panel.Add(label_rms_report, (11, 0), (1, 1), 0, 0)
-        grid_sizer_left_panel.Add(self.text_rms_report, (11, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        grid_sizer_left_panel.Add(label_frequency_report, (12, 0), (1, 1), 0, 0)
-        grid_sizer_left_panel.Add(self.text_frequency_report, (12, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(self.spreadsheet, (11, 0), (1, 3), wx.EXPAND, 0)
+        grid_sizer_left_panel.Add(self.btn_cleardata, (12, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT | wx.TOP, 5)
+        grid_sizer_left_panel.Add(self.checkbox_errorbar, (12, 1), (1, 1), wx.ALIGN_BOTTOM | wx.LEFT | wx.TOP, 5)
 
         # BUTTONS ------------------------------------------------------------------------------------------------------
         static_line_4 = wx.StaticLine(self.left_panel, wx.ID_ANY)
@@ -206,6 +226,16 @@ class MultimeterTab(wx.Panel):
             self.combo_rms_or_peak.Enable()
             self.text_frequency.Enable()
 
+    def toggle_controls(self):
+        if self.text_amplitude.Enabled:
+            self.text_amplitude.Disable()
+            self.combo_rms_or_peak.Disable()
+            self.text_frequency.Disable()
+        else:
+            self.text_amplitude.Enable()
+            self.combo_rms_or_peak.Enable()
+            self.text_frequency.Enable()
+
     # ------------------------------------------------------------------------------------------------------------------
     def get_values(self):
         mode = self.combo_mode.GetSelection()
@@ -219,6 +249,13 @@ class MultimeterTab(wx.Panel):
                            'rms': rms,
                            'frequency': freq_string,
                            }
+
+    # ------------------------------------------------------------------------------------------------------------------
+    def OnDummyChecked(self):
+        if self.dmm.DUMMY_DATA:
+            self.dmm.DUMMY_DATA = False
+        else:
+            self.dmm.DUMMY_DATA = True
 
     # ------------------------------------------------------------------------------------------------------------------
     def thread_this(self, func, arg=()):
@@ -248,62 +285,71 @@ class MultimeterTab(wx.Panel):
             self.thread_this(self.dmm.start, (self.user_input,))
             self.btn_start.SetLabel('STOP')
 
-        elif self.t.is_alive() and self.user_input['mode'] in (1, 4):
-            # stop continuous
+        elif self.t.is_alive() and self.user_input['mode'] == 1:
+            # stop sweep
             # https://stackoverflow.com/a/36499538
             self.t.do_run = False
             self.btn_start.SetLabel('RUN')
         else:
             print('thread already running.')
 
-    def OnOpen(self, event):
-        Path("results/history").mkdir(parents=True, exist_ok=True)
-        with wx.FileDialog(self, "Open previous measurement:", wildcard="CSV files (*.csv)|*.csv",
-                           defaultDir="results/history",
-                           style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as fileDialog:
-
-            if fileDialog.ShowModal() == wx.ID_CANCEL:
-                return  # the user changed their mind
-
-            # Proceed loading the file chosen by the user
-            pathname = fileDialog.GetPath()
-            try:
-                with open(pathname, 'r') as file:
-                    self.open_history(file)
-            except (IOError, ValueError) as e:
-                wx.LogError("Cannot open file '%s'." % pathname)
-                self.error_dialog(e)
-
-    def open_history(self, file):
-        df = pd.read_csv(file)
-
-        try:
-            xt = df['xt'].to_numpy()
-            yt = df['yt'].to_numpy()
-            xf = df['xf'].to_numpy()
-
-            # https://stackoverflow.com/a/18919965/3382269
-            # https://stackoverflow.com/a/51725795/3382269
-            df['yf'] = df['yf'].str.replace('i', 'j').apply(lambda x: np.complex(x))
-            yf = df['yf'].to_numpy()
-        except KeyError:
-            raise ValueError('Incorrect file attempted to be opened. '
-                             '\nCheck data headers. xt, yt, xf, yf should be present')
-
     # ------------------------------------------------------------------------------------------------------------------
     def __do_plot_layout(self):
-        self.ax1.set_title('SAMPLED TIMED SERIES DATA')
+        self.ax1.set_title('MULTIMETER')
         self.ax1.set_xlabel('FREQUENCY (kHz)')
         self.ax1.set_ylabel('AMPLITUDE')
+        self.ax1.grid(True)
         self.figure.tight_layout()
 
-    def plot(self, x, y):
-        self.temporal.set_data(x, y)
+    def toggle_errorbar(self, evt):
+        if self.errorbars:
+            self.errorbars = False
+            self.plot()
+        else:
+            self.errorbars = True
 
+        if hasattr(self.x, 'size'):
+            y_err = self.std / np.sqrt(self.x.size)
+            self.plot(yerr=y_err)
+
+    def update_plot(self, x, y, std):
+        self.results_update([x, y, std])
+        # TODO: np.NaN is always index 0. Should this be fixed?
+        self.x = np.append(self.x, x)
+        self.y = np.append(self.y, y)
+        self.std = np.append(self.std, std)
+
+        yerr = self.std / np.sqrt(self.x.size)
+
+        self.plot(yerr)
+
+    def plot(self, yerr=None):
+        if self.errorbars and yerr is not None:
+            yerr_top = self.y + yerr
+            yerr_btm = self.y - yerr
+
+            self.line.set_data(self.x, self.y)
+            self.err_top.set_data(self.x, yerr_top)
+            self.err_btm.set_data(self.x, yerr_btm)
+
+            new_segments = [np.array([[x, yt], [x, yb]]) for x, yt, yb in zip(self.x, yerr_top, yerr_btm)]
+            self.bars.set_segments(new_segments)
+        else:
+            self.line.set_data(self.x, self.y)
+            self.err_top.set_ydata(None)
+            self.err_btm.set_ydata(None)
+
+            new_segments = []
+            self.bars.set_segments(new_segments)
+
+        self.plot_redraw()
+
+    def plot_redraw(self):
         try:
             self.ax1.relim()  # recompute the ax.dataLim
         except ValueError:
-            print(f'Are the lengths of xt: {len(x)} and yt: {len(y)} mismatched?')
+            yerr = self.err_top.get_ydata()
+            print(f'Are the lengths of x: {len(self.x)}, y: {len(self.y)}, and yerr: {len(yerr)} mismatched?')
             raise
         self.ax1.autoscale()
 
@@ -314,9 +360,29 @@ class MultimeterTab(wx.Panel):
         self.canvas.draw()
         self.canvas.flush_events()
 
-    def results_update(self, x, y):
-        self.text_rms_report.SetLabelText(str(y))
-        self.text_frequency_report.SetLabelText(str(x))
+    def cleardata(self, evt):
+        # self.x, self.y, self.std = np.empty(1), np.empty(1), np.empty(1)
+        self.x, self.y, self.std = np.NaN, np.NaN, np.NaN
+        self.spreadsheet.cleardata()
+
+        self.plot()
+
+    def __do_table_header(self):
+        header = ['value', 'frequency', 'std']
+        self.spreadsheet.append_rows(header)
+
+    def results_update(self, row):
+        """
+
+        :param row: of type list
+        :return:
+        """
+        # self.text_rms_report.SetLabelText(str(y))
+        # self.text_frequency_report.SetLabelText(str(x))
+        if isinstance(row, list):
+            self.spreadsheet.append_rows(row)
+        else:
+            raise ValueError('Row to be appended not of type list.')
 
     def error_dialog(self, error_message):
         print(error_message)

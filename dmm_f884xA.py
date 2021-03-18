@@ -1,5 +1,6 @@
 import VisaClient
 import time
+import numpy as np
 
 instruments = {'f884xA': {'address': '10.205.92.156', 'port': '3490', 'gpib': '8', 'mode': 'SOCKET'}}
 
@@ -71,8 +72,8 @@ class f884xA_instruments:
             freqval = 0.0
             time.sleep(1)
             self.f884xA.write('INIT:IMM')
-
             time.sleep(0.2)
+
             # FETCh1? Returns measurements from the primary display
             outval = to_float(self.f884xA.query('FETCh1?'))
 
@@ -83,6 +84,19 @@ class f884xA_instruments:
             return outval, freqval
         else:
             raise ValueError('Fluke 884xA has not been configured for measurement.')
+
+    def average_reading(self, N, dt=0.1):
+        readings = np.zeros(N)
+        freqval = 0.0
+
+        for idx in range(N):
+            readings[idx], freqval = self.read_meter()
+            time.sleep(dt)
+
+        mean = readings.mean()
+        std = np.sqrt(np.mean(abs(readings - mean) ** 2))
+
+        return mean, freqval, std
 
     ####################################################################################################################
     def close_f884xA(self):

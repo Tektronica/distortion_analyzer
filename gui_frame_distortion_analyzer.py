@@ -66,7 +66,7 @@ class TestFrame(wx.Frame):
         self.notebook_analyzer = wx.Panel(self.notebook, wx.ID_ANY)
         self.notebook_data = wx.Panel(self.notebook, wx.ID_ANY)
         self.notebook_history = wx.Panel(self.notebook)
-        self.notebook_voltageshift = wx.Panel(self.notebook)
+        self.notebook_multimeter = wx.Panel(self.notebook)
         self.notebook_information = wx.Panel(self.notebook, wx.ID_ANY)
 
         self.panel_3 = wx.Panel(self.notebook_analyzer, wx.ID_ANY)  # left panel
@@ -123,7 +123,7 @@ class TestFrame(wx.Frame):
         self.tab_history = HistoryTab(self.notebook_history)
 
         # Data panel for displaying raw output -------------------------------------------------------------------------
-        self.tab_voltageshift = MultimeterTab(self.notebook_voltageshift)
+        self.tab_multimeter = MultimeterTab(self.notebook_multimeter)
 
         # Information Panel ------------------ -------------------------------------------------------------------------
         self.tab_about = AboutTab(self.notebook_information)
@@ -197,7 +197,7 @@ class TestFrame(wx.Frame):
         self.notebook_analyzer.SetBackgroundColour(wx.Colour(255, 255, 255))
         self.notebook_data.SetBackgroundColour(wx.Colour(255, 255, 255))
         self.notebook_history.SetBackgroundColour(wx.Colour(255, 255, 255))
-        self.notebook_voltageshift.SetBackgroundColour(wx.Colour(255, 255, 255))
+        self.notebook_multimeter.SetBackgroundColour(wx.Colour(255, 255, 255))
         self.notebook_information.SetBackgroundColour(wx.Colour(255, 0, 255))
 
         self.text_DUT_report.SetMinSize((200, 23))
@@ -338,8 +338,8 @@ class TestFrame(wx.Frame):
         grid_sizer_7.Add(self.tab_history, 1, wx.EXPAND, 0)
         self.notebook_history.SetSizer(grid_sizer_7)
 
-        grid_sizer_8.Add(self.tab_voltageshift, 1, wx.EXPAND, 0)
-        self.notebook_voltageshift.SetSizer(grid_sizer_8)
+        grid_sizer_8.Add(self.tab_multimeter, 1, wx.EXPAND, 0)
+        self.notebook_multimeter.SetSizer(grid_sizer_8)
 
         grid_sizer_9.Add(self.tab_about, 1, wx.EXPAND, 0)
         self.notebook_information.SetSizer(grid_sizer_9)
@@ -351,7 +351,7 @@ class TestFrame(wx.Frame):
         self.notebook.AddPage(self.notebook_analyzer, "Analyzer")
         self.notebook.AddPage(self.notebook_data, "Data")
         self.notebook.AddPage(self.notebook_history, "History")
-        self.notebook.AddPage(self.notebook_voltageshift, "DMM")
+        self.notebook.AddPage(self.notebook_multimeter, "DMM")
         self.notebook.AddPage(self.notebook_information, "Information")
         sizer_8.Add(self.notebook, 1, wx.ALL | wx.EXPAND, 10)
         self.panel_1.SetSizer(sizer_8)
@@ -378,10 +378,12 @@ class TestFrame(wx.Frame):
     def OnDummyChecked(self, event):
         if self.menu_DUMMY.IsChecked():
             self.da.DUMMY_DATA = True
+            self.tab_multimeter.OnDummyChecked()
             print('using DUMMY data.')
         else:
             print('No longer using DUMMY data.')
             self.da.DUMMY_DATA = False
+            self.tab_multimeter.OnDummyChecked()
 
     # ------------------------------------------------------------------------------------------------------------------
     def thread_this(self, func, arg=()):

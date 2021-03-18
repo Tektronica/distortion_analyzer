@@ -78,13 +78,13 @@ class Instruments(dut.f5560A_instrument, dmm.f884xA_instruments):
 class DMM_Measurement:
     # ------------------------------------------------------------------------------------------------------------------
     def __init__(self, parent):
-        self.panel = parent
+        self.parent = parent
         self.DUMMY_DATA = False  # can be toggled by the gui
         self.amplitude_good = False  # Flag indicates user input for amplitude value is good (True)
         self.frequency_good = False  # Flag indicates user input for frequency value is good (True)
 
-        self.params = {'mode': 0, 'source': 0, 'amplitude': '', 'units': '',
-                       'rms': 0, 'frequency': 0.0, 'error': 0.0,
+        self.params = {'mode': 0, 'amplitude': '', 'units': '',
+                       'rms': 0, 'frequency': 0.0,
                        'cycles': 0.0, 'filter': ''}
         self.data = {'xt': [0], 'yt': [0],
                      'xf': [0], 'yf': [0]}
@@ -102,22 +102,17 @@ class DMM_Measurement:
         try:
             self.M.connect(instruments)
         except ValueError as e:
-            self.frame.error_dialog(e)
+            self.parent.error_dialog(e)
 
     # ------------------------------------------------------------------------------------------------------------------
     def start(self, user_input):
         selection = user_input['mode']
-        source = user_input['source']
         amplitude, units, ft = self.get_string_value(user_input['amplitude'], user_input['frequency'])
         self.params = {'mode': user_input['mode'],
-                       'source': user_input['source'],
                        'amplitude': amplitude,
                        'units': units.capitalize(),
                        'rms': user_input['rms'],
                        'frequency': ft,
-                       'error': user_input['error'],
-
-                       'filter': user_input['filter']
                        }
 
         message = f"{amplitude} {units} @ {ft} Hz"
@@ -125,60 +120,38 @@ class DMM_Measurement:
 
         try:
             if self.M.connected:
-                # TODO: Why did I do this?
-                if selection in (1, 3):
-                    self.run_selected_function(selection)
-                elif not source or (self.amplitude_good and self.frequency_good):
+                if selection == 1:
                     self.run_selected_function(selection)
                 else:
-                    self.frame.error_dialog('\nCheck amplitude and frequency values.')
+                    self.parent.error_dialog('\nCheck amplitude and frequency values.')
             elif self.DUMMY_DATA:
                 self.run_selected_function(selection)
             else:
-                self.frame.error_dialog('\nConnect to instruments first.')
-            self.frame.btn_start.SetLabel('START')
+                self.parent.error_dialog('\nConnect to instruments first.')
+            self.parent.btn_start.SetLabel('START')
 
         except ValueError as e:
             message = 'finished with errors.'
             print(f"{message} {'-' * (100 - len(message))}")
 
-            self.frame.flag_complete = True
-            self.frame.btn_start.SetLabel('START')
-            self.frame.error_dialog(e)
+            self.parent.flag_complete = True
+            self.parent.btn_start.SetLabel('START')
+            self.parent.error_dialog(e)
         else:
             message = 'done'
             print(f"{message} {'-' * (100 - len(message))}")
-            self.frame.flag_complete = True
+            self.parent.flag_complete = True
 
     def run_selected_function(self, selection):
         try:
             # run single
             if selection == 0:
-                self.run_single(self.test)
+                self.run_single(self.test_multimeter)
 
             # run sweep
             elif selection == 1:
                 df = pd.read_csv('distortion_breakpoints.csv')
-                self.run_sweep(df, self.test)
-
-            # run single shunt voltage implied current measurement
-            elif selection == 2:
-                print('Running single measurement measuring current from shunt voltage.')
-                self.run_single(self.test_analyze_shunt_voltage)
-
-            # run swept shunt voltage implied current measurement
-            elif selection == 3:
-                print('Running sweep measuring current from shunt voltage.')
-                df = pd.read_csv('distortion_breakpoints.csv')
-                self.run_sweep(df, self.test_analyze_shunt_voltage)
-
-            # run continuous
-            elif selection == 4:
-                self.run_continuous(self.test)
-
-            # amplitude measurement only using fluke 884xA
-            elif selection == 5:
-                self.run_sweep(self.test_amplitude_only)
+                self.run_sweep(df, self.test_multimeter)
 
             else:
                 print('Nothing happened.')
@@ -188,31 +161,31 @@ class DMM_Measurement:
 
     # ------------------------------------------------------------------------------------------------------------------
     def run_single(self, func):
-        print('Running Single Measurement.')
-        self.frame.toggle_controls()
-        self.frame.flag_complete = False
+        print('Running Single Measurement with Multimeter.')
+        self.parent.toggle_controls()
+        self.parent.flag_complete = False
         try:
             func(setup=True)
             if not self.DUMMY_DATA:
                 self.M.standby()
         except ValueError:
-            self.frame.toggle_controls()
+            self.parent.toggle_controls()
             raise
 
-        self.frame.toggle_controls()
-        self.frame.flag_complete = True
+        self.parent.toggle_controls()
+        self.parent.flag_complete = True
 
     def run_sweep(self, df, func):
         print('Running Sweep.')
-        self.frame.flag_complete = False
-        headers = ['amplitude', 'frequency', 'rms', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'aperture']
+        self.parent.flag_complete = False
+        headers = ['amplitude', 'frequency', 'measured', 'freq_meas', 'std']
         results = np.zeros(shape=(len(df.index), len(headers)))
         t = threading.currentThread()
         for idx, row in df.iterrows():
             if getattr(t, "do_run", True):
                 if not self.DUMMY_DATA:
-                    self.frame.text_amplitude.SetValue(str(row.amplitude))
-                    self.frame.text_frequency.SetValue(str(row.frequency))
+                    self.parent.text_amplitude.SetValue(str(row.amplitude))
+                    self.parent.text_frequency.SetValue(str(row.frequency))
                     amplitude, units, ft = self.get_string_value(row.amplitude, str(row.frequency))
 
                     self.params['amplitude'] = amplitude
@@ -225,9 +198,11 @@ class DMM_Measurement:
                     except ValueError:
                         raise
                 else:
-                    self.params['amplitude'] = 1
-                    self.params['frequency'] = 1000
-                    self.params['units'] = 'A'
+                    amplitude, units, ft = self.get_string_value(str(row.amplitude), str(row.frequency))
+
+                    self.params['amplitude'] = amplitude
+                    self.params['frequency'] = ft
+                    self.params['units'] = units
                     results[idx] = func(setup=True)
             else:
                 break
@@ -235,11 +210,11 @@ class DMM_Measurement:
         # https://stackoverflow.com/a/28356566
         # https://stackoverflow.com/a/28058264
         results_df = pd.DataFrame(results, columns=headers)
-        results_df.to_csv(path_or_buf=_getFilepath('results', 'distortion'), sep=',', index=False)
-        self.frame.flag_complete = True
+        results_df.to_csv(path_or_buf=_getFilepath('results', 'multimeter'), sep=',', index=False)
+        self.parent.flag_complete = True
 
     # ------------------------------------------------------------------------------------------------------------------
-    def test_amplitude_only(self, setup):
+    def test_multimeter(self, setup):
         params = self.params
 
         # SOURCE
@@ -254,14 +229,13 @@ class DMM_Measurement:
         time.sleep(1)
 
         # START DATA COLLECTION ----------------------------------------------------------------------------------------
-        if setup:
-            self.M.setup_meter(output='CURR', mode='AC')
-        if params['source']:
+        if not self.DUMMY_DATA:
+            if setup:
+                self.M.setup_meter(output='CURR', mode='AC')
             try:
                 self.M.run_source(suffix, amplitude, Ft)
                 try:
-                    outval, freqval = self.M.read_meter()
-                    data = {'x': freqval, 'y': outval}
+                    outval, freqval, std = self.M.average_reading(10)
                 except ValueError:
                     print('error occurred while connecting to DMM. Placing 5560 in Standby.')
                     self.M.standby()
@@ -270,45 +244,10 @@ class DMM_Measurement:
                 print('error occurred while connecting to DUT. Exiting current measurement.')
                 raise
         else:
-            outval, freqval = self.M.read_meter()
+            freqval, outval, std = Ft, (7 + 1 * np.random.random(1))[0], (0.25 + np.random.random(1))[0]
 
-        data = {'x': freqval, 'y': outval}
-        self.plot(data)
-
-        return outval, freqval
-
-    def plot(self, data):
-        F0 = data['f0']
-        runtime = data['runtime']
-
-        # TEMPORAL -----------------------------------------------------------------------------------------------------
-        xt = data['x'] * 1e3
-        yt = data['y']
-
-        x_periods = 4
-        xt_end = min(x_periods / F0, runtime)
-        ylimit = np.max(np.abs(yt)) * 1.25
-        yt_tick = ylimit / 4
-
-        # SPECTRAL -----------------------------------------------------------------------------------------------------
-        xf = data['xf']
-        yf = data['ywf']
-        Fs = data['Fs']
-        N = data['N']
-        yrms = data['RMS']
-
-        xf_end = min(10 ** (np.ceil(np.log10(F0)) + 1), Fs / 2 - Fs / N)  # Does not exceed max bin
-
-        params = {'xt': xt, 'yt': yt,
-                  'xt_start': 0, 'xt_end': 1e3 * xt_end,
-                  'yt_start': -ylimit, 'yt_end': ylimit + yt_tick, 'yt_tick': yt_tick,
-
-                  'xf': xf[0:N] / 1000, 'yf': 20 * np.log10(2 * np.abs(yf[0:N] / (yrms * N))),
-                  'xf_start': np.min(xf) / 1000, 'xf_end': xf_end / 1000,
-                  'yf_start': -150, 'yf_end': 0
-                  }
-
-        self.panel.plot(params)
+        self.parent.update_plot(freqval, outval, std)
+        return amplitude, Ft, outval, freqval, std
 
     def close_instruments(self):
         if hasattr(self.M, 'DUT') and hasattr(self.M, 'DMM'):
@@ -336,16 +275,16 @@ class DMM_Measurement:
                 self.amplitude_good = True
 
             elif len(s_split) == 2 and s_split[1]:
-                self.frame.error_dialog('prefix used, but units not specified!')
+                self.parent.error_dialog('prefix used, but units not specified!')
                 self.amplitude_good = False
             elif len(s_split) == 1:
-                self.frame.error_dialog('units not specified!')
+                self.parent.error_dialog('units not specified!')
                 self.amplitude_good = False
             else:
-                self.frame.error_dialog('improper prefix used!')
+                self.parent.error_dialog('improper prefix used!')
                 self.amplitude_good = False
         except ValueError:
-            self.frame.error_dialog('Invalid amplitude entered!')
+            self.parent.error_dialog('Invalid amplitude entered!')
             self.amplitude_good = False
             pass
 
@@ -353,7 +292,7 @@ class DMM_Measurement:
         try:
             frequency = float(freq_string)
         except ValueError:
-            self.frame.error_dialog(f"The value {freq_string} is not a valid frequency!")
+            self.parent.error_dialog(f"The value {freq_string} is not a valid frequency!")
             self.frequency_good = False
         else:
             self.frequency_good = True

@@ -129,7 +129,6 @@ class DistortionAnalyzer:
                        'rms': user_input['rms'],
                        'frequency': ft,
                        'error': user_input['error'],
-
                        'filter': user_input['filter']
                        }
 
