@@ -69,8 +69,13 @@ class VisaClient:
 
             except visa.VisaIOError:
                 # https://github.com/pyvisa/pyvisa-py/issues/146#issuecomment-453695057
-                print(f'[attempt {attempt + 1}/5] - retrying connection to instrument')
+                if self.mode == 'GPIB':
+                    print(f"[attempt {attempt + 1}/5] - retrying connection to {self.instr_info['gpib']}")
+                else:
+                    print(f"[attempt {attempt + 1}/5] - retrying connection to {self.instr_info['address']}")
+
                 self.healthy = False
+
             except Exception:
                 raise ValueError('Could not connect. Session timed out.')
             else:

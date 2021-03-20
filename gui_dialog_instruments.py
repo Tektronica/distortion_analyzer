@@ -12,17 +12,17 @@ class InstrumentDialog(wx.Dialog):
         super(InstrumentDialog, self).__init__(parent, title='Configure Instruments')
         wx.Dialog.__init__(self, *args, **kwds)
 
-        self.panel_1 = wx.Panel(self, wx.ID_ANY)
+        self.panel = wx.Panel(self, wx.ID_ANY)
 
         # DYNAMIC DATA ENTRY PANELS ------------------------------------------------------------------------------------
         self.instr_list = instrs
         self.panels = []
-        self.LoadConfig()
 
         # BUTTONS ------------------------------------------------------------------------------------------------------
-        self.btn_save = wx.Button(self.panel_1, wx.ID_ANY, "Save")
+        self.btn_save = wx.Button(self.panel, wx.ID_ANY, "Save")
         self.btn_save.Bind(wx.EVT_BUTTON, self.on_save)
 
+        self.__load_config()
         self.__set_properties()
         self.__do_layout()
 
@@ -31,44 +31,7 @@ class InstrumentDialog(wx.Dialog):
         self.SetTitle("Configure Instruments")
 
     # ------------------------------------------------------------------------------------------------------------------
-    def __do_layout(self):
-        sizer_1 = wx.BoxSizer(wx.VERTICAL)
-        grid_sizer = wx.GridBagSizer(0, 0)
-        grid_dynamic_sizer = wx.GridBagSizer(0, 0)
-
-        # TITLE --------------------------------------------------------------------------------------------------------
-        title_Instruments = wx.StaticText(self.panel_1, wx.ID_ANY, "INSTRUMENTS")
-        title_Instruments.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer.Add(title_Instruments, (0, 0), (1, 3), wx.BOTTOM, 10)
-
-        static_line_1 = wx.StaticLine(self.panel_1, wx.ID_ANY)
-        static_line_1.SetMinSize((292, 2))
-        grid_sizer.Add(static_line_1, (1, 0), (1, 3), wx.BOTTOM | wx.TOP, 5)
-
-        # ADD DYNAMIC PANELS -------------------------------------------------------------------------------------------
-        for idx, panel in enumerate(self.panels):
-            if panel.key in self.instr_list:
-                header = wx.StaticText(self.panel_1, wx.ID_ANY, panel.key)
-                header.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-                grid_dynamic_sizer.Add(header, (idx, 0), (1, 1), wx.BOTTOM | wx.RIGHT, 5)
-                grid_dynamic_sizer.Add(panel, (idx, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
-        grid_sizer.Add(grid_dynamic_sizer, (2, 0), (1, 3), wx.BOTTOM | wx.TOP, 5)
-
-        # ADD BUTTONS --------------------------------------------------------------------------------------------------
-        static_line_2 = wx.StaticLine(self.panel_1, wx.ID_ANY)
-        static_line_2.SetMinSize((292, 2))
-        grid_sizer.Add(static_line_2, (3, 0), (1, 3), wx.BOTTOM | wx.TOP, 5)
-
-        grid_sizer.Add(self.btn_save, (4, 0), (1, 3), wx.ALIGN_RIGHT, 0)
-        self.panel_1.SetSizer(grid_sizer)
-
-        # ADD MAIN PANEL TO SIZER --------------------------------------------------------------------------------------
-        sizer_1.Add(self.panel_1, 1, wx.ALL | wx.EXPAND, 10)
-        self.SetSizer(sizer_1)
-        sizer_1.Fit(self)
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def LoadConfig(self):
+    def __load_config(self):
         config_dict = ReadConfig()
         # load config file into settings if available
         if isinstance(config_dict, dict):
@@ -77,12 +40,49 @@ class InstrumentDialog(wx.Dialog):
             for idx, key in enumerate(config_dict.keys()):
                 mode = config[key]['mode']
 
-                self.panels.append(DataEntryPanel(self.panel_1, wx.ID_ANY, key))
+                self.panels.append(DataEntryPanel(self.panel, wx.ID_ANY, key))
                 self.panels[idx].setValues(mode=mode, address=config[key]['address'], port=config[key]['port'],
                                            gpib=config[key]['gpib'])
                 self.panels[idx].toggle_panel(mode)
         else:
             print('no config')
+
+    # ------------------------------------------------------------------------------------------------------------------
+    def __do_layout(self):
+        sizer_1 = wx.BoxSizer(wx.VERTICAL)
+        grid_sizer = wx.GridBagSizer(0, 0)
+        grid_dynamic_sizer = wx.GridBagSizer(0, 0)
+
+        # TITLE --------------------------------------------------------------------------------------------------------
+        title_Instruments = wx.StaticText(self.panel, wx.ID_ANY, "INSTRUMENTS")
+        title_Instruments.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
+        grid_sizer.Add(title_Instruments, (0, 0), (1, 3), wx.BOTTOM, 10)
+
+        static_line_1 = wx.StaticLine(self.panel, wx.ID_ANY)
+        static_line_1.SetMinSize((292, 2))
+        grid_sizer.Add(static_line_1, (1, 0), (1, 3), wx.BOTTOM | wx.TOP, 5)
+
+        # ADD DYNAMIC PANELS -------------------------------------------------------------------------------------------
+        for idx, panel in enumerate(self.panels):
+            if panel.key in self.instr_list:
+                header = wx.StaticText(self.panel, wx.ID_ANY, panel.key)
+                header.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
+                grid_dynamic_sizer.Add(header, (idx, 0), (1, 1), wx.BOTTOM | wx.RIGHT, 5)
+                grid_dynamic_sizer.Add(panel, (idx, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
+        grid_sizer.Add(grid_dynamic_sizer, (2, 0), (1, 3), wx.BOTTOM | wx.TOP, 5)
+
+        # ADD BUTTONS --------------------------------------------------------------------------------------------------
+        static_line_2 = wx.StaticLine(self.panel, wx.ID_ANY)
+        static_line_2.SetMinSize((292, 2))
+        grid_sizer.Add(static_line_2, (3, 0), (1, 3), wx.BOTTOM | wx.TOP, 5)
+
+        grid_sizer.Add(self.btn_save, (4, 0), (1, 3), wx.ALIGN_RIGHT, 0)
+        self.panel.SetSizer(grid_sizer)
+
+        # ADD MAIN PANEL TO SIZER --------------------------------------------------------------------------------------
+        sizer_1.Add(self.panel, 1, wx.ALL | wx.EXPAND, 10)
+        self.SetSizer(sizer_1)
+        sizer_1.Fit(self)
 
     # ------------------------------------------------------------------------------------------------------------------
     def toggle_panel(self, mode, panel, panel_gpib):
@@ -137,8 +137,6 @@ class DataEntryPanel(wx.Panel):
         self.gpib.SetMinSize((50, 23))
         self.panel_1.SetMinSize((176, 51))
         self.panel_2.SetMinSize((176, 51))
-        # self.panel_1.SetBackgroundColour(wx.Colour(255, 255, 0))
-        # self.panel_2.SetBackgroundColour(wx.Colour(255, 0, 255))
 
     def __do_layout(self):
         sizer_1 = wx.BoxSizer(wx.VERTICAL)

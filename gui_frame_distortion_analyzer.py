@@ -1,4 +1,4 @@
-from distortion_analyzer import DistortionAnalyzer as da
+from gui_panel_distortion_analyzer import DistortionAnalyzerTab
 from gui_panel_datatable import DataTab
 from gui_panel_history import HistoryTab
 from gui_panel_multimeter import MultimeterTab
@@ -12,28 +12,8 @@ import wx.adv
 import wx.html
 import webbrowser
 
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.pylab as pylab
-from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
-from matplotlib.backends.backend_wxagg import NavigationToolbar2WxAgg as NavigationToolbar
-
-import threading
-
 APP_VERSION = 'v2.0.2'
 APP_ICON = 'images/hornet.ico'
-
-# https://stackoverflow.com/a/38251497
-# https://matplotlib.org/3.1.1/tutorials/introductory/customizing.html
-params = {'legend.fontsize': 'medium',
-          'font.family': 'Segoe UI',
-          'axes.titleweight': 'bold',
-          'figure.figsize': (15, 5),
-          'axes.labelsize': 'medium',
-          'axes.titlesize': 'medium',
-          'xtick.labelsize': 'medium',
-          'ytick.labelsize': 'medium'}
-pylab.rcParams.update(params)
 
 
 ########################################################################################################################
@@ -50,84 +30,6 @@ class TestFrame(wx.Frame):
         # Sets minimum window dimensions
         # self.SetSizeHints(1055, 640, -1, -1)
 
-        self.flag_complete = True  # Flag indicates any active threads (False) or thread completed (True)
-        self.t = threading.Thread()
-        self.da = da(self)
-        self.user_input = {'mode': 0,
-                           'source': 0,
-                           'amplitude': '',
-                           'rms': 0,
-                           'frequency': '',
-                           'error': 0,
-                           'filter': 0
-                           }
-        self.panel_1 = wx.Panel(self, wx.ID_ANY)
-        self.notebook = wx.Notebook(self.panel_1, wx.ID_ANY)
-        self.notebook_analyzer = wx.Panel(self.notebook, wx.ID_ANY)
-        self.notebook_data = wx.Panel(self.notebook, wx.ID_ANY)
-        self.notebook_history = wx.Panel(self.notebook)
-        self.notebook_multimeter = wx.Panel(self.notebook)
-        self.notebook_information = wx.Panel(self.notebook, wx.ID_ANY)
-
-        self.panel_3 = wx.Panel(self.notebook_analyzer, wx.ID_ANY)  # left panel
-        self.panel_4 = wx.Panel(self.panel_3, wx.ID_ANY)  # amplitude/frequency panel
-        self.panel_5 = wx.Panel(self.notebook_analyzer, wx.ID_ANY, style=wx.SIMPLE_BORDER)  # plot panel
-
-        # PLOT Panel ---------------------------------------------------------------------------------------------------
-        self.figure = plt.figure(figsize=(1, 1))  # look into Figure((5, 4), 75)
-        self.canvas = FigureCanvas(self.panel_5, -1, self.figure)
-        self.toolbar = NavigationToolbar(self.canvas)
-        self.toolbar.Realize()
-
-        self.ax1 = self.figure.add_subplot(211)
-        self.ax2 = self.figure.add_subplot(212)
-
-        self.temporal, = self.ax1.plot([], [], linestyle='-')
-        self.spectral, = self.ax2.plot([], [], color='#C02942')
-
-        # LEFT TOOL PANEL ----------------------------------------------------------------------------------------------
-        self.text_DUT_report = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
-        self.text_DMM_report = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
-        self.btn_connect = wx.Button(self.panel_3, wx.ID_ANY, "Connect")
-        self.btn_config = wx.Button(self.panel_3, wx.ID_ANY, "Config")
-
-        self.checkbox_1 = wx.CheckBox(self.panel_3, wx.ID_ANY, "Control Source")
-        self.text_amplitude = wx.TextCtrl(self.panel_4, wx.ID_ANY, "10uA")
-        self.combo_box_1 = wx.ComboBox(self.panel_4, wx.ID_ANY, choices=["RMS", "Peak"],
-                                       style=wx.CB_DROPDOWN | wx.CB_READONLY)
-        self.text_frequency = wx.TextCtrl(self.panel_4, wx.ID_ANY, "1000")
-        self.text_error = wx.TextCtrl(self.panel_3, wx.ID_ANY, "0.1")
-
-        self.combo_filter = wx.ComboBox(self.panel_3, wx.ID_ANY, choices=["None", "100kHz", "3MHz"],
-                                        style=wx.CB_DROPDOWN | wx.CB_READONLY)
-
-        self.label_fs_report = wx.StaticText(self.panel_3, wx.ID_ANY, "--")
-        self.label_samples_report = wx.StaticText(self.panel_3, wx.ID_ANY, "--")
-        self.label_aperture_report = wx.StaticText(self.panel_3, wx.ID_ANY, "--")
-        self.text_rms_report = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
-        self.text_thdn_report = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
-        self.text_thd_report = wx.TextCtrl(self.panel_3, wx.ID_ANY, "", style=wx.TE_READONLY)
-
-        self.btn_start = wx.Button(self.panel_3, wx.ID_ANY, "RUN")
-        self.combo_mode = wx.ComboBox(self.panel_3, wx.ID_ANY,
-                                      choices=["Single", "Sweep",
-                                               "Single w/ shunt", "Sweep w/ shunt",
-                                               "Continuous"],
-                                      style=wx.CB_DROPDOWN)
-
-        # Data panel for displaying raw output -------------------------------------------------------------------------
-        self.tab_data = DataTab(self.notebook_data)
-        self.grid_1 = self.tab_data.spreadsheet
-
-        # Data panel for displaying raw output -------------------------------------------------------------------------
-        self.tab_history = HistoryTab(self.notebook_history)
-
-        # Data panel for displaying raw output -------------------------------------------------------------------------
-        self.tab_multimeter = MultimeterTab(self.notebook_multimeter)
-
-        # Information Panel ------------------ -------------------------------------------------------------------------
-        self.tab_about = AboutTab(self.notebook_information)
-
         # Menu Bar -----------------------------------------------------------------------------------------------------
         self.frame_menubar = wx.MenuBar()
         wxglade_tmp_menu = wx.Menu()
@@ -138,7 +40,8 @@ class TestFrame(wx.Frame):
         self.frame_menubar.Append(wxglade_tmp_menu, "File")
 
         wxglade_tmp_menu = wx.Menu()
-        self.menu_config = wxglade_tmp_menu.Append(wx.ID_ANY, "Configure instruments", "")
+        self.menu_config = wxglade_tmp_menu.Append(wx.ID_ANY, "Configure Instruments", "")
+        self.menu_close_instruments = wxglade_tmp_menu.Append(wx.ID_ANY, "Close Instruments", "")
         self.menu_DUMMY = wxglade_tmp_menu.AppendCheckItem(wx.ID_ANY, "Use DUMMY Data?")
         # self.menu_brkpts = wxglade_tmp_menu.Append(wx.ID_ANY, "Open Breakpoints", "")
         self.frame_menubar.Append(wxglade_tmp_menu, "Settings")
@@ -151,43 +54,44 @@ class TestFrame(wx.Frame):
         self.frame_menubar.Append(wxglade_tmp_menu, "View")
         self.SetMenuBar(self.frame_menubar)
 
-        # Menu Bar Bind Events -----------------------------------------------------------------------------------------
+        # NOTEBOOK =====================================================================================================
+        self.panel_1 = wx.Panel(self, wx.ID_ANY)
+        self.notebook = wx.Notebook(self.panel_1, wx.ID_ANY)
+        self.notebook_analyzer = wx.Panel(self.notebook, wx.ID_ANY)
+        self.tab_analyzer = DistortionAnalyzerTab(self.notebook_analyzer, self)
+
+        self.notebook_data = wx.Panel(self.notebook, wx.ID_ANY)
+        self.tab_data = DataTab(self.notebook_data)
+        self.grid_1 = self.tab_data.spreadsheet
+
+        self.notebook_history = wx.Panel(self.notebook)
+        self.tab_history = HistoryTab(self.notebook_history)
+
+        self.notebook_multimeter = wx.Panel(self.notebook)
+        self.tab_multimeter = MultimeterTab(self.notebook_multimeter)
+
+        self.notebook_information = wx.Panel(self.notebook, wx.ID_ANY)
+        self.tab_about = AboutTab(self.notebook_information)
+
+        # BINDING EVENTS ===============================================================================================
         ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
         on_open_results_dir = lambda event: webbrowser.open('file:////' + ROOT_DIR + '/results')
         on_open_history_dir = lambda event: webbrowser.open('file:////' + ROOT_DIR + '/results/history')
         self.Bind(wx.EVT_MENU, on_open_results_dir, self.menu_results)
         self.Bind(wx.EVT_MENU, on_open_history_dir, self.menu_history)
         self.Bind(wx.EVT_MENU, self.grid_1.export, self.menu_export)
-        self.Bind(wx.EVT_MENU, self.config, self.menu_config)
+        self.Bind(wx.EVT_MENU, self.config_all_instruments, self.menu_config)
+        self.Bind(wx.EVT_MENU, self.close_all_instruments, self.menu_close_instruments)
         self.Bind(wx.EVT_MENU, self.OnDummyChecked, self.menu_DUMMY)
         # self.Bind(wx.EVT_MENU, self.open_breakpoints, self.menu_brkpts)
         self.Bind(wx.EVT_MENU, self.reset_view, self.menu_reset_view)
         self.Bind(wx.EVT_MENU, self.OnAbout, self.menu_about)
-
-        # Configure Instruments ----------------------------------------------------------------------------------------
-        on_connect = lambda event: self.on_connect_instr(event)
-        self.Bind(wx.EVT_BUTTON, on_connect, self.btn_connect)
-
-        on_config = lambda event: self.config(event)
-        self.Bind(wx.EVT_BUTTON, on_config, self.btn_config)
-
-        # Run Measurement (start subprocess) ---------------------------------------------------------------------------
-        on_single_event = lambda event: self.on_run(event)
-        self.Bind(wx.EVT_BUTTON, on_single_event, self.btn_start)
-
-        on_toggle = lambda event: self.toggle_panel(event)
-        self.Bind(wx.EVT_CHECKBOX, on_toggle, self.checkbox_1)
-
-        on_combo_select = lambda event: self.lock_controls(event)
-        self.Bind(wx.EVT_COMBOBOX_CLOSEUP, on_combo_select, self.combo_mode)
-
         self.Bind(wx.EVT_CLOSE, self.OnCloseWindow)
 
         self.Freeze()
         self.__set_properties()
-        self.__do_layout()
-        self.__do_plot_layout()
         self.__do_table_header()
+        self.__do_layout()
         self.Thaw()
 
     def __set_properties(self):
@@ -200,165 +104,81 @@ class TestFrame(wx.Frame):
         self.notebook_multimeter.SetBackgroundColour(wx.Colour(255, 255, 255))
         self.notebook_information.SetBackgroundColour(wx.Colour(255, 0, 255))
 
-        self.text_DUT_report.SetMinSize((200, 23))
-        self.text_DMM_report.SetMinSize((200, 23))
-        self.canvas.SetMinSize((700, 490))
-        self.panel_3.SetMinSize((310, 502))
-        self.panel_5.SetMinSize((700, 502))
-        self.checkbox_1.SetValue(1)
-        self.combo_box_1.SetSelection(0)
-        self.combo_filter.SetSelection(1)
-        self.combo_mode.SetSelection(0)
-
     def __do_layout(self):
         sizer_7 = wx.BoxSizer(wx.VERTICAL)
         sizer_8 = wx.BoxSizer(wx.VERTICAL)
 
-        grid_sizer_1 = wx.GridBagSizer(0, 0)
-        grid_sizer_2 = wx.GridBagSizer(0, 0)
-        grid_sizer_3 = wx.GridBagSizer(0, 0)
-        grid_sizer_4 = wx.GridBagSizer(0, 0)
+        grid_sizer_analyzertab = wx.BoxSizer(wx.VERTICAL)
+        grid_sizer_datatab = wx.BoxSizer(wx.VERTICAL)
+        grid_sizer_historytab = wx.BoxSizer(wx.VERTICAL)
+        grid_sizer_multimetertab = wx.BoxSizer(wx.VERTICAL)
+        grid_sizer_abouttab = wx.BoxSizer(wx.VERTICAL)
 
-        grid_sizer_5 = wx.BoxSizer(wx.VERTICAL)
-        grid_sizer_7 = wx.BoxSizer(wx.VERTICAL)
-        grid_sizer_8 = wx.BoxSizer(wx.VERTICAL)
-        grid_sizer_9 = wx.BoxSizer(wx.VERTICAL)
+        grid_sizer_analyzertab.Add(self.tab_analyzer, 1, wx.EXPAND | wx.TOP, 5)
+        self.notebook_analyzer.SetSizer(grid_sizer_analyzertab)
 
-        # TITLE --------------------------------------------------------------------------------------------------------
-        label_1 = wx.StaticText(self.panel_3, wx.ID_ANY, "DISTORTION ANALYZER")
-        label_1.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_2.Add(label_1, (0, 0), (1, 2), 0, 0)
+        grid_sizer_datatab.Add(self.tab_data, 1, wx.EXPAND, 0)
+        self.notebook_data.SetSizer(grid_sizer_datatab)
 
-        static_line_5 = wx.StaticLine(self.panel_3, wx.ID_ANY)
-        static_line_5.SetMinSize((300, 2))
-        grid_sizer_2.Add(static_line_5, (1, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
+        grid_sizer_historytab.Add(self.tab_history, 1, wx.EXPAND, 0)
+        self.notebook_history.SetSizer(grid_sizer_historytab)
 
-        # PLOT PANEL ---------------------------------------------------------------------------------------------------
-        grid_sizer_4.Add(self.canvas, (0, 0), (1, 1), wx.ALL | wx.EXPAND)
-        grid_sizer_4.Add(self.toolbar, (1, 0), (1, 1), wx.ALL | wx.EXPAND)
-        self.panel_5.SetSizer(grid_sizer_4)
+        grid_sizer_multimetertab.Add(self.tab_multimeter, 1, wx.EXPAND | wx.TOP, 5)
+        self.notebook_multimeter.SetSizer(grid_sizer_multimetertab)
 
-        # LEFT TOOL PANEL ==============================================================================================
-        # INSTRUMENT INFO  ---------------------------------------------------------------------------------------------
-        label_DUT = wx.StaticText(self.panel_3, wx.ID_ANY, "DUT")
-        label_DMM = wx.StaticText(self.panel_3, wx.ID_ANY, "DMM (Digitizer)")
+        grid_sizer_abouttab.Add(self.tab_about, 1, wx.EXPAND, 0)
+        self.notebook_information.SetSizer(grid_sizer_abouttab)
 
-        label_DUT.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        label_DMM.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-
-        grid_sizer_2.Add(label_DUT, (2, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
-        grid_sizer_2.Add(label_DMM, (3, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
-        grid_sizer_2.Add(self.btn_connect, (4, 0), (1, 1), wx.BOTTOM, 5)
-        grid_sizer_2.Add(self.text_DUT_report, (2, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        grid_sizer_2.Add(self.text_DMM_report, (3, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        grid_sizer_2.Add(self.btn_config, (4, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-
-        static_line_6 = wx.StaticLine(self.panel_3, wx.ID_ANY)
-        static_line_6.SetMinSize((300, 2))
-        grid_sizer_2.Add(static_line_6, (6, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
-
-        # SOURCE -------------------------------------------------------------------------------------------------------
-        label_source = wx.StaticText(self.panel_3, wx.ID_ANY, "5560A")
-        label_source.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_2.Add(label_source, (5, 0), (1, 1), wx.TOP, 10)
-        grid_sizer_2.Add(self.checkbox_1, (5, 1), (1, 1), wx.ALIGN_BOTTOM | wx.LEFT | wx.TOP, 5)
-
-        label_amplitude = wx.StaticText(self.panel_4, wx.ID_ANY, "Amplitude:")
-        label_frequency = wx.StaticText(self.panel_4, wx.ID_ANY, "Frequency (Ft):")
-        label_Hz = wx.StaticText(self.panel_4, wx.ID_ANY, "(Hz)")
-        label_measure = wx.StaticText(self.panel_3, wx.ID_ANY, "Sampling")
-
-        label_frequency.SetMinSize((95, 16))
-
-        grid_sizer_3.Add(label_amplitude, (0, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
-        grid_sizer_3.Add(self.text_amplitude, (0, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        grid_sizer_3.Add(self.combo_box_1, (0, 2), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        grid_sizer_3.Add(label_frequency, (1, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
-        grid_sizer_3.Add(self.text_frequency, (1, 1), (1, 1), wx.LEFT, 5)
-        grid_sizer_3.Add(label_Hz, (1, 2), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
-        self.panel_4.SetSizer(grid_sizer_3)
-        grid_sizer_2.Add(self.panel_4, (7, 0), (1, 2), wx.EXPAND, 0)
-
-        # MEASURE ------------------------------------------------------------------------------------------------------
-        label_error = wx.StaticText(self.panel_3, wx.ID_ANY, "Error:")
-
-        label_filter = wx.StaticText(self.panel_3, wx.ID_ANY, "Filter:")
-        label_fs = wx.StaticText(self.panel_3, wx.ID_ANY, "Fs:")
-        label_samples = wx.StaticText(self.panel_3, wx.ID_ANY, "Samples:")
-        label_aperture = wx.StaticText(self.panel_3, wx.ID_ANY, "Aperture:")
-
-        label_measure.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_2.Add(label_measure, (8, 0), (1, 2), wx.TOP, 10)
-        static_line_7 = wx.StaticLine(self.panel_3, wx.ID_ANY)
-
-        static_line_7.SetMinSize((300, 2))
-        grid_sizer_2.Add(static_line_7, (9, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
-        grid_sizer_2.Add(label_error, (10, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.text_error, (10, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        grid_sizer_2.Add(label_filter, (11, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.combo_filter, (11, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        grid_sizer_2.Add(label_fs, (12, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.label_fs_report, (12, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        grid_sizer_2.Add(label_samples, (13, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.label_samples_report, (13, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        grid_sizer_2.Add(label_aperture, (14, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.label_aperture_report, (14, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-
-        # RESULTS ------------------------------------------------------------------------------------------------------
-        static_line_8 = wx.StaticLine(self.panel_3, wx.ID_ANY)
-        static_line_8.SetMinSize((300, 2))
-        grid_sizer_2.Add(static_line_8, (15, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
-
-        label_rms = wx.StaticText(self.panel_3, wx.ID_ANY, "RMS:")
-        label_thdn = wx.StaticText(self.panel_3, wx.ID_ANY, "THD+N:")
-        label_thd = wx.StaticText(self.panel_3, wx.ID_ANY, "THD:")
-
-        grid_sizer_2.Add(label_rms, (16, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.text_rms_report, (16, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        grid_sizer_2.Add(label_thdn, (17, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.text_thdn_report, (17, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        grid_sizer_2.Add(label_thd, (18, 0), (1, 1), 0, 0)
-        grid_sizer_2.Add(self.text_thd_report, (18, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        static_line_9 = wx.StaticLine(self.panel_3, wx.ID_ANY)
-        static_line_9.SetMinSize((300, 2))
-        grid_sizer_2.Add(static_line_9, (19, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
-
-        # BUTTONS ------------------------------------------------------------------------------------------------------
-        grid_sizer_2.Add(self.btn_start, (20, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
-        grid_sizer_2.Add(self.combo_mode, (20, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
-
-        self.panel_3.SetSizer(grid_sizer_2)
-        grid_sizer_1.Add(self.panel_3, (0, 0), (1, 1), wx.EXPAND, 0)
-        grid_sizer_1.Add(self.panel_5, (0, 1), (1, 1), wx.EXPAND, 0)
-        self.notebook_analyzer.SetSizer(grid_sizer_1)
-
-        grid_sizer_5.Add(self.tab_data, 1, wx.EXPAND, 0)
-        self.notebook_data.SetSizer(grid_sizer_5)
-
-        grid_sizer_7.Add(self.tab_history, 1, wx.EXPAND, 0)
-        self.notebook_history.SetSizer(grid_sizer_7)
-
-        grid_sizer_8.Add(self.tab_multimeter, 1, wx.EXPAND, 0)
-        self.notebook_multimeter.SetSizer(grid_sizer_8)
-
-        grid_sizer_9.Add(self.tab_about, 1, wx.EXPAND, 0)
-        self.notebook_information.SetSizer(grid_sizer_9)
-
-        grid_sizer_1.AddGrowableRow(0)
-        grid_sizer_1.AddGrowableCol(1)
-        grid_sizer_4.AddGrowableRow(0)
-        grid_sizer_4.AddGrowableCol(0)
         self.notebook.AddPage(self.notebook_analyzer, "Analyzer")
         self.notebook.AddPage(self.notebook_data, "Data")
         self.notebook.AddPage(self.notebook_history, "History")
         self.notebook.AddPage(self.notebook_multimeter, "Multimeter")
         self.notebook.AddPage(self.notebook_information, "Information")
+
         sizer_8.Add(self.notebook, 1, wx.ALL | wx.EXPAND, 10)
         self.panel_1.SetSizer(sizer_8)
+
         sizer_7.Add(self.panel_1, 1, wx.EXPAND, 0)
         self.SetSizer(sizer_7)
+
         self.Layout()
 
+    # ------------------------------------------------------------------------------------------------------------------
+    def reset_view(self, evt):
+        self.SetSize((1055, 640))
+
+    # ------------------------------------------------------------------------------------------------------------------
+    def config_all_instruments(self, evt):
+        dlg = InstrumentDialog(self, ['f5560A', 'f8588A', 'f884xA'], None, wx.ID_ANY, )
+        dlg.ShowModal()
+        dlg.Destroy()
+
+    def close_all_instruments(self, evt):
+        print("Closing all possible remote connections to instruments:")
+        self.tab_analyzer.da.close_instruments()
+        print("\tremote connection to instruments used in distortion analyzer are closed.")
+        self.tab_multimeter.dmm.close_instruments()
+        print("\tremote connection to instruments used in multimeter are closed.")
+
+    def OnDummyChecked(self, event):
+        if self.menu_DUMMY.IsChecked():
+            self.tab_analyzer.da.DUMMY_DATA = True
+            self.tab_multimeter.OnDummyChecked()
+            print('using DUMMY data.')
+        else:
+            print('No longer using DUMMY data.')
+            self.tab_analyzer.da.DUMMY_DATA = False
+            self.tab_multimeter.OnDummyChecked()
+
+    # ------------------------------------------------------------------------------------------------------------------
+    def __do_table_header(self):
+        header = ['Amplitude', 'Frequency', 'RMS', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'Samples', 'Aperture']
+        self.grid_1.append_rows(header)
+
+    def append_row(self, row):
+        self.grid_1.append_rows(row)
+
+    # ------------------------------------------------------------------------------------------------------------------
     def OnAbout(self, evt):
         info = wx.adv.AboutDialogInfo()
 
@@ -375,216 +195,10 @@ class TestFrame(wx.Frame):
         wx.adv.AboutBox(info)
 
     # ------------------------------------------------------------------------------------------------------------------
-    def OnDummyChecked(self, event):
-        if self.menu_DUMMY.IsChecked():
-            self.da.DUMMY_DATA = True
-            self.tab_multimeter.OnDummyChecked()
-            print('using DUMMY data.')
-        else:
-            print('No longer using DUMMY data.')
-            self.da.DUMMY_DATA = False
-            self.tab_multimeter.OnDummyChecked()
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def thread_this(self, func, arg=()):
-        self.t = threading.Thread(target=func, args=arg, daemon=True)
-        self.t.start()
-
-    def on_connect_instr(self, evt):
-        print('\nResetting connection. Closing communication with any connected instruments')
-        self.text_DUT_report.Clear()
-        self.text_DMM_report.Clear()
-        self.thread_this(self.da.connect, (self.get_instruments(),))
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def on_run(self, evt):
-        self.get_values()
-        if not self.t.is_alive() and self.flag_complete:
-            # start new thread
-            self.thread_this(self.da.start, (self.user_input,))
-            self.btn_start.SetLabel('STOP')
-
-        elif self.t.is_alive() and self.user_input['mode'] in (1, 4):
-            # stop continuous
-            # https://stackoverflow.com/a/36499538
-            self.t.do_run = False
-            self.btn_start.SetLabel('RUN')
-        else:
-            print('thread already running.')
-
-    def reset_view(self, evt):
-        self.SetSize((1055, 640))
-
-    def config(self, evt):
-        dlg = InstrumentDialog(self, ['f5560A', 'f8588A'], None, wx.ID_ANY,)
-        dlg.ShowModal()
-        dlg.Destroy()
-
-    def get_instruments(self):
-        config_dict = ReadConfig()
-
-        instruments = {'f5560A': {'address': config_dict['DUT']['address'], 'port': config_dict['DUT']['port'],
-                                  'gpib': config_dict['DUT']['gpib'], 'mode': config_dict['DUT']['mode']},
-                       'f8588A': {'address': config_dict['DMM']['address'], 'port': config_dict['DMM']['port'],
-                                  'gpib': config_dict['DMM']['gpib'], 'mode': config_dict['DMM']['mode']}}
-        return instruments
-
-    def set_ident(self, idn_dict):
-        self.text_DUT_report.SetValue(idn_dict['DUT'])  # DUT
-        self.text_DMM_report.SetValue(idn_dict['DMM'])  # current DMM
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def lock_controls(self, evt):
-        choice = self.combo_mode.GetSelection()
-        if choice in (1, 3):
-            if self.checkbox_1.GetValue() == 0:
-                self.checkbox_1.SetValue(1)
-                self.toggle_panel(evt)
-            self.checkbox_1.Disable()
-            self.text_amplitude.Disable()
-            self.combo_box_1.Disable()
-            self.text_frequency.Disable()
-        else:
-            self.checkbox_1.Enable()
-            self.text_amplitude.Enable()
-            self.combo_box_1.Enable()
-            self.text_frequency.Enable()
-
-    def toggle_controls(self):
-        if self.text_amplitude.Enabled:
-            self.checkbox_1.Disable()
-            self.text_amplitude.Disable()
-            self.combo_box_1.Disable()
-            self.text_frequency.Disable()
-        else:
-            self.checkbox_1.Enable()
-            self.text_amplitude.Enable()
-            self.combo_box_1.Enable()
-            self.text_frequency.Enable()
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def toggle_panel(self, evt):
-        if self.checkbox_1.GetValue():
-            if not self.panel_4.IsShown():
-                self.panel_4.Show()
-        else:
-            self.panel_4.Hide()
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def get_values(self):
-        mode = self.combo_mode.GetSelection()
-        source = self.checkbox_1.GetValue()
-        error = float(self.text_error.GetValue())
-        rms = self.combo_box_1.GetSelection()
-
-        filter = self.combo_filter.GetValue()
-
-        amp_string = self.text_amplitude.GetValue()
-        freq_string = self.text_frequency.GetValue()
-
-        self.user_input = {'mode': mode,
-                           'source': source,
-                           'amplitude': amp_string,
-                           'rms': rms,
-                           'frequency': freq_string,
-                           'error': error,
-                           'filter': filter
-                           }
-
-    # def open_breakpoints(self, evt):
-    #     fileName = 'distortion_breakpoints.csv'
-    #     os.system("notepad.exe " + fileName)
-
-    def error_dialog(self, error_message):
-        print(error_message)
-        dial = wx.MessageDialog(None, str(error_message), 'Error', wx.OK | wx.ICON_ERROR)
-        dial.ShowModal()
-
     def OnCloseWindow(self, evt):
-        self.da.close_instruments()
+        self.tab_analyzer.da.close_instruments()
+        self.tab_multimeter.dmm.close_instruments()
         self.Destroy()
-
-    def __do_table_header(self):
-        header = ['Amplitude', 'Frequency', 'RMS', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'Samples', 'Aperture']
-        self.grid_1.append_rows(header)
-
-    def results_update(self, results):
-        amplitude = results['Amplitude']
-        frequency = results['Frequency']
-
-        fs = results['Fs']
-        N = results['N']
-        aperture = results['Aperture']
-        rms = results['RMS']
-        units = results['units']
-        thdn = results['THDN']
-        thd = results['THD']
-        rms_noise = results['RMS NOISE']
-
-        self.label_fs_report.SetLabelText(str(fs))
-        self.label_samples_report.SetLabelText(str(N))
-        self.label_aperture_report.SetLabelText(str(aperture))
-        self.text_rms_report.SetValue(f"{'{:0.3e}'.format(rms)} {units}")
-        self.text_thdn_report.SetValue(f"{round(thdn * 100, 3)}% or {round(np.log10(thdn), 1)}dB")
-        self.text_thd_report.SetValue(f"{round(thd * 100, 3)}% or {round(np.log10(thd), 1)}dB")
-
-        # self.grid_1.append_rows({k: results[k] for k in set(list(results.keys())) - {'units'}})
-        self.grid_1.append_rows([amplitude, frequency, rms, thdn, thd, rms_noise, fs, N, aperture])
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def __do_plot_layout(self):
-        self.ax1.set_title('SAMPLED TIMED SERIES DATA')
-        self.ax1.set_xlabel('TIME (ms)')
-        self.ax1.set_ylabel('AMPLITUDE')
-        self.ax2.set_title('DIGITIZED WAVEFORM SPECTRAL RESPONSE')
-        self.ax2.set_xlabel('FREQUENCY (kHz)')
-        self.ax2.set_ylabel('MAGNITUDE (dB)')
-        self.ax2.grid()
-        self.figure.align_ylabels([self.ax1, self.ax2])
-        self.figure.tight_layout()
-
-    def plot(self, params):
-        # TEMPORAL -----------------------------------------------------------------------------------------------------
-        xt = params['xt']
-        yt = params['yt']
-
-        self.temporal.set_data(xt, yt)
-
-        xt_start = params['xt_start']
-        xt_end = params['xt_end']
-        yt_start = params['yt_start']
-        yt_end = params['yt_end']
-        yt_tick = params['yt_tick']
-
-        self.ax1.set_yticks(np.arange(yt_start, yt_end, yt_tick))
-        try:
-            self.ax1.relim()  # recompute the ax.dataLim
-        except ValueError:
-            print(f'Are the lengths of xt: {len(xt)} and yt: {len(yt)} mismatched?')
-            raise
-        self.ax1.autoscale()
-        self.ax1.set_xlim([xt_start, xt_end])
-
-        # SPECTRAL -----------------------------------------------------------------------------------------------------
-        xf = params['xf']
-        yf = params['yf']
-
-        self.spectral.set_data(xf, yf)
-
-        xf_start = params['xf_start']
-        xf_end = params['xf_end']
-        yf_start = params['yf_start']
-        yf_end = params['yf_end']
-
-        self.ax2.set_xlim(xf_start, xf_end)
-        self.ax2.set_ylim(yf_start, yf_end)
-
-        # UPDATE PLOT FEATURES -----------------------------------------------------------------------------------------
-        self.figure.tight_layout()
-
-        self.toolbar.update()  # Not sure why this is needed - ADS
-        self.canvas.draw()
-        self.canvas.flush_events()
 
 
 ########################################################################################################################

@@ -13,6 +13,18 @@ import matplotlib.pylab as pylab
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.backends.backend_wxagg import NavigationToolbar2WxAgg as NavigationToolbar
 
+# https://stackoverflow.com/a/38251497
+# https://matplotlib.org/3.1.1/tutorials/introductory/customizing.html
+pylab_params = {'legend.fontsize': 'medium',
+                'font.family': 'Segoe UI',
+                'axes.titleweight': 'bold',
+                'figure.figsize': (15, 5),
+                'axes.labelsize': 'medium',
+                'axes.titlesize': 'medium',
+                'xtick.labelsize': 'medium',
+                'ytick.labelsize': 'medium'}
+pylab.rcParams.update(pylab_params)
+
 
 class MultimeterTab(wx.Panel):
     def __init__(self, parent):
@@ -33,9 +45,6 @@ class MultimeterTab(wx.Panel):
                                              choices=["RMS", "Peak"],
                                              style=wx.CB_DROPDOWN | wx.CB_READONLY)
         self.text_frequency = wx.TextCtrl(self.left_panel, wx.ID_ANY, "1000")
-
-        # self.text_rms_report = wx.TextCtrl(self.left_panel, wx.ID_ANY, "", style=wx.TE_READONLY)
-        # self.text_frequency_report = wx.TextCtrl(self.left_panel, wx.ID_ANY, "", style=wx.TE_READONLY)
 
         self.spreadsheet = MyGrid(self.left_panel)
         self.btn_cleardata = wx.Button(self.left_panel, wx.ID_ANY, "Clear Data")
@@ -104,12 +113,14 @@ class MultimeterTab(wx.Panel):
         self.combo_mode.SetSelection(0)
         self.checkbox_errorbar.SetValue(1)
 
-        self.spreadsheet.CreateGrid(20, 3)
-        self.spreadsheet.SetMinSize((100, 195))
+        self.spreadsheet.CreateGrid(60, 3)
         self.spreadsheet.SetRowLabelSize(40)
         self.spreadsheet.SetColLabelValue(0, 'Value')
         self.spreadsheet.SetColLabelValue(1, 'Frequency')
         self.spreadsheet.SetColLabelValue(2, 'STD')
+        self.spreadsheet.SetMinSize((300, 184))
+
+        self.combo_mode.SetMinSize((110, 23))
 
     def __do_layout(self):
         sizer_2 = wx.GridSizer(1, 1, 0, 0)
@@ -169,16 +180,10 @@ class MultimeterTab(wx.Panel):
         static_line_3.SetMinSize((300, 2))
         grid_sizer_left_panel.Add(static_line_3, (10, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
-        # label_rms_report = wx.StaticText(self.left_panel, wx.ID_ANY, "RMS:")
-        # grid_sizer_left_panel.Add(label_rms_report, (11, 0), (1, 1), 0, 0)
-        # grid_sizer_left_panel.Add(self.text_rms_report, (11, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        # label_frequency_report = wx.StaticText(self.left_panel, wx.ID_ANY, "Frequency:")
-        # grid_sizer_left_panel.Add(label_frequency_report, (12, 0), (1, 1), 0, 0)
-        # grid_sizer_left_panel.Add(self.text_frequency_report, (12, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-
-        grid_sizer_left_panel.Add(self.spreadsheet, (11, 0), (1, 3), wx.EXPAND, 0)
-        grid_sizer_left_panel.Add(self.btn_cleardata, (12, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT | wx.TOP, 5)
-        grid_sizer_left_panel.Add(self.checkbox_errorbar, (12, 1), (1, 1), wx.ALIGN_BOTTOM | wx.LEFT | wx.TOP, 5)
+        grid_sizer_left_panel.Add(self.spreadsheet, (11, 0), (1, 3), wx.ALIGN_LEFT, 0)
+        grid_sizer_left_panel.Add(self.btn_cleardata, (12, 0), (1, 1), wx.LEFT | wx.TOP, 5)
+        grid_sizer_left_panel.Add(self.checkbox_errorbar, (12, 1), (1, 1), wx.LEFT | wx.TOP, 5)
+        # grid_sizer_left_panel.AddGrowableRow(11)
 
         # BUTTONS ------------------------------------------------------------------------------------------------------
         static_line_4 = wx.StaticLine(self.left_panel, wx.ID_ANY)
@@ -186,7 +191,7 @@ class MultimeterTab(wx.Panel):
         grid_sizer_left_panel.Add(static_line_4, (13, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
         grid_sizer_left_panel.Add(self.btn_start, (14, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
-        grid_sizer_left_panel.Add(self.combo_mode, (14, 1), (1, 1), wx.EXPAND | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(self.combo_mode, (14, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
 
         self.left_panel.SetSizer(grid_sizer_left_panel)
 
@@ -210,28 +215,32 @@ class MultimeterTab(wx.Panel):
 
     # ------------------------------------------------------------------------------------------------------------------
     def config(self, evt):
-        dlg = InstrumentDialog(self, ['f5560A', 'f884xA'], None, wx.ID_ANY,)
+        dlg = InstrumentDialog(self, ['f5560A', 'f884xA'], None, wx.ID_ANY, )
         dlg.ShowModal()
         dlg.Destroy()
 
     def get_instruments(self):
         config_dict = ReadConfig()
 
-        instruments = {'f5560A': {'address': config_dict['DUT']['address'], 'port': config_dict['DUT']['port'],
-                                  'gpib': config_dict['DUT']['gpib'], 'mode': config_dict['DUT']['mode']},
-                       'f884xA': {'address': config_dict['DMM']['address'], 'port': config_dict['DMM']['port'],
-                                  'gpib': config_dict['DMM']['gpib'], 'mode': config_dict['DMM']['mode']}}
-        return instruments
+        f5560A = config_dict['f5560A']
+        f884xA = config_dict['f884xA']
 
-    def OnCloseWindow(self, evt):
-        self.dmm.close_instruments()
-        self.Destroy()
+        instruments = {'f5560A': {'address': f5560A['address'], 'port': f5560A['port'],
+                                  'gpib': f5560A['gpib'], 'mode': f5560A['mode']},
+                       'f884xA': {'address': f884xA['address'], 'port': f884xA['port'],
+                                  'gpib': f884xA['gpib'], 'mode': f884xA['mode']}}
+
+        return instruments
 
     def on_connect_instr(self, evt):
         print('\nResetting connection. Closing communication with any connected instruments')
         self.text_DUT_report.Clear()
         self.text_DMM_report.Clear()
         self.thread_this(self.dmm.connect, (self.get_instruments(),))
+
+    def OnCloseWindow(self, evt):
+        self.dmm.close_instruments()
+        self.Destroy()
 
     # ------------------------------------------------------------------------------------------------------------------
     def lock_controls(self, evt):
@@ -280,21 +289,6 @@ class MultimeterTab(wx.Panel):
     def thread_this(self, func, arg=()):
         self.t = threading.Thread(target=func, args=arg, daemon=True)
         self.t.start()
-
-    def get_instruments(self):
-        config_dict = ReadConfig()
-
-        instruments = {'DUT': {'address': config_dict['DUT']['address'], 'port': config_dict['DUT']['port'],
-                               'gpib': config_dict['DUT']['gpib'], 'mode': config_dict['DUT']['mode']},
-                       'f884xA': {'address': config_dict['DMM']['address'], 'port': config_dict['DMM']['port'],
-                                  'gpib': config_dict['DMM']['gpib'], 'mode': config_dict['DMM']['mode']}}
-        return instruments
-
-    def on_connect_instr(self, evt):
-        print('\nResetting connection. Closing communication with any connected instruments')
-        self.text_DUT_report.Clear()
-        self.text_DMM_report.Clear()
-        self.thread_this(self.dmm.connect, (self.get_instruments(),))
 
     # ------------------------------------------------------------------------------------------------------------------
     def on_run(self, evt):

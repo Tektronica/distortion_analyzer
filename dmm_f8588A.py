@@ -99,8 +99,9 @@ class f8588A_instrument:
             except ValueError:
                 raise
         else:
-            print('\nUnable to connect to the Fluke 8588A. Check software configuration, ensure instrument are in'
-                  'appropriate mode, and consider power cycling the suspected instrument\n')
+            print('Unable to connect to the Fluke 8588A. Check software configuration, ensure instrument is'
+                  'connected properly or not being used by another remote session. Consider power cycling the '
+                  'suspected instrument\n')
 
     ####################################################################################################################
     def setup_meter(self, output='CURR', mode='AC'):

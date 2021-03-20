@@ -22,8 +22,9 @@ class f5560A_instrument:
             self.f5560_connected = True
             self.f5560A_IDN = self.f5560A.query('*IDN?')
         else:
-            print('\nUnable to connect to the Fluke 5560A. Check software configuration, ensure instrument are in'
-                  'appropriate mode, and consider power cycling the suspected instrument\n')
+            print('Unable to connect to the Fluke 5560A. Check software configuration, ensure instrument is'
+                  'connected properly or not being used by another remote session. Consider power cycling the '
+                  'suspected instrument\n')
 
     def setup_source(self):
         self.f5560A.write('*RST')

@@ -65,7 +65,7 @@ class Instruments(dut.f5560A_instrument, dmm.f884xA_instruments):
                 except ValueError:
                     raise
             else:
-                print('\nUnable to connect to all instruments.\n')
+                print('Unable to connect to all instruments.\n')
         except ValueError:
             raise ValueError('Could not connect. Timeout error occurred.')
 
@@ -73,6 +73,7 @@ class Instruments(dut.f5560A_instrument, dmm.f884xA_instruments):
         time.sleep(1)
         self.close_f5560A()
         self.close_f884xA()
+        self.connected = False
 
 
 class DMM_Measurement:

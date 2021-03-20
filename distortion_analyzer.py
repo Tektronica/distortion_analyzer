@@ -76,7 +76,7 @@ class Instruments(dut.f5560A_instrument, dmm.f8588A_instrument):
                 except ValueError:
                     raise
             else:
-                print('\nUnable to connect to all instruments.\n')
+                print('Unable to connect to all instruments.\n')
         except ValueError:
             raise ValueError('Could not connect. Timeout error occurred.')
 
@@ -84,6 +84,7 @@ class Instruments(dut.f5560A_instrument, dmm.f8588A_instrument):
         time.sleep(1)
         self.close_f5560A()
         self.close_f8588A()
+        self.connected = False
 
 
 class DistortionAnalyzer:
