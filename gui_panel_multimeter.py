@@ -182,7 +182,7 @@ class MultimeterTab(wx.Panel):
         static_line_3.SetMinSize((300, 2))
         grid_sizer_left_panel.Add(static_line_3, (10, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
-        grid_sizer_left_panel.Add(self.spreadsheet, (11, 0), (1, 3), wx.ALIGN_LEFT | wx.EXPAND, 0)
+        grid_sizer_left_panel.Add(self.spreadsheet, (11, 0), (1, 3), wx.ALIGN_LEFT | wx.RIGHT | wx.EXPAND, 5)
         grid_sizer_left_panel.Add(self.btn_cleardata, (12, 0), (1, 1), wx.LEFT | wx.TOP, 5)
         grid_sizer_left_panel.Add(self.checkbox_errorbar, (12, 1), (1, 1), wx.LEFT | wx.TOP, 5)
         grid_sizer_left_panel.AddGrowableRow(11)
@@ -374,7 +374,6 @@ class MultimeterTab(wx.Panel):
         self.canvas.flush_events()
 
     def cleardata(self, evt):
-        # self.x, self.y, self.std = np.empty(1), np.empty(1), np.empty(1)
         self.x, self.y, self.std = np.NaN, np.NaN, np.NaN
         self.spreadsheet.cleardata()
 
