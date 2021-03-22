@@ -36,6 +36,7 @@ class DistortionAnalyzerTab(wx.Panel):
         self.left_sub_panel = wx.Panel(self.left_panel, wx.ID_ANY)  # amplitude/frequency panel
         self.plot_panel = wx.Panel(self, wx.ID_ANY, style=wx.SIMPLE_BORDER)
 
+        # PANELS =======================================================================================================
         # LEFT Panel ---------------------------------------------------------------------------------------------------
         self.text_DUT_report = wx.TextCtrl(self.left_panel, wx.ID_ANY, "", style=wx.TE_READONLY)
         self.text_DMM_report = wx.TextCtrl(self.left_panel, wx.ID_ANY, "", style=wx.TE_READONLY)
@@ -68,7 +69,6 @@ class DistortionAnalyzerTab(wx.Panel):
                                                "Continuous"],
                                       style=wx.CB_DROPDOWN)
 
-        # PANELS =======================================================================================================
         # PLOT Panel ---------------------------------------------------------------------------------------------------
         self.figure = plt.figure(figsize=(1, 1))  # look into Figure((5, 4), 75)
         self.canvas = FigureCanvas(self.plot_panel, -1, self.figure)
@@ -296,6 +296,10 @@ class DistortionAnalyzerTab(wx.Panel):
         self.text_DUT_report.Clear()
         self.text_DMM_report.Clear()
         self.thread_this(self.da.connect, (self.get_instruments(),))
+
+    # def OnCloseWindow(self, evt):
+    #     self.da.close_instruments()
+    #     self.Destroy()
 
     # ------------------------------------------------------------------------------------------------------------------
     def toggle_panel(self, evt):

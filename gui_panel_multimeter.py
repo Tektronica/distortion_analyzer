@@ -75,6 +75,7 @@ class MultimeterTab(wx.Panel):
         self.line, (self.err_top, self.err_btm), (self.bars,) = self.ax1.errorbar(np.NaN, np.NaN, yerr=np.NaN, fmt='o',
                                                                                   ecolor='red', capsize=4)
 
+        # BINDINGS =====================================================================================================
         # Configure Instruments ----------------------------------------------------------------------------------------
         on_connect = lambda event: self.on_connect_instr(event)
         self.Bind(wx.EVT_BUTTON, on_connect, self.btn_connect)
@@ -234,15 +235,19 @@ class MultimeterTab(wx.Panel):
 
         return instruments
 
+    def set_ident(self, idn_dict):
+        self.text_DUT_report.SetValue(idn_dict['DUT'])  # DUT
+        self.text_DMM_report.SetValue(idn_dict['DMM'])  # current DMM
+
     def on_connect_instr(self, evt):
         print('\nResetting connection. Closing communication with any connected instruments')
         self.text_DUT_report.Clear()
         self.text_DMM_report.Clear()
         self.thread_this(self.dmm.connect, (self.get_instruments(),))
 
-    def OnCloseWindow(self, evt):
-        self.dmm.close_instruments()
-        self.Destroy()
+    # def OnCloseWindow(self, evt):
+    #     self.dmm.close_instruments()
+    #     self.Destroy()
 
     # ------------------------------------------------------------------------------------------------------------------
     def lock_controls(self, evt):
@@ -279,13 +284,6 @@ class MultimeterTab(wx.Panel):
                            'rms': rms,
                            'frequency': freq_string,
                            }
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def OnDummyChecked(self):
-        if self.dmm.DUMMY_DATA:
-            self.dmm.DUMMY_DATA = False
-        else:
-            self.dmm.DUMMY_DATA = True
 
     # ------------------------------------------------------------------------------------------------------------------
     def thread_this(self, func, arg=()):
