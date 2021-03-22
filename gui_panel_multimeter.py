@@ -126,6 +126,7 @@ class MultimeterTab(wx.Panel):
         sizer_2 = wx.GridSizer(1, 1, 0, 0)
         grid_sizer_1 = wx.FlexGridSizer(1, 2, 0, 0)
         grid_sizer_left_panel = wx.GridBagSizer(0, 0)
+        grid_sizer_left_sub_btn_row = wx.GridBagSizer(0, 0)
         grid_sizer_plot = wx.GridBagSizer(0, 0)
 
         # LEFT PANEL ===================================================================================================
@@ -180,18 +181,19 @@ class MultimeterTab(wx.Panel):
         static_line_3.SetMinSize((300, 2))
         grid_sizer_left_panel.Add(static_line_3, (10, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
-        grid_sizer_left_panel.Add(self.spreadsheet, (11, 0), (1, 3), wx.ALIGN_LEFT, 0)
+        grid_sizer_left_panel.Add(self.spreadsheet, (11, 0), (1, 3), wx.ALIGN_LEFT | wx.EXPAND, 0)
         grid_sizer_left_panel.Add(self.btn_cleardata, (12, 0), (1, 1), wx.LEFT | wx.TOP, 5)
         grid_sizer_left_panel.Add(self.checkbox_errorbar, (12, 1), (1, 1), wx.LEFT | wx.TOP, 5)
-        # grid_sizer_left_panel.AddGrowableRow(11)
+        grid_sizer_left_panel.AddGrowableRow(11)
 
         # BUTTONS ------------------------------------------------------------------------------------------------------
         static_line_4 = wx.StaticLine(self.left_panel, wx.ID_ANY)
         static_line_4.SetMinSize((300, 2))
         grid_sizer_left_panel.Add(static_line_4, (13, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
-        grid_sizer_left_panel.Add(self.btn_start, (14, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
-        grid_sizer_left_panel.Add(self.combo_mode, (14, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
+        grid_sizer_left_sub_btn_row.Add(self.btn_start, (0, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
+        grid_sizer_left_sub_btn_row.Add(self.combo_mode, (0, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(grid_sizer_left_sub_btn_row, (14, 0), (1, 3), wx.ALIGN_TOP | wx.BOTTOM, 13)
 
         self.left_panel.SetSizer(grid_sizer_left_panel)
 
