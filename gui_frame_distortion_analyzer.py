@@ -166,9 +166,9 @@ class TestFrame(wx.Frame):
             self.tab_multimeter.dmm.DUMMY_DATA = True
             print('using DUMMY data.')
         else:
-            print('No longer using DUMMY data.')
             self.tab_analyzer.da.DUMMY_DATA = False
             self.tab_multimeter.dmm.DUMMY_DATA = False
+            print('No longer using DUMMY data.')
 
     # ------------------------------------------------------------------------------------------------------------------
     def __do_table_header(self):
