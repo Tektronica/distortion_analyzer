@@ -163,12 +163,12 @@ class TestFrame(wx.Frame):
     def OnDummyChecked(self, event):
         if self.menu_DUMMY.IsChecked():
             self.tab_analyzer.da.DUMMY_DATA = True
-            self.tab_multimeter.OnDummyChecked()
+            self.tab_multimeter.dmm.DUMMY_DATA = True
             print('using DUMMY data.')
         else:
             print('No longer using DUMMY data.')
             self.tab_analyzer.da.DUMMY_DATA = False
-            self.tab_multimeter.OnDummyChecked()
+            self.tab_multimeter.dmm.DUMMY_DATA = False
 
     # ------------------------------------------------------------------------------------------------------------------
     def __do_table_header(self):
