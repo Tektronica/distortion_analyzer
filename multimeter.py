@@ -93,6 +93,9 @@ class DMM_Measurement:
                         'THDN': [], 'THD': [], 'RMS NOISE': [],
                         'N': [], 'Fs': [], 'Aperture': []}
 
+        # Saving the last state of Ft (operating frequency) helps determine if we have switched between AC and DC
+        self._Ft = 0.0
+
         self.M = Instruments(self)
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -130,6 +133,7 @@ class DMM_Measurement:
             else:
                 self.parent.error_dialog('\nConnect to instruments first.')
             self.parent.btn_start.SetLabel('START')
+            self.parent.checkbox_autorange.Enable()
 
         except ValueError as e:
             message = 'finished with errors.'
@@ -140,7 +144,7 @@ class DMM_Measurement:
             self.parent.error_dialog(e)
         else:
             message = 'done'
-            print(f"{message} {'-' * (100 - len(message))}")
+            print(f"{message} {'-' * (100 - len(message))}\n")
             self.parent.flag_complete = True
 
     def run_selected_function(self, selection):
@@ -214,7 +218,7 @@ class DMM_Measurement:
         results_df.to_csv(path_or_buf=_getFilepath('results', 'multimeter'), sep=',', index=False)
         self.parent.flag_complete = True
 
-    # ------------------------------------------------------------------------------------------------------------------
+    # ==================================================================================================================
     def test_multimeter(self, setup):
         params = self.params
 
@@ -226,26 +230,46 @@ class DMM_Measurement:
             print('Provided amplitude converted to RMS.')
 
         Ft = params['frequency']
-        suffix = params['units']
+        units = params['units']
         time.sleep(1)
 
         # START DATA COLLECTION ----------------------------------------------------------------------------------------
         if not self.DUMMY_DATA:
+            autorange = params['autorange']
+
+            # Usually enters on each new measurement, but only once for each loop (measurement sweep) ------------------
             if setup:
-                self.M.setup_meter(output='CURR', mode='AC')
+                self.M.f884xA_meter_setup(autorange=autorange, units=units, frequency=Ft)
+                self._Ft = Ft
+
+            # During a loop (measurement sweep) we want to catch changes from either AC to DC or vice-versa ------------
+            elif (Ft * self._Ft) == 0 and Ft != self._Ft:
+                self.M.f884xA_meter_setup(autorange=autorange, units=units, frequency=Ft)
+                self._Ft = Ft
+
             try:
-                self.M.run_source(suffix, amplitude, Ft)
+                if not autorange:
+                    self.M.set_range(ideal_range_val=amplitude, units=units, frequency=Ft)
+                    time.sleep(1)
+                self.M.run_source(units, amplitude, Ft)
+
                 try:
                     outval, freqval, std = self.M.average_reading(10)
+
                 except ValueError:
-                    print('error occurred while connecting to DMM. Placing 5560 in Standby.')
+                    print('error occurred while connecting to DMM. Placing Fluke 5560A in Standby.')
                     self.M.standby()
                     raise
+
             except ValueError:
-                print('error occurred while connecting to DUT. Exiting current measurement.')
+                print('error occurred while connecting to Fluke 5560A. Exiting current measurement.')
                 raise
         else:
+            # DUMMY_DATA for random number generation
             freqval, outval, std = Ft, (7 + 1 * np.random.random(1))[0], (0.25 + np.random.random(1))[0]
+            M = dmm.f884xA_instruments()
+            print(units)
+            print(M._get_function_params(frequency=freqval, units='A'))
 
         self.parent.update_plot(freqval, outval, std)
         return amplitude, Ft, outval, freqval, std

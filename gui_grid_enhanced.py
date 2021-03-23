@@ -402,33 +402,27 @@ class MyGrid(wx.grid.Grid):
 
 class MyGridFrame(wx.Frame):
     def __init__(self, *args, **kwds):
-        # begin wxGlade: MyFrame.__init__
         kwds["style"] = kwds.get("style", 0) | wx.DEFAULT_FRAME_STYLE
         wx.Frame.__init__(self, *args, **kwds)
         self.SetSize((1028, 278))
-        self.panel_1 = wx.Panel(self, wx.ID_ANY)
-        self.grid_1 = MyGrid(self.panel_1)
+        self.panel = wx.Panel(self, wx.ID_ANY)
+        self.grid_1 = MyGrid(self.panel)
 
         self.__set_properties()
         self.__do_layout()
-        # end wxGlade
 
     def __set_properties(self):
-        # begin wxGlade: MyFrame.__set_properties
-        self.SetTitle("frame")
+        self.SetTitle("Enhanced Grid")
         self.grid_1.CreateGrid(16, 13)
-        # end wxGlade
 
     def __do_layout(self):
-        # begin wxGlade: MyFrame.__do_layout
         sizer_1 = wx.BoxSizer(wx.VERTICAL)
         sizer_2 = wx.BoxSizer(wx.VERTICAL)
         sizer_2.Add(self.grid_1, 1, wx.EXPAND, 0)
-        self.panel_1.SetSizer(sizer_2)
-        sizer_1.Add(self.panel_1, 1, wx.EXPAND, 0)
+        self.panel.SetSizer(sizer_2)
+        sizer_1.Add(self.panel, 1, wx.EXPAND, 0)
         self.SetSizer(sizer_1)
         self.Layout()
-        # end wxGlade
 
 
 class MyApp(wx.App):

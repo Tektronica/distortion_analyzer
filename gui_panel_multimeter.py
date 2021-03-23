@@ -39,6 +39,7 @@ class MultimeterTab(wx.Panel):
         self.text_DMM_report = wx.TextCtrl(self.left_panel, wx.ID_ANY, "", style=wx.TE_READONLY)
         self.btn_connect = wx.Button(self.left_panel, wx.ID_ANY, "Connect")
         self.btn_config = wx.Button(self.left_panel, wx.ID_ANY, "Config")
+        self.checkbox_autorange = wx.CheckBox(self.left_panel, wx.ID_ANY, "Auto Range")
 
         self.text_amplitude = wx.TextCtrl(self.left_panel, wx.ID_ANY, "10uA")
         self.combo_rms_or_peak = wx.ComboBox(self.left_panel, wx.ID_ANY,
@@ -83,6 +84,9 @@ class MultimeterTab(wx.Panel):
         on_config = lambda event: self.config(event)
         self.Bind(wx.EVT_BUTTON, on_config, self.btn_config)
 
+        on_toggle_autorange = lambda event: self.toggle_autorange(event)
+        self.Bind(wx.EVT_CHECKBOX, on_toggle_autorange, self.checkbox_autorange)
+
         on_cleardata = lambda event: self.cleardata(event)
         self.Bind(wx.EVT_BUTTON, on_cleardata, self.btn_cleardata)
 
@@ -110,6 +114,8 @@ class MultimeterTab(wx.Panel):
 
         self.text_DUT_report.SetMinSize((200, 23))
         self.text_DMM_report.SetMinSize((200, 23))
+        self.checkbox_autorange.SetValue(1)
+
         self.combo_rms_or_peak.SetSelection(0)
         self.combo_mode.SetSelection(0)
         self.checkbox_errorbar.SetValue(1)
@@ -152,8 +158,10 @@ class MultimeterTab(wx.Panel):
         grid_sizer_left_panel.Add(self.text_DMM_report, (3, 1), (1, 2), wx.BOTTOM | wx.LEFT, 5)
 
         grid_sizer_left_panel.Add(self.btn_connect, (4, 0), (1, 1), wx.BOTTOM, 5)
-        grid_sizer_left_panel.Add(self.btn_config, (4, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(self.btn_config, (4, 1), (1, 1), wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
+        grid_sizer_left_panel.Add(self.checkbox_autorange, (4, 2), (1, 1), wx.ALIGN_CENTRE_VERTICAL | wx.BOTTOM, 5)
 
+        # f5560A SETUP -------------------------------------------------------------------------------------------------
         label_source = wx.StaticText(self.left_panel, wx.ID_ANY, "5560A")
         label_source.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
         grid_sizer_left_panel.Add(label_source, (5, 0), (1, 1), wx.TOP, 10)
@@ -245,10 +253,6 @@ class MultimeterTab(wx.Panel):
         self.text_DMM_report.Clear()
         self.thread_this(self.dmm.connect, (self.get_instruments(),))
 
-    # def OnCloseWindow(self, evt):
-    #     self.dmm.close_instruments()
-    #     self.Destroy()
-
     # ------------------------------------------------------------------------------------------------------------------
     def lock_controls(self, evt):
         choice = self.combo_mode.GetSelection()
@@ -271,15 +275,23 @@ class MultimeterTab(wx.Panel):
             self.combo_rms_or_peak.Enable()
             self.text_frequency.Enable()
 
+    def toggle_autorange(self, evt):
+        if self.checkbox_autorange.IsChecked():
+            print("[Update] Auto Ranging turned ON for Fluke 884xA.")
+        else:
+            print("[Update] Auto Ranging turned OFF for Fluke 884xA.")
+
     # ------------------------------------------------------------------------------------------------------------------
     def get_values(self):
+        autorange = bool(self.checkbox_autorange)
         mode = self.combo_mode.GetSelection()
         rms = self.combo_rms_or_peak.GetSelection()
 
         amp_string = self.text_amplitude.GetValue()
         freq_string = self.text_frequency.GetValue()
 
-        self.user_input = {'mode': mode,
+        self.user_input = {'autorange': autorange,
+                           'mode': mode,
                            'amplitude': amp_string,
                            'rms': rms,
                            'frequency': freq_string,
@@ -296,12 +308,14 @@ class MultimeterTab(wx.Panel):
         if not self.t.is_alive() and self.flag_complete:
             # start new thread
             self.thread_this(self.dmm.start, (self.user_input,))
+            self.checkbox_autorange.Disable()
             self.btn_start.SetLabel('STOP')
 
         elif self.t.is_alive() and self.user_input['mode'] == 1:
             # stop sweep
             # https://stackoverflow.com/a/36499538
             self.t.do_run = False
+            self.checkbox_autorange.Enable()
             self.btn_start.SetLabel('RUN')
         else:
             print('thread already running.')
@@ -317,9 +331,10 @@ class MultimeterTab(wx.Panel):
     def toggle_errorbar(self, evt):
         if self.errorbars:
             self.errorbars = False
-            self.plot()
+            print("[Update] Error bars have been turned OFF")
         else:
             self.errorbars = True
+            print("[Update] Error bars have been turned ON")
 
         if hasattr(self.x, 'size'):
             y_err = self.std / np.sqrt(self.x.size)
@@ -385,14 +400,14 @@ class MultimeterTab(wx.Panel):
 
     def results_update(self, row):
         """
-
         :param row: of type list
-        :return:
+        :return: True iff rows successfully appended to spreadsheet (grid)
         """
         # self.text_rms_report.SetLabelText(str(y))
         # self.text_frequency_report.SetLabelText(str(x))
         if isinstance(row, list):
             self.spreadsheet.append_rows(row)
+            return True
         else:
             raise ValueError('Row to be appended not of type list.')
 
@@ -400,3 +415,43 @@ class MultimeterTab(wx.Panel):
         print(error_message)
         dial = wx.MessageDialog(None, str(error_message), 'Error', wx.OK | wx.ICON_ERROR)
         dial.ShowModal()
+
+
+# FOR RUNNING INDEPENDENTLY ============================================================================================
+class MyMultimeterFrame(wx.Frame):
+    def __init__(self, *args, **kwds):
+        kwds["style"] = kwds.get("style", 0) | wx.DEFAULT_FRAME_STYLE
+        wx.Frame.__init__(self, *args, **kwds)
+        self.SetSize((1055, 564))
+        self.panel = MultimeterTab(self)
+
+        self.__set_properties()
+        self.__do_layout()
+
+    def __set_properties(self):
+        self.SetTitle("Multimeter")
+        self.panel.dmm.DUMMY_DATA = True
+
+    def __do_layout(self):
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(self.panel, 1, wx.EXPAND, 0)
+        self.SetSizer(sizer)
+        self.Layout()
+
+    # ------------------------------------------------------------------------------------------------------------------
+    def OnCloseWindow(self, evt):
+        self.panel.dmm.close_instruments()
+        self.Destroy()
+
+
+class MyApp(wx.App):
+    def OnInit(self):
+        self.frame = MyMultimeterFrame(None, wx.ID_ANY, "")
+        self.SetTopWindow(self.frame)
+        self.frame.Show()
+        return True
+
+
+if __name__ == "__main__":
+    app = MyApp(0)
+    app.MainLoop()

@@ -1,4 +1,5 @@
 from distortion_analyzer import DistortionAnalyzer as da
+from gui_grid_enhanced import MyGrid
 from gui_dialog_instruments import *
 from instruments_RWConfig import *
 
@@ -168,6 +169,7 @@ class DistortionAnalyzerTab(wx.Panel):
         grid_sizer_left_panel.Add(self.btn_connect, (4, 0), (1, 1), wx.BOTTOM, 5)
         grid_sizer_left_panel.Add(self.btn_config, (4, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
 
+        # f5560A SETUP -------------------------------------------------------------------------------------------------
         label_source = wx.StaticText(self.left_panel, wx.ID_ANY, "5560A")
         label_source.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
         grid_sizer_left_panel.Add(label_source, (5, 0), (1, 1), wx.TOP, 10)
@@ -181,8 +183,10 @@ class DistortionAnalyzerTab(wx.Panel):
         label_amplitude = wx.StaticText(self.left_sub_panel, wx.ID_ANY, "Amplitude:")
         label_amplitude.SetMinSize((93, 16))
         grid_sizer_left_sub_panel.Add(label_amplitude, (0, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
-        grid_sizer_left_sub_panel.Add(self.text_amplitude, (0, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
-        grid_sizer_left_sub_panel.Add(self.combo_rms_or_peak, (0, 2), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_sub_panel.Add(self.text_amplitude, (0, 1), (1, 1),
+                                      wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_sub_panel.Add(self.combo_rms_or_peak, (0, 2), (1, 1),
+                                      wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
 
         label_frequency = wx.StaticText(self.left_sub_panel, wx.ID_ANY, "Frequency (Ft):")
         label_frequency.SetMinSize((93, 16))
@@ -296,10 +300,6 @@ class DistortionAnalyzerTab(wx.Panel):
         self.text_DUT_report.Clear()
         self.text_DMM_report.Clear()
         self.thread_this(self.da.connect, (self.get_instruments(),))
-
-    # def OnCloseWindow(self, evt):
-    #     self.da.close_instruments()
-    #     self.Destroy()
 
     # ------------------------------------------------------------------------------------------------------------------
     def toggle_panel(self, evt):
@@ -479,3 +479,59 @@ class DistortionAnalyzerTab(wx.Panel):
         print(error_message)
         dial = wx.MessageDialog(None, str(error_message), 'Error', wx.OK | wx.ICON_ERROR)
         dial.ShowModal()
+
+
+# FOR RUNNING INDEPENDENTLY ============================================================================================
+class MyDistortionAnalyzerFrame(wx.Frame):
+    def __init__(self, *args, **kwds):
+        kwds["style"] = kwds.get("style", 0) | wx.DEFAULT_FRAME_STYLE
+        wx.Frame.__init__(self, *args, **kwds)
+        self.SetSize((1055, 1000))
+
+        self.splitter = wx.SplitterWindow(self)
+        self.panel = DistortionAnalyzerTab(self.splitter, self)
+        self.spreadsheet = MyGrid(self.splitter)
+
+        self.splitter.SplitHorizontally(window1=self.panel, window2=self.spreadsheet, sashPosition=0)
+
+        self.__set_properties()
+        self.__do_table_header()
+        self.__do_layout()
+
+    def __set_properties(self):
+        self.SetTitle("Distortion Analyzer")
+        self.panel.da.DUMMY_DATA = True
+        self.panel.SetMinSize((1055, 525))
+        self.spreadsheet.CreateGrid(100, 60)
+
+    def __do_layout(self):
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(self.splitter, 1, wx.EXPAND, 0)
+        self.SetSizer(sizer)
+        self.Layout()
+
+    # ------------------------------------------------------------------------------------------------------------------
+    def OnCloseWindow(self, evt):
+        self.panel.da.close_instruments()
+        self.Destroy()
+
+    # ------------------------------------------------------------------------------------------------------------------
+    def __do_table_header(self):
+        header = ['Amplitude', 'Frequency', 'RMS', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'Samples', 'Aperture']
+        self.spreadsheet.append_rows(header)
+
+    def append_row(self, row):
+        self.spreadsheet.append_rows(row)
+
+
+class MyApp(wx.App):
+    def OnInit(self):
+        self.frame = MyDistortionAnalyzerFrame(None, wx.ID_ANY, "")
+        self.SetTopWindow(self.frame)
+        self.frame.Show()
+        return True
+
+
+if __name__ == "__main__":
+    app = MyApp(0)
+    app.MainLoop()

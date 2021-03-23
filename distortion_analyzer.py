@@ -158,7 +158,7 @@ class DistortionAnalyzer:
             self.frame.error_dialog(e)
         else:
             message = 'done'
-            print(f"{message} {'-' * (100 - len(message))}")
+            print(f"{message} {'-' * (100 - len(message))}\n")
             self.frame.flag_complete = True
 
     def run_selected_function(self, selection):
