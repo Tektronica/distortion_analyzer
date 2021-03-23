@@ -3,5 +3,5 @@
 
 @echo off
 SET PYTHONIOENCODING=UTF-8
-python distortion_analyzer_gui.py %*
+python gui_frame_distortion_analyzer.py %*
 pause
