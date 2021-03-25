@@ -60,7 +60,7 @@ class Instruments(dut.f5560A_instrument, dmm.f884xA_instruments):
                 self.connected = True
                 try:
                     idn_dict = {'DUT': self.f5560A_IDN, 'DMM': self.f884xA_IDN}
-                    self.analyzer.frame.set_ident(idn_dict)
+                    self.analyzer.parent.set_ident(idn_dict)
                     self.setup_source()
                 except ValueError:
                     raise
@@ -84,7 +84,8 @@ class DMM_Measurement:
         self.amplitude_good = False  # Flag indicates user input for amplitude value is good (True)
         self.frequency_good = False  # Flag indicates user input for frequency value is good (True)
 
-        self.params = {'mode': 0, 'amplitude': '', 'units': '',
+        self.params = {'autorange': True, 'always_voltage': True,
+                       'mode': 0, 'amplitude': '', 'units': '',
                        'rms': 0, 'frequency': 0.0,
                        'cycles': 0.0, 'filter': ''}
         self.data = {'xt': [0], 'yt': [0],
@@ -99,7 +100,6 @@ class DMM_Measurement:
         self.M = Instruments(self)
 
     # ------------------------------------------------------------------------------------------------------------------
-
     def connect(self, instruments):
         self.M.close_instruments()
         time.sleep(2)
@@ -112,19 +112,23 @@ class DMM_Measurement:
     def start(self, user_input):
         selection = user_input['mode']
         amplitude, units, ft = self.get_string_value(user_input['amplitude'], user_input['frequency'])
-        self.params = {'mode': user_input['mode'],
+        self.params = {'autorange': user_input['autorange'],
+                       'always_voltage': user_input['always_voltage'],
+                       'mode': user_input['mode'],
                        'amplitude': amplitude,
                        'units': units.capitalize(),
                        'rms': user_input['rms'],
                        'frequency': ft,
                        }
-
+        
         message = f"{amplitude} {units} @ {ft} Hz"
         print(f"\n{message} {'-' * (100 - len(message))}")
 
         try:
             if self.M.connected:
                 if selection == 1:
+                    self.run_selected_function(selection)
+                elif self.amplitude_good and self.frequency_good:
                     self.run_selected_function(selection)
                 else:
                     self.parent.error_dialog('\nCheck amplitude and frequency values.')
@@ -134,6 +138,7 @@ class DMM_Measurement:
                 self.parent.error_dialog('\nConnect to instruments first.')
             self.parent.btn_start.SetLabel('START')
             self.parent.checkbox_autorange.Enable()
+            self.parent.checkbox_always_voltage.Enable()
 
         except ValueError as e:
             message = 'finished with errors.'
@@ -231,6 +236,13 @@ class DMM_Measurement:
 
         Ft = params['frequency']
         units = params['units']
+
+        # In transimpedance situations where voltage is being measured across a load -----------------------------------
+        if params['always_voltage']:
+            dmm_units = 'V'
+        else:
+            dmm_units = units
+
         time.sleep(1)
 
         # START DATA COLLECTION ----------------------------------------------------------------------------------------
@@ -239,12 +251,12 @@ class DMM_Measurement:
 
             # Usually enters on each new measurement, but only once for each loop (measurement sweep) ------------------
             if setup:
-                self.M.f884xA_meter_setup(autorange=autorange, units=units, frequency=Ft)
+                self.M.f884xA_meter_setup(autorange=autorange, units=dmm_units, frequency=Ft)
                 self._Ft = Ft
 
             # During a loop (measurement sweep) we want to catch changes from either AC to DC or vice-versa ------------
             elif (Ft * self._Ft) == 0 and Ft != self._Ft:
-                self.M.f884xA_meter_setup(autorange=autorange, units=units, frequency=Ft)
+                self.M.f884xA_meter_setup(autorange=autorange, units=dmm_units, frequency=Ft)
                 self._Ft = Ft
 
             try:
@@ -268,8 +280,9 @@ class DMM_Measurement:
             # DUMMY_DATA for random number generation
             freqval, outval, std = Ft, (7 + 1 * np.random.random(1))[0], (0.25 + np.random.random(1))[0]
             M = dmm.f884xA_instruments()
-            print(units)
-            print(M._get_function_params(frequency=freqval, units='A'))
+            print(f"Fluke 5560A operating units: {units}")
+            print(f"Retrieve function parameters for DMM: {M._get_function_params(frequency=freqval, units='A')}")
+            print(f"Measured units: {dmm_units}")
 
         self.parent.update_plot(freqval, outval, std)
         return amplitude, Ft, outval, freqval, std

@@ -47,6 +47,7 @@ class MultimeterTab(wx.Panel):
                                              style=wx.CB_DROPDOWN | wx.CB_READONLY)
         self.text_frequency = wx.TextCtrl(self.left_panel, wx.ID_ANY, "1000")
 
+        self.checkbox_always_voltage = wx.CheckBox(self.left_panel, wx.ID_ANY, "Always Voltage")
         self.spreadsheet = MyGrid(self.left_panel)
         self.btn_cleardata = wx.Button(self.left_panel, wx.ID_ANY, "Clear Data")
         self.checkbox_errorbar = wx.CheckBox(self.left_panel, wx.ID_ANY, "Error Bars")
@@ -64,7 +65,9 @@ class MultimeterTab(wx.Panel):
         self.dmm = dmm(self)
         self.t = threading.Thread()
         self.flag_complete = True  # Flag indicates any active threads (False) or thread completed (True)
-        self.user_input = {'mode': 0,
+        self.user_input = {'autorange': True,
+                           'always_voltage': True,
+                           'mode': 0,
                            'amplitude': '',
                            'rms': 0,
                            'frequency': '',
@@ -86,6 +89,9 @@ class MultimeterTab(wx.Panel):
 
         on_toggle_autorange = lambda event: self.toggle_autorange(event)
         self.Bind(wx.EVT_CHECKBOX, on_toggle_autorange, self.checkbox_autorange)
+
+        on_toggle_always_voltage = lambda event: self.toggle_always_voltage(event)
+        self.Bind(wx.EVT_CHECKBOX, on_toggle_always_voltage, self.checkbox_always_voltage)
 
         on_cleardata = lambda event: self.cleardata(event)
         self.Bind(wx.EVT_BUTTON, on_cleardata, self.btn_cleardata)
@@ -118,12 +124,13 @@ class MultimeterTab(wx.Panel):
 
         self.combo_rms_or_peak.SetSelection(0)
         self.combo_mode.SetSelection(0)
+        self.checkbox_always_voltage.SetValue(1)
         self.checkbox_errorbar.SetValue(1)
 
         self.spreadsheet.CreateGrid(60, 3)
         self.spreadsheet.SetRowLabelSize(40)
-        self.spreadsheet.SetColLabelValue(0, 'Value')
-        self.spreadsheet.SetColLabelValue(1, 'Frequency')
+        self.spreadsheet.SetColLabelValue(0, 'Frequency')
+        self.spreadsheet.SetColLabelValue(1, 'Value')
         self.spreadsheet.SetColLabelValue(2, 'STD')
         self.spreadsheet.SetMinSize((300, 184))
 
@@ -181,9 +188,10 @@ class MultimeterTab(wx.Panel):
         label_Hz = wx.StaticText(self.left_panel, wx.ID_ANY, "(Hz)")
         grid_sizer_left_panel.Add(label_Hz, (8, 2), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
 
-        label_measure = wx.StaticText(self.left_panel, wx.ID_ANY, "Measurement")
+        label_measure = wx.StaticText(self.left_panel, wx.ID_ANY, "Measure")
         label_measure.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_left_panel.Add(label_measure, (9, 0), (1, 2), wx.TOP, 10)
+        grid_sizer_left_panel.Add(label_measure, (9, 0), (1, 1), wx.TOP, 10)
+        grid_sizer_left_panel.Add(self.checkbox_always_voltage, (9, 1), (1, 3), wx.ALIGN_BOTTOM | wx.LEFT, 10)
 
         # RESULTS ------------------------------------------------------------------------------------------------------
         static_line_3 = wx.StaticLine(self.left_panel, wx.ID_ANY)
@@ -281,9 +289,16 @@ class MultimeterTab(wx.Panel):
         else:
             print("[Update] Auto Ranging turned OFF for Fluke 884xA.")
 
+    def toggle_always_voltage(self, evt):
+        if self.checkbox_always_voltage.IsChecked():
+            print("[Update] Fluke 884xA will always measure voltage (across FLuke 5560A load).")
+        else:
+            print("[Update] Fluke 884xA will perform direct measurement of the Fluke 5560A.")
+
     # ------------------------------------------------------------------------------------------------------------------
     def get_values(self):
-        autorange = bool(self.checkbox_autorange)
+        autorange = bool(self.checkbox_autorange.GetValue())
+        always_voltage = bool(self.checkbox_always_voltage.GetValue())
         mode = self.combo_mode.GetSelection()
         rms = self.combo_rms_or_peak.GetSelection()
 
@@ -291,6 +306,7 @@ class MultimeterTab(wx.Panel):
         freq_string = self.text_frequency.GetValue()
 
         self.user_input = {'autorange': autorange,
+                           'always_voltage': always_voltage,
                            'mode': mode,
                            'amplitude': amp_string,
                            'rms': rms,
@@ -309,6 +325,7 @@ class MultimeterTab(wx.Panel):
             # start new thread
             self.thread_this(self.dmm.start, (self.user_input,))
             self.checkbox_autorange.Disable()
+            self.checkbox_always_voltage.Disable()
             self.btn_start.SetLabel('STOP')
 
         elif self.t.is_alive() and self.user_input['mode'] == 1:
@@ -316,6 +333,7 @@ class MultimeterTab(wx.Panel):
             # https://stackoverflow.com/a/36499538
             self.t.do_run = False
             self.checkbox_autorange.Enable()
+            self.checkbox_always_voltage.Enable()
             self.btn_start.SetLabel('RUN')
         else:
             print('thread already running.')
@@ -395,7 +413,7 @@ class MultimeterTab(wx.Panel):
         self.plot()
 
     def __do_table_header(self):
-        header = ['value', 'frequency', 'std']
+        header = ['frequency', 'value', 'std']
         self.spreadsheet.append_rows(header)
 
     def results_update(self, row):
