@@ -120,7 +120,7 @@ class DMM_Measurement:
                        'rms': user_input['rms'],
                        'frequency': ft,
                        }
-        
+
         message = f"{amplitude} {units} @ {ft} Hz"
         print(f"\n{message} {'-' * (100 - len(message))}")
 

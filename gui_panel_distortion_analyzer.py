@@ -103,8 +103,8 @@ class DistortionAnalyzerTab(wx.Panel):
         self.Bind(wx.EVT_BUTTON, on_config, self.btn_config)
 
         # Run Measurement (start subprocess) ---------------------------------------------------------------------------
-        on_single_event = lambda event: self.on_run(event)
-        self.Bind(wx.EVT_BUTTON, on_single_event, self.btn_start)
+        on_run_event = lambda event: self.on_run(event)
+        self.Bind(wx.EVT_BUTTON, on_run_event, self.btn_start)
 
         on_toggle = lambda event: self.toggle_panel(event)
         self.Bind(wx.EVT_CHECKBOX, on_toggle, self.checkbox_1)

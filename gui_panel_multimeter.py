@@ -100,8 +100,8 @@ class MultimeterTab(wx.Panel):
         self.Bind(wx.EVT_CHECKBOX, on_toggle_errorbar, self.checkbox_errorbar)
 
         # Run Measurement (start subprocess) ---------------------------------------------------------------------------
-        on_single_event = lambda event: self.on_run(event)
-        self.Bind(wx.EVT_BUTTON, on_single_event, self.btn_start)
+        on_run_event = lambda event: self.on_run(event)
+        self.Bind(wx.EVT_BUTTON, on_run_event, self.btn_start)
 
         on_combo_select = lambda event: self.lock_controls(event)
         self.Bind(wx.EVT_COMBOBOX_CLOSEUP, on_combo_select, self.combo_mode)

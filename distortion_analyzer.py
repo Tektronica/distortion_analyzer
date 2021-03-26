@@ -147,7 +147,7 @@ class DistortionAnalyzer:
                 self.run_selected_function(selection)
             else:
                 self.frame.error_dialog('\nConnect to instruments first.')
-            self.frame.btn_start.SetLabel('START')
+            self.frame.btn_start.SetLabel('RUN')
 
         except ValueError as e:
             message = 'finished with errors.'
