@@ -179,6 +179,7 @@ class HistoryTab(wx.Panel):
         except ValueError:
             print(f'Are the lengths of xt: {len(xt)} and yt: {len(yt)} mismatched?')
             raise
+        self.ax1.margins(x=0)
         self.ax1.autoscale()
 
         # SPECTRAL -----------------------------------------------------------------------------------------------------

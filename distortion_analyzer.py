@@ -281,26 +281,6 @@ class DistortionAnalyzer:
         error = params['error']
         filter_val = params['filter']
 
-        # SIGNAL SOURCE ================================================================================================
-        if suffix in ('A', 'a'):
-            if amplitude <= 1.5:
-                oper_range = 10 ** round(np.log10(amplitude))
-            elif 1.5 <= amplitude <= 10:
-                oper_range = 10
-            else:
-                oper_range = 30
-        else:
-            if amplitude <= 0.12:
-                oper_range = 0.1
-            elif amplitude <= 1.2:
-                oper_range = 1
-            elif amplitude <= 12:
-                oper_range = 10
-            elif amplitude <= 120:
-                oper_range = 100
-            else:
-                oper_range = 1000
-
         # DIGITIZED SIGNAL =============================================================================================
         if Ft == 0:
 
@@ -323,8 +303,9 @@ class DistortionAnalyzer:
         # TODO
         # This is for internal debugging only. Not user facing.
         if not self.DUMMY_DATA:
+            # TODO: shouldn't we always want to setup digitizer for new range??
             if setup:
-                self.M.setup_digitizer(suffix, oper_range, filter_val, N, aperture)
+                self.M.setup_digitizer(suffix, amplitude, filter_val, N, aperture)
             if params['source']:
                 try:
                     self.M.run_source(suffix, amplitude, Ft)
@@ -360,8 +341,8 @@ class DistortionAnalyzer:
         time.sleep(1)
 
         # METER
-        self.M.setup_meter('VOLT', 'AC')
-        meter_outval, meter_range, meter_ft = self.M.read_meter('VOLT', 'AC')
+        self.M.setup_f8588A_meter(autorange=True, output='VOLT', mode='AC')
+        meter_outval, meter_range, meter_ft = self.M.read_f8588A_meter()
         meter_mode = 'V'
 
         # DIGITIZER
@@ -458,9 +439,13 @@ class DistortionAnalyzer:
         yt = data['y']
 
         x_periods = 4
-        xt_end = min(x_periods / F0, runtime)
         ylimit = np.max(np.abs(yt)) * 1.25
         yt_tick = ylimit / 4
+
+        xt_left = 0
+        xt_right = min(x_periods / F0, runtime)
+        yt_btm = -ylimit
+        yt_top = ylimit + yt_tick
 
         # SPECTRAL -----------------------------------------------------------------------------------------------------
         xf = data['xf']
@@ -469,15 +454,18 @@ class DistortionAnalyzer:
         N = data['N']
         yrms = data['RMS']
 
-        xf_end = min(10 ** (np.ceil(np.log10(F0)) + 1), Fs / 2 - Fs / N)  # Does not exceed max bin
+        xf_left = np.min(xf)
+        xf_right = min(10 ** (np.ceil(np.log10(F0)) + 1), Fs / 2 - Fs / N)  # Does not exceed max bin
+        yf_btm = -250
+        yf_top = 0
 
         params = {'xt': xt, 'yt': yt,
-                  'xt_start': 0, 'xt_end': 1e3 * xt_end,
-                  'yt_start': -ylimit, 'yt_end': ylimit + yt_tick, 'yt_tick': yt_tick,
+                  'xt_left': xt_left, 'xt_right': 1000 * xt_right,
+                  'yt_btm': yt_btm, 'yt_top': yt_top, 'yt_tick': yt_tick,
 
                   'xf': xf[0:N] / 1000, 'yf': 20 * np.log10(2 * np.abs(yf[0:N] / (yrms * N))),
-                  'xf_start': np.min(xf) / 1000, 'xf_end': xf_end / 1000,
-                  'yf_start': -150, 'yf_end': 0
+                  'xf_left': xf_left / 1000, 'xf_right': xf_right / 1000,
+                  'yf_btm': yf_btm, 'yf_top': yf_top
                   }
 
         self.frame.plot(params)

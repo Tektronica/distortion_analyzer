@@ -409,14 +409,14 @@ class DistortionAnalyzerTab(wx.Panel):
 
         self.temporal.set_data(xt, yt)
 
-        xt_start = params['xt_start']
-        xt_end = params['xt_end']
-        yt_start = params['yt_start']
-        yt_end = params['yt_end']
+        xt_left = params['xt_left']
+        xt_right = params['xt_right']
+        yt_btm = params['yt_btm']
+        yt_top = params['yt_top']
         yt_tick = params['yt_tick']
 
-        self.ax1.set_xlim([xt_start, xt_end])
-        self.ax1.set_yticks(np.arange(yt_start, yt_end, yt_tick))
+        self.ax1.set_xlim(left=xt_left, right=xt_right)
+        self.ax1.set_yticks(np.arange(yt_btm, yt_top, yt_tick))
 
         # SPECTRAL -----------------------------------------------------------------------------------------------------
         xf = params['xf']
@@ -424,13 +424,13 @@ class DistortionAnalyzerTab(wx.Panel):
 
         self.spectral.set_data(xf, yf)
 
-        xf_start = params['xf_start']
-        xf_end = params['xf_end']
-        yf_start = params['yf_start']
-        yf_end = params['yf_end']
+        xf_left = params['xf_left']
+        xf_right = params['xf_right']
+        yf_btm = params['yf_btm']
+        yf_top = params['yf_top']
 
-        self.ax2.set_xlim(xf_start, xf_end)
-        self.ax2.set_ylim(yf_start, yf_end)
+        self.ax2.set_xlim(left=xf_left, right=xf_right)
+        self.ax2.set_ylim(bottom=yf_btm, top=yf_top)
 
         # REDRAW PLOT --------------------------------------------------------------------------------------------------
         self.plot_redraw()
@@ -443,7 +443,8 @@ class DistortionAnalyzerTab(wx.Panel):
             yt_length = len(self.ax1.get_ydata())
             print(f'Are the lengths of xt: {xt_length} and yt: {yt_length} mismatched?')
             raise
-        self.ax1.autoscale()
+        self.ax1.margins(x=0)
+        self.ax1.autoscale(axis='y')
 
         # UPDATE PLOT FEATURES -----------------------------------------------------------------------------------------
         self.figure.tight_layout()

@@ -87,6 +87,7 @@ def windowed_fft(yt, Fs, N, windfunc='blackman'):
     # remove DC offset
     yt -= np.mean(yt)
 
+    # Calculate windowing function and its length ----------------------------------------------------------------------
     if windfunc == 'bartlett':
         w = np.bartlett(N)
     elif windfunc == 'hanning':
@@ -98,20 +99,28 @@ def windowed_fft(yt, Fs, N, windfunc='blackman'):
     else:
         w = np.kaiser(N)
 
-    # https://numpy.org/doc/stable/reference/generated/numpy.fft.rfft.html
-    # function does not compute the negative frequency terms
-    yf_fft = np.fft.fft(yt * w)
+    # Calculate amplitude correction factor after windowing ------------------------------------------------------------
+    # https://stackoverflow.com/q/47904399/3382269
+    amplitude_correction_factor = 1 / np.mean(w)
 
+    # Calculate the length of the FFT ----------------------------------------------------------------------------------
     if (N % 2) == 0:
-        # for even values of N: length is (N / 2) + 1
-        length = int(N / 2) + 1
+        # for even values of N: FFT length is (N / 2) + 1
+        fft_length = int(N / 2) + 1
     else:
-        # for odd values of N: length is (N + 1) / 2
-        length = int((N + 2) / 2)
+        # for odd values of N: FFT length is (N + 1) / 2
+        fft_length = int((N + 2) / 2)
 
-    yf_rfft = yf_fft[:length]
+    """
+    Compute the FFT of the signal Divide by the length of the FFT to recover the original amplitude. Note dividing 
+    alternatively by N samples of the time-series data splits the power between the positive and negative sides. 
+    However, we are only looking at one side of the FFT.
+    """
+    yf_fft = (np.fft.fft(yt * w) / fft_length) * amplitude_correction_factor
+
+    yf_rfft = yf_fft[:fft_length]
     xf_fft = np.linspace(0.0, Fs, N)
-    xf_rfft = np.linspace(0.0, Fs/2, length)
+    xf_rfft = np.linspace(0.0, Fs / 2, fft_length)
 
     return xf_fft, yf_fft, xf_rfft, yf_rfft
 

@@ -36,6 +36,9 @@ class MultimeterTab(wx.Panel):
 
         # LEFT Panel ---------------------------------------------------------------------------------------------------
         self.text_DUT_report = wx.TextCtrl(self.left_panel, wx.ID_ANY, "", style=wx.TE_READONLY)
+        self.combo_DMM_choice = wx.ComboBox(self.left_panel, wx.ID_ANY,
+                                            choices=["Fluke 884xA", "Fluke 8588A"],
+                                            style=wx.CB_DROPDOWN | wx.CB_READONLY)
         self.text_DMM_report = wx.TextCtrl(self.left_panel, wx.ID_ANY, "", style=wx.TE_READONLY)
         self.btn_connect = wx.Button(self.left_panel, wx.ID_ANY, "Connect")
         self.btn_config = wx.Button(self.left_panel, wx.ID_ANY, "Config")
@@ -62,6 +65,7 @@ class MultimeterTab(wx.Panel):
         self.toolbar.Realize()
 
         # instance variables -------------------------------------------------------------------------------------------
+        self.DMM_choice = 'f884xA'
         self.dmm = dmm(self)
         self.t = threading.Thread()
         self.flag_complete = True  # Flag indicates any active threads (False) or thread completed (True)
@@ -81,6 +85,8 @@ class MultimeterTab(wx.Panel):
 
         # BINDINGS =====================================================================================================
         # Configure Instruments ----------------------------------------------------------------------------------------
+        on_DMM_selection = lambda event: self._get_DMM_choice(event)
+        self.Bind(wx.EVT_COMBOBOX_CLOSEUP, on_DMM_selection, self.combo_DMM_choice)
         on_connect = lambda event: self.on_connect_instr(event)
         self.Bind(wx.EVT_BUTTON, on_connect, self.btn_connect)
 
@@ -122,6 +128,8 @@ class MultimeterTab(wx.Panel):
         self.text_DMM_report.SetMinSize((200, 23))
         self.checkbox_autorange.SetValue(1)
 
+        self.combo_DMM_choice.SetSelection(0)
+        self.combo_DMM_choice.SetMinSize((87, 23))
         self.combo_rms_or_peak.SetSelection(0)
         self.combo_mode.SetSelection(0)
         self.checkbox_always_voltage.SetValue(1)
@@ -159,9 +167,7 @@ class MultimeterTab(wx.Panel):
         grid_sizer_left_panel.Add(label_DUT, (2, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
         grid_sizer_left_panel.Add(self.text_DUT_report, (2, 1), (1, 2), wx.BOTTOM | wx.LEFT, 5)
 
-        label_DMM = wx.StaticText(self.left_panel, wx.ID_ANY, "DMM (f884xA)")
-        label_DMM.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_left_panel.Add(label_DMM, (3, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
+        grid_sizer_left_panel.Add(self.combo_DMM_choice, (3, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
         grid_sizer_left_panel.Add(self.text_DMM_report, (3, 1), (1, 2), wx.BOTTOM | wx.LEFT, 5)
 
         grid_sizer_left_panel.Add(self.btn_connect, (4, 0), (1, 1), wx.BOTTOM, 5)
@@ -233,8 +239,15 @@ class MultimeterTab(wx.Panel):
         self.Layout()
 
     # ------------------------------------------------------------------------------------------------------------------
+    def _get_DMM_choice(self, evt):
+        selection = self.combo_DMM_choice.GetValue()
+        print(f"The {selection} has been selected.")
+        self.DMM_choice = 'f' + selection.strip('Fluke ')
+        self.dmm.DMM_choice = self.DMM_choice
+        return self.DMM_choice
+
     def config(self, evt):
-        dlg = InstrumentDialog(self, ['f5560A', 'f884xA'], None, wx.ID_ANY, )
+        dlg = InstrumentDialog(self, ['f5560A', self.DMM_choice], None, wx.ID_ANY, )
         dlg.ShowModal()
         dlg.Destroy()
 
@@ -242,12 +255,12 @@ class MultimeterTab(wx.Panel):
         config_dict = ReadConfig()
 
         f5560A = config_dict['f5560A']
-        f884xA = config_dict['f884xA']
+        f884xA = config_dict[self.DMM_choice]
 
         instruments = {'f5560A': {'address': f5560A['address'], 'port': f5560A['port'],
                                   'gpib': f5560A['gpib'], 'mode': f5560A['mode']},
-                       'f884xA': {'address': f884xA['address'], 'port': f884xA['port'],
-                                  'gpib': f884xA['gpib'], 'mode': f884xA['mode']}}
+                       self.DMM_choice: {'address': f884xA['address'], 'port': f884xA['port'],
+                                         'gpib': f884xA['gpib'], 'mode': f884xA['mode']}}
 
         return instruments
 

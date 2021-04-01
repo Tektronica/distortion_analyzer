@@ -7,18 +7,18 @@ INFO = "file:///C:/Users/rholle/AppData/Local/Temp/8845A___pmeng0300.pdf"
 
 
 ########################################################################################################################
-def to_float(s):
+def to_float(string_val):
     try:
-        f = float(s)
+        float_val = float(string_val)
     except ValueError:
         print('[ERROR] Measurement could not be converted to float. Possible issues with configuration.')
         raise ValueError('Prospective measurement obtained by the Fluke 884xA could not be converted to float. Suspect '
                          'null value or over-range')
     else:
-        return f
+        return float_val
 
 
-class f884xA_instruments:
+class f884xA_instrument:
 
     def __init__(self):
         self.measurement = []
@@ -45,29 +45,37 @@ class f884xA_instruments:
                   'connected properly or not being used by another remote session. Consider power cycling the '
                   'suspected instrument\n')
 
-    ####################################################################################################################
-    def f884xA_meter_setup(self, autorange=True, **kwds):
-        output, mode = self._get_function_params(**kwds)
-        self.output = output
-        self.mode = mode
+    # SETUP METER ######################################################################################################
+    def setup_f884xA_meter(self, autorange=True, **kwds):
+        """
+        method accepts several keyword pairs as arguments. Specify at least two of the following:
+            + 'output' ('VOLT' or 'CURR') and 'mode' ('AC' or 'DC')
+            + 'output' ('VOLT' or 'CURR') and 'frequency' (a float value >= 0)
+            + 'units' ('A' or 'V') and 'frequency' (a float value >= 0)
+
+        :param autorange: True or False
+        :param kwds: dictionary containing at least two of the following keys: 'output', 'mode', 'units', 'frequency'
+        :return: True if completion successful
+        """
+        self.output, self.mode = self._get_function_params(**kwds)
 
         try:
-            self.f884xA.write(f'CONF:{output}:{mode}')
+            self.f884xA.write(f'CONF:{self.output}:{self.mode}')
             if autorange:
-                self.f884xA.write(f'{output}:{mode}:RANGE:AUTO ON')
+                self.f884xA.write(f'{self.output}:{self.mode}:RANGE:AUTO ON')
             else:
                 # Set Fluke 884xA to largest range for internal protection by default.
-                self.set_range(ideal_range_val=1000, output=output, mode=mode)
+                self.set_f884xA_range(ideal_range_val=1000, output=self.output, mode=self.mode)
             time.sleep(1)
             self.setup = True
-            return True
+            return True  # returns true if setup completes succesfully
 
         except Exception as e:
-            print('setup_meter for 884xA failed. What error was thrown here?')
+            print('setup_meter for the Fluke 884xA failed. What error was thrown here?')
             print(e)
-            raise ValueError('Setting up Fluke 884xA failed. Check connection and configuration to instrument.')
+            raise ValueError('Setting up Fluke 884xA failed.\nCheck connection and configuration to instrument.')
 
-    def get_range(self):
+    def get_f884xA_range(self):
         """
         A convenience function for determining the appropriate range for a measurement. Use-case is determining the
         range of an automated measurement without requiring auto-range. This reduces loading non-linearity associated
@@ -137,7 +145,8 @@ class f884xA_instruments:
 
         return output, mode
 
-    def determine_range(self, val: float, output: str):
+    # RANGE ############################################################################################################
+    def determine_f884xA_range(self, val: float, units: str):
         # Set multiplier based on measurement rate ---------------------------------------------------------------------
         rate = self.get_rate()
 
@@ -149,7 +158,7 @@ class f884xA_instruments:
             multiplier = 3
 
         # overange is 20%. Max value must be less than (1 + 20%) of nominal range --------------------------------------
-        if output in ("A", "CURR"):
+        if units in ("A", "CURR"):
             if val < 10e-3 * multiplier * (1 + 0.2):
                 range_val = 1
                 range_string = '30mA'
@@ -160,7 +169,7 @@ class f884xA_instruments:
                 range_val = 3
                 range_string = '10A'
 
-        elif output in ('V', "VOLT"):
+        elif units in ('V', "VOLT"):
             if val < 100e-3 * multiplier * (1 + 0.2):
                 range_val = 1
                 range_string = '100mV'
@@ -183,7 +192,7 @@ class f884xA_instruments:
 
         return range_val, range_string
 
-    def set_range(self, ideal_range_val, **kwds):
+    def set_f884xA_range(self, ideal_range_val, **kwds):
         """
         method accepts several keyword pairs as arguments. Specify at least two of the following:
             + 'output' ('VOLT' or 'CURR') and 'mode' ('AC' or 'DC')
@@ -198,7 +207,7 @@ class f884xA_instruments:
         :return: True iff range is set successfully
         """
         # Get function parameters for Fluke 884xA ----------------------------------------------------------------------
-        output, mode = self._get_function_params(**kwds)
+        output, mode = self._get_function_params(**kwds)  # ('VOLT', 'AC')
 
         # Check if output and mode values have changed since setup. They shouldn't. ------------------------------------
         if output != self.output:
@@ -211,7 +220,7 @@ class f884xA_instruments:
         self.f884xA.write(f"{self.output}:{self.mode}:FIXED")
 
         # Calculate the closest range for measurement ------------------------------------------------------------------
-        range_val, range_string = self.determine_range(ideal_range_val, self.output)
+        range_val, range_string = self.determine_f884xA_range(ideal_range_val, self.output)
 
         # Set new range ------------------------------------------------------------------------------------------------
         try:
@@ -221,31 +230,33 @@ class f884xA_instruments:
         except Exception:
             raise ValueError(f"Failed to set range to {range_val} ({range_string})")
 
-    ####################################################################################################################
-    def read_meter(self):
+    # RETRIEVE MEASUREMENT #############################################################################################
+    def read_f884xA_meter(self):
         if self.setup:
             freqval = 0.0
             time.sleep(1)
-            self.f884xA.write('INIT:IMM')
+            # Initiate Triggering - (MEASure? or READ? or INITiate)
+            self.f884xA.write('INIT')
             time.sleep(0.2)
 
             # FETCh1? Returns measurements from the primary display
             outval = to_float(self.f884xA.query('FETCh1?'))
+            dmm_range = self.get_f884xA_range()
 
             if self.mode == 'AC':
                 # FETCh2? Returns readings from the secondary display
                 freqval = to_float(self.f884xA.query('FETCh2?'))
 
-            return outval, freqval
+            return outval, freqval, dmm_range
         else:
             raise ValueError('Fluke 884xA has not been configured for measurement.')
 
-    def average_reading(self, N, dt=0.1):
-        readings = np.zeros(N)
+    def average_f884xA_reading(self, samples=10, dt=0.1):
+        readings = np.zeros(samples)
         freqval = 0.0
 
-        for idx in range(N):
-            readings[idx], freqval = self.read_meter()
+        for idx in range(samples):
+            readings[idx], freqval, dmm_range = self.read_f884xA_meter()
             time.sleep(dt)
 
         mean = readings.mean()
@@ -263,12 +274,14 @@ class f884xA_instruments:
 
 # Run
 if __name__ == "__main__":
-    instr = f884xA_instruments()
+    instr = f884xA_instrument()
     instr.connect_to_f884xA(instruments)
 
-    autorange = True
-    instr.f884xA_meter_setup(autorange=autorange, output='VOLT', mode='AC')
-    outval, freqval, std = instr.average_reading(10)
+    # 1. Setup the meter for measurement
+    instr.setup_f884xA_meter(autorange=True, output='VOLT', mode='AC')
+    # 2. Get Average Reading
+    outval, freqval, std = instr.average_f884xA_reading(samples=10, dt=0.1)
+
     print(f"\nOutput: {outval}\nFrequency: {freqval} Hz")
 
     instr.close_f884xA()

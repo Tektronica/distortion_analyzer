@@ -1,5 +1,6 @@
 import dut_f5560A as dut
-import dmm_f884xA as dmm
+import dmm_f884xA as dmm1
+import dmm_f8588A as dmm2
 
 import time
 import pandas as pd
@@ -38,12 +39,13 @@ def write_to_csv(path, fname, header, *args):
 
 
 ########################################################################################################################
-class Instruments(dut.f5560A_instrument, dmm.f884xA_instruments):
+class Instruments(dut.f5560A_instrument, dmm1.f884xA_instrument, dmm2.f8588A_instrument):
     def __init__(self, parent):
         dut.f5560A_instrument.__init__(self)
-        dmm.f884xA_instruments.__init__(self)
+        dmm1.f884xA_instrument.__init__(self)
+        dmm2.f8588A_instrument.__init__(self)
 
-        self.analyzer = parent
+        self.parent = parent
         self.measurement = []
         self.connected = False
 
@@ -51,16 +53,22 @@ class Instruments(dut.f5560A_instrument, dmm.f884xA_instruments):
         try:
             # ESTABLISH COMMUNICATION TO INSTRUMENTS -------------------------------------------------------------------
             f5560A_id = instruments['f5560A']
-            f884xA_id = instruments['f884xA']
+            DMM_id = instruments[self.parent.DMM_choice]
 
             self.connect_to_f5560A(f5560A_id)
-            self.connect_to_f884xA(f884xA_id)
+            if self.parent.DMM_choice == 'f884xA':
+                self.connect_to_f884xA(DMM_id)
+            elif self.parent.DMM_choice == 'f8588A':
+                self.connect_to_f8588A(DMM_id)
+            else:
+                raise ValueError("Invalid DMM choice selected!")
 
-            if self.f5560A.healthy and self.f884xA.healthy:
+            if self.f5560A.healthy and (self.f884xA.healthy or self.f8588A.healthy):
                 self.connected = True
                 try:
                     idn_dict = {'DUT': self.f5560A_IDN, 'DMM': self.f884xA_IDN}
-                    self.analyzer.parent.set_ident(idn_dict)
+                    # TODO: parent.parent. --nice
+                    self.parent.parent.set_ident(idn_dict)
                     self.setup_source()
                 except ValueError:
                     raise
@@ -72,7 +80,13 @@ class Instruments(dut.f5560A_instrument, dmm.f884xA_instruments):
     def close_instruments(self):
         time.sleep(1)
         self.close_f5560A()
-        self.close_f884xA()
+        if self.parent.DMM_choice == 'f884xA':
+            self.close_f884xA()
+        elif self.parent.DMM_choice == 'f8588A':
+            self.close_f8588A()
+        else:
+            raise ValueError("Failed to close DMM instrument!"
+                             "\nThe DMM selected may not match what is currently in remote.")
         self.connected = False
 
 
@@ -84,6 +98,7 @@ class DMM_Measurement:
         self.amplitude_good = False  # Flag indicates user input for amplitude value is good (True)
         self.frequency_good = False  # Flag indicates user input for frequency value is good (True)
 
+        self.DMM_choice = 'f8588A'
         self.params = {'autorange': True, 'always_voltage': True,
                        'mode': 0, 'amplitude': '', 'units': '',
                        'rms': 0, 'frequency': 0.0,
@@ -251,22 +266,33 @@ class DMM_Measurement:
 
             # Usually enters on each new measurement, but only once for each loop (measurement sweep) ------------------
             if setup:
-                self.M.f884xA_meter_setup(autorange=autorange, units=dmm_units, frequency=Ft)
+                self.M.setup_f884xA_meter(autorange=autorange, units=dmm_units, frequency=Ft)
                 self._Ft = Ft
 
             # During a loop (measurement sweep) we want to catch changes from either AC to DC or vice-versa ------------
             elif (Ft * self._Ft) == 0 and Ft != self._Ft:
-                self.M.f884xA_meter_setup(autorange=autorange, units=dmm_units, frequency=Ft)
+                self.M.setup_f884xA_meter(autorange=autorange, units=dmm_units, frequency=Ft)
                 self._Ft = Ft
 
             try:
                 if not autorange:
-                    self.M.set_range(ideal_range_val=amplitude, units=units, frequency=Ft)
+                    if self.DMM_choice == 'f884xA':
+                        self.M.set_f884xA_range(ideal_range_val=amplitude, units=units, frequency=Ft)
+                    elif self.DMM_choice == 'f8588A':
+                        self.M.set_f8588A_range(ideal_range_val=amplitude, units=units, frequency=Ft)
+                    else:
+                        raise ValueError("Invalid DMM selection made!")
+
                     time.sleep(1)
                 self.M.run_source(units, amplitude, Ft)
 
                 try:
-                    outval, freqval, std = self.M.average_reading(10)
+                    if self.DMM_choice == 'f884xA':
+                        outval, freqval, std = self.M.average_f884xA_reading(10)
+                    elif self.DMM_choice == 'f8588A':
+                        outval, freqval, std = self.M.average_f8588A_reading(10)
+                    else:
+                        raise ValueError("Invalid DMM selection made!")
 
                 except ValueError:
                     print('error occurred while connecting to DMM. Placing Fluke 5560A in Standby.')
@@ -279,7 +305,13 @@ class DMM_Measurement:
         else:
             # DUMMY_DATA for random number generation
             freqval, outval, std = Ft, (7 + 1 * np.random.random(1))[0], (0.25 + np.random.random(1))[0]
-            M = dmm.f884xA_instruments()
+            if self.DMM_choice == 'f884xA':
+                M = dmm1.f884xA_instrument()
+            elif self.DMM_choice == 'f8588A':
+                M = dmm2.f8588A_instrument()
+            else:
+                raise ValueError("Invalid DMM selection made!")
+
             print(f"Fluke 5560A operating units: {units}")
             print(f"Retrieve function parameters for DMM: {M._get_function_params(frequency=freqval, units='A')}")
             print(f"Measured units: {dmm_units}")
