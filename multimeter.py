@@ -99,12 +99,7 @@ class DMM_Measurement:
         self.frequency_good = False  # Flag indicates user input for frequency value is good (True)
 
         self.DMM_choice = 'f8588A'
-        self.params = {'autorange': True, 'always_voltage': True,
-                       'mode': 0, 'amplitude': '', 'units': '',
-                       'rms': 0, 'frequency': 0.0,
-                       'cycles': 0.0, 'filter': ''}
-        self.data = {'xt': [0], 'yt': [0],
-                     'xf': [0], 'yf': [0]}
+        self.params = {}
         self.results = {'Amplitude': [], 'Frequency': [], 'RMS': [],
                         'THDN': [], 'THD': [], 'RMS NOISE': [],
                         'N': [], 'Fs': [], 'Aperture': []}
@@ -114,7 +109,7 @@ class DMM_Measurement:
 
         self.M = Instruments(self)
 
-    # ------------------------------------------------------------------------------------------------------------------
+    # ##################################################################################################################
     def connect(self, instruments):
         self.M.close_instruments()
         time.sleep(2)
@@ -123,7 +118,11 @@ class DMM_Measurement:
         except ValueError as e:
             self.parent.error_dialog(e)
 
-    # ------------------------------------------------------------------------------------------------------------------
+    def close_instruments(self):
+        if hasattr(self.M, 'DUT') and hasattr(self.M, 'DMM'):
+            self.M.close_instruments()
+
+    # ##################################################################################################################
     def start(self, user_input):
         selection = user_input['mode']
         amplitude, units, ft = self.get_string_value(user_input['amplitude'], user_input['frequency'])
@@ -238,7 +237,7 @@ class DMM_Measurement:
         results_df.to_csv(path_or_buf=_getFilepath('results', 'multimeter'), sep=',', index=False)
         self.parent.flag_complete = True
 
-    # ==================================================================================================================
+    # TEST FUNCTIONS ###################################################################################################
     def test_multimeter(self, setup):
         params = self.params
 
@@ -319,11 +318,7 @@ class DMM_Measurement:
         self.parent.update_plot(freqval, outval, std)
         return amplitude, Ft, outval, freqval, std
 
-    def close_instruments(self):
-        if hasattr(self.M, 'DUT') and hasattr(self.M, 'DMM'):
-            self.M.close_instruments()
-
-    # ------------------------------------------------------------------------------------------------------------------
+    # MISCELLANEOUS ####################################################################################################
     def get_string_value(self, amp_string, freq_string):
         # https://stackoverflow.com/a/35610194
         amplitude = 0.0

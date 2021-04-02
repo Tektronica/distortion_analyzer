@@ -155,7 +155,7 @@ class HistoryTab(wx.Panel):
         thdn, *_ = THDN(yf[:fft_length], Fs, N, )
         thd = THD(yt, Fs)
 
-        self.plot(xt, yt, yrms, fft_length, xf, yf)
+        self.plot(xt, yt, fft_length, xf, yf)
         self.results_update(Fs, N, yrms, thdn, thd)
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -170,7 +170,7 @@ class HistoryTab(wx.Panel):
         self.figure.align_ylabels([self.ax1, self.ax2])
         self.figure.tight_layout()
 
-    def plot(self, xt, yt, yrms, fft_length, xf, yf):
+    def plot(self, xt, yt, fft_length, xf, yf):
         # TEMPORAL -----------------------------------------------------------------------------------------------------
         self.temporal.set_data(xt, yt)
 
@@ -183,19 +183,18 @@ class HistoryTab(wx.Panel):
         self.ax1.autoscale()
 
         # SPECTRAL -----------------------------------------------------------------------------------------------------
-        xf_scaled = xf[0:fft_length] / 1000
-        yf_scaled = 20 * np.log10(2 * np.abs(yf[0:fft_length] / (yrms * fft_length)))
-        self.spectral.set_data(xf_scaled, yf_scaled)
+        yf_peak = max(abs(yf))
+        self.spectral.set_data(xf/1000, 20 * np.log10(np.abs(yf/yf_peak)))
         try:
             self.ax2.relim()  # recompute the ax.dataLim
         except ValueError:
-            print(f'Are the lengths of xt: {len(xf_scaled)} and yt: {len(yf_scaled)} mismatched?')
+            print(f'Are the lengths of xt: {len(xf)} and yt: {len(yf)} mismatched?')
             raise
         self.ax2.autoscale()
 
-        xf_start = 0
-        xf_end = xf_scaled[fft_length - 1]
-        self.ax2.set_xlim([xf_start, xf_end])
+        xf_left = 0
+        xf_right = xf[fft_length - 1]
+        self.ax2.set_xlim(left=xf_left/1000, right=xf_right/1000)
 
         # UPDATE PLOT FEATURES -----------------------------------------------------------------------------------------
         self.figure.tight_layout()

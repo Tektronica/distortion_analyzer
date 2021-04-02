@@ -26,7 +26,7 @@ class f884xA_instrument:
         self.f884xA_connected = False
 
         self.setup = True
-        self.output = 'VOLT'
+        self.output_type = 'VOLT'
         self.mode = 'DC'
 
     def connect_to_f884xA(self, instr_id):
@@ -57,15 +57,15 @@ class f884xA_instrument:
         :param kwds: dictionary containing at least two of the following keys: 'output', 'mode', 'units', 'frequency'
         :return: True if completion successful
         """
-        self.output, self.mode = self._get_function_params(**kwds)
+        self.output_type, self.mode = self._get_function_params(**kwds)
 
         try:
-            self.f884xA.write(f'CONF:{self.output}:{self.mode}')
+            self.f884xA.write(f'CONF:{self.output_type}:{self.mode}')
             if autorange:
-                self.f884xA.write(f'{self.output}:{self.mode}:RANGE:AUTO ON')
+                self.f884xA.write(f'{self.output_type}:{self.mode}:RANGE:AUTO ON')
             else:
                 # Set Fluke 884xA to largest range for internal protection by default.
-                self.set_f884xA_range(ideal_range_val=1000, output=self.output, mode=self.mode)
+                self.set_f884xA_range(ideal_range_val=1000, output=self.output_type, mode=self.mode)
             time.sleep(1)
             self.setup = True
             return True  # returns true if setup completes succesfully
@@ -82,11 +82,11 @@ class f884xA_instrument:
         with switching ranges. This method allows the meter to range correctly before performing the measurement.
         :return:
         """
-        dmm_range = to_float(self.f884xA.query(f'{self.output}:{self.mode}:RANGE?'))
+        dmm_range = to_float(self.f884xA.query(f'{self.output_type}:{self.mode}:RANGE?'))
         return dmm_range
 
     def get_rate(self):
-        rate = self.f884xA.query(f'{self.output}:{self.mode}:RATE?')
+        rate = self.f884xA.query(f'{self.output_type}:{self.mode}:RATE?')
         return rate
 
     def set_rate(self, new_rate):
@@ -95,7 +95,7 @@ class f884xA_instrument:
         fast (20 readings/second).
         """
         if new_rate in ("S", "M", "F"):
-            self.f884xA.write(f'{self.output}:{self.mode}:RATE {new_rate}')
+            self.f884xA.write(f'{self.output_type}:{self.mode}:RATE {new_rate}')
             return True
         else:
             rate = self.get_rate()
@@ -146,7 +146,7 @@ class f884xA_instrument:
         return output, mode
 
     # RANGE ############################################################################################################
-    def determine_f884xA_range(self, val: float, units: str):
+    def determine_f884xA_range(self, ideal_range_val: float, output_type: str):
         # Set multiplier based on measurement rate ---------------------------------------------------------------------
         rate = self.get_rate()
 
@@ -158,28 +158,28 @@ class f884xA_instrument:
             multiplier = 3
 
         # overange is 20%. Max value must be less than (1 + 20%) of nominal range --------------------------------------
-        if units in ("A", "CURR"):
-            if val < 10e-3 * multiplier * (1 + 0.2):
+        if output_type.capitalize() in ("A", "CURR"):
+            if ideal_range_val < 10e-3 * multiplier * (1 + 0.2):
                 range_val = 1
                 range_string = '30mA'
-            elif val < 100e-3 * (1 + 0.2):
+            elif ideal_range_val < 100e-3 * (1 + 0.2):
                 range_val = 2
                 range_string = '100mA'
             else:
                 range_val = 3
                 range_string = '10A'
 
-        elif units in ('V', "VOLT"):
-            if val < 100e-3 * multiplier * (1 + 0.2):
+        elif output_type.capitalize() in ('V', "VOLT"):
+            if ideal_range_val < 100e-3 * multiplier * (1 + 0.2):
                 range_val = 1
                 range_string = '100mV'
-            elif val < 1 * multiplier * (1 + 0.2):
+            elif ideal_range_val < 1 * multiplier * (1 + 0.2):
                 range_val = 2
                 range_string = '1V'
-            elif val < 10 * multiplier * (1 + 0.2):
+            elif ideal_range_val < 10 * multiplier * (1 + 0.2):
                 range_val = 3
                 range_string = '10V'
-            elif val < 100 * multiplier * (1 + 0.2):
+            elif ideal_range_val < 100 * multiplier * (1 + 0.2):
                 range_val = 4
                 range_string = '100V'
             else:
@@ -207,24 +207,18 @@ class f884xA_instrument:
         :return: True iff range is set successfully
         """
         # Get function parameters for Fluke 884xA ----------------------------------------------------------------------
-        output, mode = self._get_function_params(**kwds)  # ('VOLT', 'AC')
-
-        # Check if output and mode values have changed since setup. They shouldn't. ------------------------------------
-        if output != self.output:
-            self.output = output
-        if mode != self.mode:
-            self.mode = mode
+        self.output_type, self.mode = self._get_function_params(**kwds)  # ('VOLT', 'AC')
 
         # Causes the meter to exit autoranging on the primary display and enter manual ranging. The present range ------
         # becomes the selected range. ----------------------------------------------------------------------------------
-        self.f884xA.write(f"{self.output}:{self.mode}:FIXED")
+        self.f884xA.write(f"{self.output_type}:{self.mode}:FIXED")
 
         # Calculate the closest range for measurement ------------------------------------------------------------------
-        range_val, range_string = self.determine_f884xA_range(ideal_range_val, self.output)
+        range_val, range_string = self.determine_f884xA_range(ideal_range_val, self.output_type)
 
         # Set new range ------------------------------------------------------------------------------------------------
         try:
-            self.f884xA.write(f"{self.output}:{self.mode}:RANGE {range_val}")
+            self.f884xA.write(f"{self.output_type}:{self.mode}:RANGE {range_val}")
             print(f"Successfully set range of Fluke 884xA to {range_val} ({range_string})")
             return True
         except Exception:

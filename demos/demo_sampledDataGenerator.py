@@ -61,7 +61,7 @@ def get_FFT_parameters(Ft, lpf, error):
     return Fs, N
 
 
-def plot(xt, yt, yrms, xf, yf, N):
+def plot(xt, yt, xf, yf, N):
     # TEMPORAL ---------------------------------------------------------------------------------------------------------
     fig, (ax1, ax2) = plt.subplots(2, 1, constrained_layout=True)
     ax1.plot(xt, yt, linestyle='-')
@@ -71,16 +71,20 @@ def plot(xt, yt, yrms, xf, yf, N):
     ax1.set_ylabel('amplitude')
 
     # SPECTRAL ---------------------------------------------------------------------------------------------------------
-    xf_scaled = xf[0:N] / 1000
-    yf_scaled = 20 * np.log10(2 * np.abs(yf[0:N] / (yrms * N)))
-    ax2.plot(xf_scaled, yf_scaled, linestyle='-')
+    yf_peak = max(abs(yf))
+    ax2.plot(xf, 20*np.log10(np.abs(yf/yf_peak)), linestyle='-')
 
-    xf_end = xf_scaled[int(N / 2) - 1]
-    ax2.set_xlim([0, xf_end])
+    xf_left = 0
+    xf_right = xf[int(N / 2) - 1]
+
+    ax2.set_xlim(left=xf_left, right=xf_right)
 
     ax2.set_title('FFT Spectral Plot')
     ax2.set_xlabel('frequency (kHz)')
-    ax2.set_ylabel('amplitude')
+    ax2.set_ylabel('Magnitude (dB)')
+
+    ax1.margins(x=0)
+    ax1.autoscale(axis='y')
 
     # UPDATE PLOT FEATURES ---------------------------------------------------------------------------------------------
     plt.grid()
@@ -119,7 +123,7 @@ def main():
 
     # TEMPORAL ---------------------------------------------------------------------------------------------------------
     xt = np.arange(0, N, 1) / Fs
-    yt = np.sin(2 * np.pi * Ft * xt)
+    yt = 2*np.sin(2 * np.pi * Ft * xt)
     if CONTAINS_HARMONICS:
         yt = yt + 0.001 * np.sin(2 * np.pi * 3 * Ft * xt) + 0.0001 * np.sin(2 * np.pi * 5 * Ft * xt)
     if CONTAINS_NOISE:
@@ -130,11 +134,24 @@ def main():
     # SPECTRAL ---------------------------------------------------------------------------------------------------------
     xf = np.linspace(0.0, Fs, N)
     w = np.blackman(N)
-    yf = np.fft.fft(yt * w)
 
-    plot(xt, yt, yrms, xf, yf, N)
+    # Calculate amplitude correction factor after windowing ------------------------------------------------------------
+    # https://stackoverflow.com/q/47904399/3382269
+    amplitude_correction_factor = 1 / np.mean(w)
+
+    # Calculate the length of the FFT ----------------------------------------------------------------------------------
+    if (N % 2) == 0:
+        # for even values of N: FFT length is (N / 2) + 1
+        fft_length = int(N / 2) + 1
+    else:
+        # for odd values of N: FFT length is (N + 1) / 2
+        fft_length = int((N + 2) / 2)
+
+    yf_fft = (np.fft.fft(yt * w) / fft_length) * amplitude_correction_factor
+
+    plot(xt, yt, xf, yf_fft, N)
     header = ['xt', 'yt', 'xf', 'yf']
-    write_to_csv('results/history', 'generated', header, xt, yt, xf, yf)
+    write_to_csv('../results/history', 'generated', header, xt, yt, xf, yf_fft)
 
 
 if __name__ == "__main__":

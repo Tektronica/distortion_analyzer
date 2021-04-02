@@ -18,14 +18,14 @@ def to_float(string_val):
         return float_val
 
 
-def getSamplingFrequency(F0, bw=100e3):
+def getSamplingFrequency(f0, bw=100e3):
     """
     The maximum detectable frequency resolved by an FFT is defined as half the sampling frequency.
     :param bw: the maximum resolved frequency of the fft.
     :return: sampling rate, fs
     """
     # Ideal sampling frequency
-    _Fs = max(2*bw, 100 * F0)
+    _Fs = max(2 * bw, 100 * f0)
 
     # An integer number of samples averaged per measurement determines actual sampling frequency
     N = max(round(DIGITIZER_SAMPLING_FREQUENCY / _Fs), 1)
@@ -89,7 +89,7 @@ class f8588A_instrument:
         self.f8588_connected = False
 
         self.setup = True
-        self.output = 'VOLT'
+        self.output_type = 'VOLT'
         self.mode = 'DC'
 
     def connect_to_f8588A(self, instr_id):
@@ -120,15 +120,15 @@ class f8588A_instrument:
         :return: True if completion successful
         """
 
-        self.output, self.mode = self._get_function_params(**kwds)
+        self.output_type, self.mode = self._get_function_params(**kwds)  # Example: ('VOLT', 'AC')
 
         try:
-            self.f8588A.write(f'CONF:{self.output}:{self.mode}')
+            self.f8588A.write(f'CONF:{self.output_type}:{self.mode}')
             if autorange:
-                self.f8588A.write(f'{self.output}:{self.mode}:RANGE:AUTO ON')
+                self.f8588A.write(f'{self.output_type}:{self.mode}:RANGE:AUTO ON')
             else:
                 # Set Fluke 884xA to largest range for internal protection by default.
-                self.set_f8588A_range(ideal_range_val=1000, output=self.output, mode=self.mode)
+                self.set_f8588A_range(ideal_range_val=1000, output=self.output_type, mode=self.mode)
             time.sleep(1)
             return True
 
@@ -144,7 +144,7 @@ class f8588A_instrument:
         with switching ranges. This method allows the meter to range correctly before performing the measurement.
         :return:
         """
-        dmm_range = to_float(self.f8588A.query(f'{self.output}:{self.mode}:RANGE?'))
+        dmm_range = to_float(self.f8588A.query(f'{self.output_type}:{self.mode}:RANGE?'))
         return dmm_range
 
     def _get_function_params(self, **kwds):
@@ -192,45 +192,45 @@ class f8588A_instrument:
         return output, mode
 
     # RANGE ############################################################################################################
-    def determine_f8588A_range(self, val: float, units: str):
+    def determine_f8588A_range(self, ideal_range_val: float, output_type: str):
         # overange is 20%. Max value must be less than (1 + 20%) of nominal range --------------------------------------
-        if units in ("A", "CURR"):
-            if val < 10e-6 * (1 + 0.2):
+        if output_type.capitalize() in ('A', 'CURR', 'CURRENT'):
+            if ideal_range_val < 10e-6 * (1 + 0.2):
                 range_val = 10e-6
                 range_string = '10uA'
-            elif val < 100e-6 * (1 + 0.2):
+            elif ideal_range_val < 100e-6 * (1 + 0.2):
                 range_val = 100e-6
                 range_string = '100uA'
-            elif val < 1e-3 * (1 + 0.2):
+            elif ideal_range_val < 1e-3 * (1 + 0.2):
                 range_val = 1e-3
                 range_string = '1mA'
-            elif val < 10e-3 * (1 + 0.2):
+            elif ideal_range_val < 10e-3 * (1 + 0.2):
                 range_val = 10e-3
                 range_string = '10mA'
-            elif val < 100e-3 * (1 + 0.2):
+            elif ideal_range_val < 100e-3 * (1 + 0.2):
                 range_val = 100e-3
                 range_string = '100mA'
-            elif val < 1 * (1 + 0.2):
+            elif ideal_range_val < 1 * (1 + 0.2):
                 range_val = 1
                 range_string = '1A'
-            elif val < 10 * (1 + 0.2):
+            elif ideal_range_val < 10 * (1 + 0.2):
                 range_val = 10
                 range_string = '10A'
             else:
                 range_val = 30
                 range_string = '30A'
 
-        elif units in ('V', "VOLT"):
-            if val < 0.10 * (1 + 0.2):
+        elif output_type.capitalize() in ('V', 'VOLT', 'VOLTAGE'):
+            if ideal_range_val < 0.10 * (1 + 0.2):
                 range_val = 0.1
                 range_string = '100mV'
-            elif val < 1.0 * (1 + 0.2):
+            elif ideal_range_val < 1.0 * (1 + 0.2):
                 range_val = 1
                 range_string = '1V'
-            elif val < 10 * (1 + 0.2):
+            elif ideal_range_val < 10 * (1 + 0.2):
                 range_val = 10
                 range_string = '10V'
-            elif val < 100 * (1 + 0.2):
+            elif ideal_range_val < 100 * (1 + 0.2):
                 range_val = 100
                 range_string = '100V'
             else:
@@ -258,24 +258,18 @@ class f8588A_instrument:
         :return: True iff range is set successfully
         """
         # Get function parameters for Fluke 884xA ----------------------------------------------------------------------
-        output, mode = self._get_function_params(**kwds)  # ('VOLT', 'AC')
-
-        # Check if output and mode values have changed since setup. They shouldn't. ------------------------------------
-        if output != self.output:
-            self.output = output
-        if mode != self.mode:
-            self.mode = mode
+        self.output_type, self.mode = self._get_function_params(**kwds)  # ('VOLT', 'AC')
 
         # Causes the meter to exit autoranging on the primary display and enter manual ranging. The present range ------
         # becomes the selected range. ----------------------------------------------------------------------------------
-        self.f8588A.write(f"{self.output}:{self.mode}:FIXED")
+        self.f8588A.write(f"{self.output_type}:{self.mode}:FIXED")
 
         # Calculate the closest range for measurement ------------------------------------------------------------------
-        range_val, range_string = self.determine_f8588A_range(ideal_range_val, self.output)
+        range_val, range_string = self.determine_f8588A_range(ideal_range_val, self.output_type)
 
         # Set new range ------------------------------------------------------------------------------------------------
         try:
-            self.f8588A.write(f"{self.output}:{self.mode}:RANGE {range_val}")
+            self.f8588A.write(f"{self.output_type}:{self.mode}:RANGE {range_val}")
             print(f"Successfully set range of Fluke 884xA to {range_val} ({range_string})")
             return True
         except Exception:
@@ -326,18 +320,25 @@ class f8588A_instrument:
         return mean, freqval, std
 
     # DIGITIZER ########################################################################################################
-    def setup_digitizer(self, mode, ideal_range_val, filter_val, N, aperture):
-        # f8588A has a 5MHz sampled rate clock. adjusting aperture time, averages more points, which adjusts sample rate
+    def setup_digitizer(self, output_type, ideal_range_val, filter_val, N, aperture):
+        self.output_type = output_type
         self.f8588A.write('*RST')
 
         # Calculate the closest range for measurement ------------------------------------------------------------------
-        range_val, range_string = self.determine_f8588A_range(ideal_range_val, mode)  # (0.1, '0.1A')
+        range_val, range_string = self.determine_f8588A_range(ideal_range_val, self.output_type)  # (0.1, '0.1A')
         try:
-            self.f8588A.write(f':FUNC "DIGitize:{self.mode}" ')
-            self.f8588A.write(f':DIGitize:{self.mode}:RANGe {range_val}')
+            self.f8588A.write(f':FUNC "DIGitize:{self.output_type}" ')
+            self.f8588A.write(f':DIGitize:{self.output_type}:RANGe {range_val}')
             print(f"Successfully set range of Fluke 8588A to {range_string}")
 
-            self.f8588A.write(f':DIGitize:FILTer {filter_val}')
+            # :FILTer OFF|100Khz|3MHZ
+            if filter_val not in ('None', '2MHz', '2.4MHz'):
+                self.f8588A.write(f':DIGitize:FILTer {filter_val}')
+            else:
+                self.f8588A.write(f':DIGitize:FILTer OFF')
+
+            # f8588A has a 5MHz sampled rate clock. adjusting aperture time,
+            # averages more points, which adjusts sample rate
             self.f8588A.write(f':DIGitize:APERture {aperture}')
             self.f8588A.write('TRIGger:RESet')
             self.f8588A.write(f'TRIGGER:COUNT {N}')

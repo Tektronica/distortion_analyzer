@@ -53,7 +53,7 @@ class DistortionAnalyzerTab(wx.Panel):
 
         self.text_error = wx.TextCtrl(self.left_panel, wx.ID_ANY, "0.1")
         self.combo_filter = wx.ComboBox(self.left_panel, wx.ID_ANY,
-                                        choices=["None", "100kHz", "3MHz"],
+                                        choices=["None", "100kHz", "2MHz", "2.4MHz", "3MHz"],
                                         style=wx.CB_DROPDOWN | wx.CB_READONLY)
 
         self.label_fs_report = wx.StaticText(self.left_panel, wx.ID_ANY, "--")
@@ -64,11 +64,11 @@ class DistortionAnalyzerTab(wx.Panel):
         self.text_thd_report = wx.TextCtrl(self.left_panel, wx.ID_ANY, "", style=wx.TE_READONLY)
 
         self.btn_start = wx.Button(self.left_panel, wx.ID_ANY, "RUN")
-        self.combo_mode = wx.ComboBox(self.left_panel, wx.ID_ANY,
-                                      choices=["Single", "Sweep",
-                                               "Single w/ shunt", "Sweep w/ shunt",
-                                               "Continuous"],
-                                      style=wx.CB_DROPDOWN)
+        self.combo_selected_test = wx.ComboBox(self.left_panel, wx.ID_ANY,
+                                               choices=["Single", "Sweep",
+                                                    "Single w/ shunt", "Sweep w/ shunt",
+                                                    "Continuous"],
+                                               style=wx.CB_DROPDOWN)
 
         # PLOT Panel ---------------------------------------------------------------------------------------------------
         self.figure = plt.figure(figsize=(1, 1))  # look into Figure((5, 4), 75)
@@ -80,14 +80,8 @@ class DistortionAnalyzerTab(wx.Panel):
         self.flag_complete = True  # Flag indicates any active threads (False) or thread completed (True)
         self.t = threading.Thread()
         self.da = da(self)
-        self.user_input = {'mode': 0,
-                           'source': 0,
-                           'amplitude': '',
-                           'rms': 0,
-                           'frequency': '',
-                           'error': 0,
-                           'filter': 0
-                           }
+        self.user_input = {}
+
         self.ax1 = self.figure.add_subplot(211)
         self.ax2 = self.figure.add_subplot(212)
 
@@ -110,7 +104,7 @@ class DistortionAnalyzerTab(wx.Panel):
         self.Bind(wx.EVT_CHECKBOX, on_toggle, self.checkbox_1)
 
         on_combo_select = lambda event: self.lock_controls(event)
-        self.Bind(wx.EVT_COMBOBOX_CLOSEUP, on_combo_select, self.combo_mode)
+        self.Bind(wx.EVT_COMBOBOX_CLOSEUP, on_combo_select, self.combo_selected_test)
 
         self.__set_properties()
         self.__do_layout()
@@ -134,8 +128,8 @@ class DistortionAnalyzerTab(wx.Panel):
         self.checkbox_1.SetValue(1)
         self.combo_rms_or_peak.SetSelection(0)
         self.combo_filter.SetSelection(1)
-        self.combo_mode.SetSelection(0)
-        self.combo_mode.SetMinSize((110, 23))
+        self.combo_selected_test.SetSelection(0)
+        self.combo_selected_test.SetMinSize((110, 23))
 
     def __do_layout(self):
         sizer_2 = wx.GridSizer(1, 1, 0, 0)
@@ -250,7 +244,7 @@ class DistortionAnalyzerTab(wx.Panel):
         grid_sizer_left_panel.Add(static_line_9, (19, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
         grid_sizer_left_panel.Add(self.btn_start, (20, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
-        grid_sizer_left_panel.Add(self.combo_mode, (20, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(self.combo_selected_test, (20, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
 
         self.left_panel.SetSizer(grid_sizer_left_panel)
 
@@ -310,7 +304,7 @@ class DistortionAnalyzerTab(wx.Panel):
             self.left_sub_panel.Hide()
 
     def lock_controls(self, evt):
-        choice = self.combo_mode.GetSelection()
+        choice = self.combo_selected_test.GetSelection()
         if choice in (1, 3):
             if self.checkbox_1.GetValue() == 0:
                 self.checkbox_1.SetValue(1)
@@ -339,7 +333,7 @@ class DistortionAnalyzerTab(wx.Panel):
 
     # ------------------------------------------------------------------------------------------------------------------
     def get_values(self):
-        mode = self.combo_mode.GetSelection()
+        selected_test = self.combo_selected_test.GetSelection()
         source = self.checkbox_1.GetValue()
         error = float(self.text_error.GetValue())
         rms = self.combo_rms_or_peak.GetSelection()
@@ -349,7 +343,7 @@ class DistortionAnalyzerTab(wx.Panel):
         amp_string = self.text_amplitude.GetValue()
         freq_string = self.text_frequency.GetValue()
 
-        self.user_input = {'mode': mode,
+        self.user_input = {'selected_test': selected_test,
                            'source': source,
                            'amplitude': amp_string,
                            'rms': rms,
@@ -461,7 +455,7 @@ class DistortionAnalyzerTab(wx.Panel):
         N = results['N']
         aperture = results['Aperture']
         rms = results['RMS']
-        units = results['units']
+        output_type = results['output_type']
         thdn = results['THDN']
         thd = results['THD']
         rms_noise = results['RMS NOISE']
@@ -469,7 +463,7 @@ class DistortionAnalyzerTab(wx.Panel):
         self.label_fs_report.SetLabelText(str(fs))
         self.label_samples_report.SetLabelText(str(N))
         self.label_aperture_report.SetLabelText(str(aperture))
-        self.text_rms_report.SetValue(f"{'{:0.3e}'.format(rms)} {units}")
+        self.text_rms_report.SetValue(f"{'{:0.3e}'.format(rms)} {output_type}")
         self.text_thdn_report.SetValue(f"{round(thdn * 100, 3)}% or {round(np.log10(thdn), 1)}dB")
         self.text_thd_report.SetValue(f"{round(thd * 100, 3)}% or {round(np.log10(thd), 1)}dB")
 
