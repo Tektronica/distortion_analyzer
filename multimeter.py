@@ -98,7 +98,7 @@ class DMM_Measurement:
         self.amplitude_good = False  # Flag indicates user input for amplitude value is good (True)
         self.frequency_good = False  # Flag indicates user input for frequency value is good (True)
 
-        self.DMM_choice = 'f8588A'
+        self.DMM_choice = ''
         self.params = {}
         self.results = {'Amplitude': [], 'Frequency': [], 'RMS': [],
                         'THDN': [], 'THD': [], 'RMS NOISE': [],
@@ -147,6 +147,7 @@ class DMM_Measurement:
                 else:
                     self.parent.error_dialog('\nCheck amplitude and frequency values.')
             elif self.DUMMY_DATA:
+                self.DMM_choice = self.parent.DMM_choice
                 self.run_selected_function(selection)
             else:
                 self.parent.error_dialog('\nConnect to instruments first.')
@@ -312,7 +313,6 @@ class DMM_Measurement:
                 raise ValueError("Invalid DMM selection made!")
 
             print(f"Fluke 5560A operating units: {units}")
-            print(f"Retrieve function parameters for DMM: {M._get_function_params(frequency=freqval, units='A')}")
             print(f"Measured units: {dmm_units}")
 
         self.parent.update_plot(freqval, outval, std)

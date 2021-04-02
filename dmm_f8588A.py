@@ -88,7 +88,7 @@ class f8588A_instrument:
         self.f8588A_IDN = ''
         self.f8588_connected = False
 
-        self.setup = True
+        self.setup_complete = True
         self.output_type = 'VOLT'
         self.mode = 'DC'
 
@@ -111,12 +111,12 @@ class f8588A_instrument:
     def setup_f8588A_meter(self, autorange=True, **kwds):
         """
         method accepts several keyword pairs as arguments. Specify at least two of the following:
-            + 'output' ('VOLT' or 'CURR') and 'mode' ('AC' or 'DC')
-            + 'output' ('VOLT' or 'CURR') and 'frequency' (a float value >= 0)
+            + 'output_type' ('VOLT' or 'CURR') and 'mode' ('AC' or 'DC')
+            + 'output_type' ('VOLT' or 'CURR') and 'frequency' (a float value >= 0)
             + 'units' ('A' or 'V') and 'frequency' (a float value >= 0)
 
         :param autorange: True or False
-        :param kwds: dictionary containing at least two of the following keys: 'output', 'mode', 'units', 'frequency'
+        :param kwds: dictionary containing at least two of the following: 'output_type', 'mode', 'units', 'frequency'
         :return: True if completion successful
         """
 
@@ -128,7 +128,7 @@ class f8588A_instrument:
                 self.f8588A.write(f'{self.output_type}:{self.mode}:RANGE:AUTO ON')
             else:
                 # Set Fluke 884xA to largest range for internal protection by default.
-                self.set_f8588A_range(ideal_range_val=1000, output=self.output_type, mode=self.mode)
+                self.set_f8588A_range(ideal_range_val=1000, output_type=self.output_type, mode=self.mode)
             time.sleep(1)
             return True
 
@@ -150,19 +150,19 @@ class f8588A_instrument:
     def _get_function_params(self, **kwds):
         """
         method accepts several keyword pairs as arguments. Specify at least two of the following:
-            + 'output' ('VOLT' or 'CURR') and 'mode' ('AC' or 'DC')
-            + 'output' ('VOLT' or 'CURR') and 'frequency' (a float value >= 0)
+            + 'output_type' ('VOLT' or 'CURR') and 'mode' ('AC' or 'DC')
+            + 'output_type' ('VOLT' or 'CURR') and 'frequency' (a float value >= 0)
             + 'units' ('A' or 'V') and 'frequency' (a float value >= 0)
 
-        :param kwds: dictionary containing at least two of the following keys: 'output', 'mode', 'units', 'frequency'
+        :param kwds: dictionary containing at least two of the following: 'output_type', 'mode', 'units', 'frequency'
         :return: output and mode used for setting up the Fluke 884xA
         """
         # SORT through what keywords were provided =====================================================================
         keys = kwds.keys()
 
         # provided output and mode -------------------------------------------------------------------------------------
-        if keys >= {'output', 'mode'}:
-            output = kwds['output']
+        if keys >= {'output_type', 'mode'}:
+            output_type = kwds['output_type']
             mode = kwds['mode']
 
         # provided frequency and either output or units ----------------------------------------------------------------
@@ -173,15 +173,15 @@ class f8588A_instrument:
                 mode = 'DC'
 
             # provided output ------------------------------------------------------------------------------------------
-            if 'output' in keys and kwds['output'] in ('VOLT', 'CURR'):
-                output = kwds['output']
+            if 'output_type' in keys and kwds['output_type'] in ('VOLT', 'CURR'):
+                output_type = kwds['output_type']
 
             # provided units -------------------------------------------------------------------------------------------
             elif 'units' in keys and kwds['units'] in ('A', 'V'):
                 if kwds['units'] == 'V':
-                    output = 'VOLT'
+                    output_type = 'VOLT'
                 else:
-                    output = 'CURR'
+                    output_type = 'CURR'
             else:
                 raise ValueError("Could not determine appropriate mode ('VOLT' or 'CURR') for meter from "
                                  "the provided arguments!")
@@ -189,7 +189,7 @@ class f8588A_instrument:
             raise ValueError("Provided keywords or keyword values are insufficient for determining appropriate output "
                              "and mode values for the Fluke 8588A configuration!")
 
-        return output, mode
+        return output_type, mode
 
     # RANGE ############################################################################################################
     def determine_f8588A_range(self, ideal_range_val: float, output_type: str):
@@ -246,15 +246,15 @@ class f8588A_instrument:
     def set_f8588A_range(self, ideal_range_val, **kwds):
         """
         method accepts several keyword pairs as arguments. Specify at least two of the following:
-            + 'output' ('VOLT' or 'CURR') and 'mode' ('AC' or 'DC')
-            + 'output' ('VOLT' or 'CURR') and 'frequency' (a float value >= 0)
+            + 'output_type' ('VOLT' or 'CURR') and 'mode' ('AC' or 'DC')
+            + 'output_type' ('VOLT' or 'CURR') and 'frequency' (a float value >= 0)
             + 'units' ('A' or 'V') and 'frequency' (a float value >= 0)
 
         Note: Meter displays overload and sends 9.9000 E+37 over the remote interface when input signal is greater
         than the selected range can measure.
 
         :param ideal_range_val: user defined range to set Fluke 884xA to
-        :param kwds: dictionary containing at least two of the following keys: 'output', 'mode', 'units', 'frequency'
+        :param kwds: dictionary containing at least two of the following: 'output_type', 'mode', 'units', 'frequency'
         :return: True iff range is set successfully
         """
         # Get function parameters for Fluke 884xA ----------------------------------------------------------------------
@@ -286,8 +286,7 @@ class f8588A_instrument:
 
         :return: primary and secondary displayed values, and RANGE
         """
-        if self.setup:
-            freqval = 0.0
+        if self.setup_complete:
             time.sleep(1)
             self.f8588A.write('INIT:IMM')
 
@@ -301,6 +300,8 @@ class f8588A_instrument:
             if self.mode == 'AC':
                 # FREQuency = 2 (page 17 of 8588A's programmers manual)
                 freqval = to_float(self.f8588A.query('FETCH? 2'))
+            else:
+                freqval = 0.0
 
             return outval, freqval, dmm_range
         else:
@@ -320,12 +321,15 @@ class f8588A_instrument:
         return mean, freqval, std
 
     # DIGITIZER ########################################################################################################
-    def setup_digitizer(self, output_type, ideal_range_val, filter_val, N, aperture):
-        self.output_type = output_type
-        self.f8588A.write('*RST')
+    def setup_digitizer(self, units, ideal_range_val, filter_val, N, aperture):
+        # determine the appropriate digitzer mode from output_type. Setting the mode here doesn't matter
+        self.output_type, self.mode = self._get_function_params(units=units, mode='AC')
 
         # Calculate the closest range for measurement ------------------------------------------------------------------
         range_val, range_string = self.determine_f8588A_range(ideal_range_val, self.output_type)  # (0.1, '0.1A')
+
+        self.f8588A.write('*RST')
+
         try:
             self.f8588A.write(f':FUNC "DIGitize:{self.output_type}" ')
             self.f8588A.write(f':DIGitize:{self.output_type}:RANGe {range_val}')
@@ -373,7 +377,7 @@ if __name__ == "__main__":
     instr.connect_to_f8588A(instruments)
 
     # 1. Setup the meter for measurement
-    instr.setup_f8588A_meter(autorange=True, output='VOLT', mode='AC')
+    instr.setup_f8588A_meter(autorange=True, output_type='VOLT', mode='AC')
     # 2. Get Average Reading
     outval, freqval, std = instr.average_f8588A_reading(samples=10, dt=0.1)
 

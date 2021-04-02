@@ -25,7 +25,7 @@ class f884xA_instrument:
         self.f884xA_IDN = ''
         self.f884xA_connected = False
 
-        self.setup = True
+        self.setup_complete = True
         self.output_type = 'VOLT'
         self.mode = 'DC'
 
@@ -49,8 +49,8 @@ class f884xA_instrument:
     def setup_f884xA_meter(self, autorange=True, **kwds):
         """
         method accepts several keyword pairs as arguments. Specify at least two of the following:
-            + 'output' ('VOLT' or 'CURR') and 'mode' ('AC' or 'DC')
-            + 'output' ('VOLT' or 'CURR') and 'frequency' (a float value >= 0)
+            + 'output_type' ('VOLT' or 'CURR') and 'mode' ('AC' or 'DC')
+            + 'output_type' ('VOLT' or 'CURR') and 'frequency' (a float value >= 0)
             + 'units' ('A' or 'V') and 'frequency' (a float value >= 0)
 
         :param autorange: True or False
@@ -67,7 +67,7 @@ class f884xA_instrument:
                 # Set Fluke 884xA to largest range for internal protection by default.
                 self.set_f884xA_range(ideal_range_val=1000, output=self.output_type, mode=self.mode)
             time.sleep(1)
-            self.setup = True
+            self.setup_complete = True
             return True  # returns true if setup completes succesfully
 
         except Exception as e:
@@ -105,18 +105,18 @@ class f884xA_instrument:
     def _get_function_params(self, **kwds):
         """
         method accepts several keyword pairs as arguments. Specify at least two of the following:
-            + 'output' ('VOLT' or 'CURR') and 'mode' ('AC' or 'DC')
-            + 'output' ('VOLT' or 'CURR') and 'frequency' (a float value >= 0)
+            + 'output_type' ('VOLT' or 'CURR') and 'mode' ('AC' or 'DC')
+            + 'output_type' ('VOLT' or 'CURR') and 'frequency' (a float value >= 0)
             + 'units' ('A' or 'V') and 'frequency' (a float value >= 0)
-        :param kwds: dictionary containing at least two of the following keys: 'output', 'mode', 'units', 'frequency'
+        :param kwds: dictionary containing at least two of the following: 'output_type', 'mode', 'units', 'frequency'
         :return: output and mode used for setting up the Fluke 884xA
         """
         # SORT through what keywords were provided =====================================================================
         keys = kwds.keys()
 
         # provided output and mode -------------------------------------------------------------------------------------
-        if keys >= {'output', 'mode'}:
-            output = kwds['output']
+        if keys >= {'output_type', 'mode'}:
+            output_type = kwds['output_type']
             mode = kwds['mode']
 
         # provided frequency and either output or units ----------------------------------------------------------------
@@ -127,15 +127,15 @@ class f884xA_instrument:
                 mode = 'DC'
 
             # provided output ------------------------------------------------------------------------------------------
-            if 'output' in keys and kwds['output'] in ('VOLT', 'CURR'):
-                output = kwds['output']
+            if 'output_type' in keys and kwds['output_type'] in ('VOLT', 'CURR'):
+                output_type = kwds['output_type']
 
             # provided units -------------------------------------------------------------------------------------------
             elif 'units' in keys and kwds['units'] in ('A', 'V'):
                 if kwds['units'] == 'V':
-                    output = 'VOLT'
+                    output_type = 'VOLT'
                 else:
-                    output = 'CURR'
+                    output_type = 'CURR'
             else:
                 raise ValueError("Could not determine appropriate mode ('VOLT' or 'CURR') for meter from "
                                  "the provided arguments!")
@@ -143,7 +143,7 @@ class f884xA_instrument:
             raise ValueError("Provided keywords or keyword values are insufficient for determining appropriate output "
                              "and mode values for the Fluke 884xA configuration!")
 
-        return output, mode
+        return output_type, mode
 
     # RANGE ############################################################################################################
     def determine_f884xA_range(self, ideal_range_val: float, output_type: str):
@@ -203,7 +203,7 @@ class f884xA_instrument:
         than the selected range can measure.
 
         :param ideal_range_val: user defined range to set Fluke 884xA to
-        :param kwds: dictionary containing at least two of the following keys: 'output', 'mode', 'units', 'frequency'
+        :param kwds: dictionary containing at least two of the following: 'output_type', 'mode', 'units', 'frequency'
         :return: True iff range is set successfully
         """
         # Get function parameters for Fluke 884xA ----------------------------------------------------------------------
@@ -226,8 +226,7 @@ class f884xA_instrument:
 
     # RETRIEVE MEASUREMENT #############################################################################################
     def read_f884xA_meter(self):
-        if self.setup:
-            freqval = 0.0
+        if self.setup_complete:
             time.sleep(1)
             # Initiate Triggering - (MEASure? or READ? or INITiate)
             self.f884xA.write('INIT')
@@ -240,6 +239,8 @@ class f884xA_instrument:
             if self.mode == 'AC':
                 # FETCh2? Returns readings from the secondary display
                 freqval = to_float(self.f884xA.query('FETCh2?'))
+            else:
+                freqval = 0.0
 
             return outval, freqval, dmm_range
         else:
@@ -272,7 +273,7 @@ if __name__ == "__main__":
     instr.connect_to_f884xA(instruments)
 
     # 1. Setup the meter for measurement
-    instr.setup_f884xA_meter(autorange=True, output='VOLT', mode='AC')
+    instr.setup_f884xA_meter(autorange=True, output_type='VOLT', mode='AC')
     # 2. Get Average Reading
     outval, freqval, std = instr.average_f884xA_reading(samples=10, dt=0.1)
 

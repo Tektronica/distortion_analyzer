@@ -243,7 +243,29 @@ class MultimeterTab(wx.Panel):
         selection = self.combo_DMM_choice.GetValue()
         print(f"The {selection} has been selected.")
         self.DMM_choice = 'f' + selection.strip('Fluke ')
-        self.dmm.DMM_choice = self.DMM_choice
+
+        if not self.dmm.M.connected:
+            # if instruments are not connected, then user is free to change the DMM choice
+            pass
+
+        elif self.DMM_choice != self.dmm.DMM_choice and self.dmm.M.connected:
+            # if the selected instrument does not currently match the remote instrument connected, there's a problem.
+            self.dmm.M.connected = False
+            print(f"[WARNING] the {selection} is NOT the current remote instrument connected!")
+            # set text box color to red (chantilly: #EAB9C1)
+            self.text_DMM_report.SetBackgroundColour(wx.Colour(234, 185, 193))
+            self.left_panel.Refresh()
+
+        elif self.DMM_choice == self.dmm.DMM_choice:
+            # if the selected instrument does match the remote instrument connected, reset the color if necessary
+            self.dmm.M.connected = True
+            # Reset color (white smoke: #F0F0F0)
+            self.text_DMM_report.SetBackgroundColour(wx.Colour(240, 240, 240))
+            self.left_panel.Refresh()
+        elif self.dmm.DUMMY_DATA:
+            # if using dummy data, then we only need to set DMM choice to True before running
+            self.dmm.DMM_choice = self.DMM_choice
+
         return self.DMM_choice
 
     def config(self, evt):
@@ -272,6 +294,7 @@ class MultimeterTab(wx.Panel):
         print('\nResetting connection. Closing communication with any connected instruments')
         self.text_DUT_report.Clear()
         self.text_DMM_report.Clear()
+        self.dmm.DMM_choice = self.DMM_choice
         self.thread_this(self.dmm.connect, (self.get_instruments(),))
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -334,6 +357,7 @@ class MultimeterTab(wx.Panel):
     # ------------------------------------------------------------------------------------------------------------------
     def on_run(self, evt):
         self.get_values()
+
         if not self.t.is_alive() and self.flag_complete:
             # start new thread
             self.thread_this(self.dmm.start, (self.user_input,))
