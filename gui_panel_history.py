@@ -140,7 +140,7 @@ class HistoryTab(wx.Panel):
         self.process_raw_input(xt, yt, xf, yf)
 
     def process_raw_input(self, xt, yt, xf, yf):
-        yrms = np.sqrt(np.mean(np.absolute(yt) ** 2))
+        yrms = np.sqrt(np.mean(np.abs(yt) ** 2))
         N = len(xt)
         Fs = round(1 / (xt[1] - xt[0]), 2)
 
@@ -152,10 +152,12 @@ class HistoryTab(wx.Panel):
             # for odd values of N: length is (N + 1) / 2
             fft_length = int((N + 2) / 2)
 
-        thdn, *_ = THDN(yf[:fft_length], Fs, N, )
-        thd = THD(yt, Fs)
+        xf_rfft, yf_rfft = xf[:fft_length], yf[:fft_length]
 
-        self.plot(xt, yt, fft_length, xf, yf)
+        thdn, *_ = THDN_F(yf_rfft, Fs, N)
+        thd = THD(yf_rfft, Fs)
+
+        self.plot(xt, yt, fft_length, xf_rfft, yf_rfft)
         self.results_update(Fs, N, yrms, thdn, thd)
 
     # ------------------------------------------------------------------------------------------------------------------

@@ -302,7 +302,6 @@ class DistortionAnalyzer:
                 hpf = 0
             else:
                 raise ValueError("Invalid filter cutoff selected!")
-
             Fs, N, aperture, runtime = get_FFT_parameters(Ft=Ft, lpf=lpf, error=error)
 
         # START DATA COLLECTION ----------------------------------------------------------------------------------------
@@ -352,7 +351,6 @@ class DistortionAnalyzer:
 
         # DIGITIZER
         error = self.params['error']
-
         filter_val = self.params['filter']
 
         # DIGITIZED SIGNAL =============================================================================================
@@ -367,9 +365,7 @@ class DistortionAnalyzer:
                 lpf = 3e6  # low pass filter cutoff frequency
             else:
                 lpf = 0
-
             hpf = 0
-
             Fs, N, aperture, runtime = get_FFT_parameters(Ft=Ft, lpf=lpf, error=error)
 
         # START DATA COLLECTION ----------------------------------------------------------------------------------------
@@ -386,12 +382,12 @@ class DistortionAnalyzer:
         yrms = rms_flat(yt)
         xt = np.arange(0, N, 1) / Fs
 
-        xf_fft, yf_fft, xf_rfft, yf_rfft = windowed_fft(yt, Fs, N, 'blackman')
+        xf_fft, yf_fft, xf_rfft, yf_rfft, main_lobe_width = windowed_fft(yt, Fs, N, 'blackman')
 
-        # Find %THD+N
+        # Find THD and THD+N -------------------------------------------------------------------------------------------
         try:
-            thdn, f0, noise_rms = THDN(yf_rfft, Fs, N, hpf, lpf)
-            thd = THD(yt, Fs)
+            thdn, f0, noise_rms = THDN_F(yf_rfft, Fs, N, main_lobe_width, hpf, lpf)
+            thd = THD(yf_rfft, Fs)
             data = {'xt': xt, 'yt': yt, 'xf': xf_rfft, 'yf': yf_rfft,
                     'N': N, 'runtime': runtime, 'Fs': Fs, 'f0': f0}
         except ValueError as e:

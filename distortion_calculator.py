@@ -68,6 +68,7 @@ def getWindowLength(f0=10e3, fs=2.5e6, windfunc='blackman', error=0.1):
     :return: window length of integer value (number of time series samples collected)
     """
     # lowest detectable frequency by window
+    # aka - the main lobe width
     ldf = f0 * error
 
     if windfunc == 'Rectangular':
@@ -90,14 +91,19 @@ def windowed_fft(yt, Fs, N, windfunc='blackman'):
     # Calculate windowing function and its length ----------------------------------------------------------------------
     if windfunc == 'bartlett':
         w = np.bartlett(N)
+        main_lobe_width = 4 * (Fs / N)
     elif windfunc == 'hanning':
         w = np.hanning(N)
+        main_lobe_width = 4 * (Fs / N)
     elif windfunc == 'hamming':
         w = np.hamming(N)
+        main_lobe_width = 4 * (Fs / N)
     elif windfunc == 'blackman':
         w = np.blackman(N)
+        main_lobe_width = 6 * (Fs / N)
     else:
-        w = np.kaiser(N)
+        # TODO - maybe include kaiser as well, but main lobe width varies with alpha
+        raise ValueError("Invalid windowing function selected!")
 
     # Calculate amplitude correction factor after windowing ------------------------------------------------------------
     # https://stackoverflow.com/q/47904399/3382269
@@ -122,12 +128,17 @@ def windowed_fft(yt, Fs, N, windfunc='blackman'):
     xf_fft = np.linspace(0.0, Fs, N)
     xf_rfft = np.linspace(0.0, Fs / 2, fft_length)
 
-    return xf_fft, yf_fft, xf_rfft, yf_rfft
+    return xf_fft, yf_fft, xf_rfft, yf_rfft, main_lobe_width
 
 
 ########################################################################################################################
-def THDN(yf, fs, N, hpf=0, lpf=100e3):
+def THDN_F(yf, fs, N, main_lobe_width=None, hpf=0, lpf=100e3):
     """
+    [THDF compares the harmonic content of a waveform to its fundamental] and is a much better measure of harmonics
+    content than THDR. Thus, the usage of THDF is advocated .
+
+    Source: https://www.thierry-lequeu.fr/data/PESL-00101-2003-R2.pdf
+
     Performs a windowed fft of a time-series signal y and calculate THDN.
         + Estimates fundamental frequency by finding peak value in fft
         + Skirts the fundamental by finding local minimas and throws those values away
@@ -143,7 +154,7 @@ def THDN(yf, fs, N, hpf=0, lpf=100e3):
     try:
         idx = np.argmax(np.abs(_yf))
         freq = freqs[idx]  # no units
-        f0 = freq * fs / 2  # in hertz
+        fundamental = freq * fs / 2  # in hertz
     except IndexError:
         raise ValueError('Failed to find fundamental. Most likely index was outside of bounds.')
 
@@ -158,21 +169,28 @@ def THDN(yf, fs, N, hpf=0, lpf=100e3):
         fc = int(lpf * N / fs) + 1
         _yf[fc:] = 1e-10
 
-    # RMS from frequency domain ----------------------------------------------------------------------------------------
-    # https://stackoverflow.com/questions/ 23341935/find-rms-value-in-frequency-domain
-    total_rms = np.sqrt(np.sum(np.abs(_yf / N) ** 2))  # Parseval'amp_string Theorem
+    # COMPUTE RMS FUNDAMENTAL ------------------------------------------------------------------------------------------
+    # https://stackoverflow.com/questions/23341935/find-rms-value-in-frequency-domain
+    # Find the local minimals of the main lobe fundamental frequency
+    if main_lobe_width:
+        left_of_lobe = int((fundamental - main_lobe_width / 2) * (N/fs)) + 1
+        right_of_lobe = int((fundamental + main_lobe_width / 2) * (N/fs)) + 2
+    else:
+        left_of_lobe, right_of_lobe = find_range(abs(_yf), idx)
 
-    # NOTCH REJECT FUNDAMENTAL AND MEASURE NOISE -----------------------------------------------------------------------
-    # Find local minimas around fundamental frequency and throw away values within boundaries of minima window.
-    # TODO: Calculate mainlobe width of the windowing function rather than finding local minimas?
-    lowermin, uppermin = find_range(abs(_yf), idx)
-    _yf[lowermin:uppermin] = 1e-10
+    rms_fundamental = np.sqrt(np.sum(np.abs(_yf[left_of_lobe:right_of_lobe]) ** 2))  # Parseval's Theorem
+
+    # REJECT FUNDAMENTAL FOR NOISE RMS ---------------------------------------------------------------------------------
+    # Throws out values within the region of the main lobe fundamental frequency
+    _yf[left_of_lobe:right_of_lobe] = 1e-10
     # __yf = np.array(_yf, copy=True)  # TODO: used for internal plotting only
 
-    # RMS from frequency domain ----------------------------------------------------------------------------------------
-    noise_rms = np.sqrt(np.sum(np.abs(_yf / N) ** 2))  # Parseval'amp_string Theorem
+    # COMPUTE RMS NOISE ------------------------------------------------------------------------------------------------
+    rms_noise = np.sqrt(np.sum(np.abs(_yf) ** 2))  # Parseval's Theorem
 
-    THDN = noise_rms / total_rms
+    # THDN CALCULATION -------------------------------------------------------------------------------------------------
+    # https://www.thierry-lequeu.fr/data/PESL-00101-2003-R2.pdf
+    THDN = rms_noise / rms_fundamental
 
     """    
     # TODO: Uncomment to save plots (can only save one temporal and spectrum plot per run)
@@ -186,18 +204,75 @@ def THDN(yf, fs, N, hpf=0, lpf=100e3):
                   title='FFT of Windowed Data with Rejected Fundamental Frequency')
     """
 
-    return THDN, f0, round(1e6 * total_rms, 2)
+    return THDN, fundamental, round(1e6 * rms_noise, 2)
+
+
+def THDN_R(yf, fs, N, hpf=0, lpf=100e3):
+    """
+    [THDR compares the harmonic content of a waveform to the waveform's entire RMS signal.] This method was inherited
+    from the area of audio amplifiers, where the THD serves as a measure of the systems linearity where its numerical
+    value is always much less than 1 (practically it ranges from 0.1% - 0.3% in Hi-Fi systems up to a few percent in
+    conventional audio systems). Thus, for this range of THD values, the error caused by mixing up the two
+    definitions of THD was acceptable. However, THDF  is a much better measure of harmonics content. Employment of
+    THDR in measurements may yield high errors in significant quantities such as power-factor and distortion-factor,
+    derived from THD measurement.
+
+    Source: https://www.thierry-lequeu.fr/data/PESL-00101-2003-R2.pdf
+
+    Performs a windowed fft of a time-series signal y and calculate THDN.
+        + Estimates fundamental frequency by finding peak value in fft
+        + Skirts the fundamental by finding local minimas and throws those values away
+        + Applies a Low-pass filter at fc (100kHz)
+        + Calculates THD+N by calculating the rms ratio of the entire signal to the fundamental removed signal
+
+    :returns: THD and fundamental frequency
+    """
+    _yf = np.array(yf, copy=True)  # protects yf from mutation
+    freqs = np.fft.rfftfreq(len(_yf))
+
+    # FIND FUNDAMENTAL (peak of frequency spectrum) --------------------------------------------------------------------
+    try:
+        idx = np.argmax(np.abs(_yf))
+        freq = freqs[idx]  # no units
+        fundamental = freq * fs / 2  # in hertz
+    except IndexError:
+        raise ValueError('Failed to find fundamental. Most likely index was outside of bounds.')
+
+    # APPLY HIGH PASS FILTERING ----------------------------------------------------------------------------------------
+    if not (hpf == 0) and (hpf < lpf):
+        print('>>applying high pass filter<<')
+        fc = int(hpf * N / fs)
+        _yf[:fc] = 1e-10
+
+    # APPLY LOW PASS FILTERING -----------------------------------------------------------------------------------------
+    if lpf != 0:
+        fc = int(lpf * N / fs) + 1
+        _yf[fc:] = 1e-10
+
+    # REJECT FUNDAMENTAL FOR NOISE RMS ---------------------------------------------------------------------------------
+    # https://stackoverflow.com/questions/ 23341935/find-rms-value-in-frequency-domain
+    rms_total = np.sqrt(np.sum(np.abs(_yf) ** 2))  # Parseval'amp_string Theorem
+
+    # NOTCH REJECT FUNDAMENTAL AND MEASURE NOISE -----------------------------------------------------------------------
+    # Find local minimas around main lobe fundamental frequency and throws out values within this window.
+    # TODO: Calculate mainlobe width of the windowing function rather than finding local minimas?
+    left_of_lobe, right_of_lobe = find_range(abs(_yf), idx)
+    _yf[left_of_lobe:right_of_lobe] = 1e-10
+
+    # COMPUTE RMS NOISE ------------------------------------------------------------------------------------------------
+    rms_noise = np.sqrt(np.sum(np.abs(_yf) ** 2))  # Parseval'amp_string Theorem
+
+    # THDN CALCULATION -------------------------------------------------------------------------------------------------
+    # https://www.thierry-lequeu.fr/data/PESL-00101-2003-R2.pdf
+    THDN = rms_noise / rms_total
+
+    return THDN, fundamental, round(1e6 * rms_total, 2)
 
 
 ########################################################################################################################
-def THD(y, Fs):
-    # PERFORM FFT
-    # TODO: Do this in the frequency domain, and take any skirts with it?
-    # y -= np.mean(y)
-    ypeak = np.max(y)
-    w = np.blackman(len(y))  # TODO Kaiser?
-    yf = np.fft.rfft(y * w)
-
+def THD(yf, Fs):
+    _yf = np.array(yf, copy=True)  # protects yf from mutation
+    _yf_data_peak = max(abs(yf))
     # FIND FUNDAMENTAL (peak of frequency spectrum)
     try:
         idx = np.argmax(np.abs(yf))
@@ -213,7 +288,7 @@ def THD(y, Fs):
         for h in range(n_harmonics):
             local = int(idx * (h + 1))
             try:
-                amplitude[h] = np.max(np.abs(yf[local - 4:local + 4])) / ypeak
+                amplitude[h] = np.max(np.abs(yf[local - 4:local + 4])) / _yf_data_peak
             except ValueError:
                 raise ValueError('Failed to capture all peaks for calculating THD.\nMost likely zero-size array.')
         thd = np.sqrt(np.sum(np.abs(amplitude[1:]) ** 2)) / np.abs(amplitude[0])
