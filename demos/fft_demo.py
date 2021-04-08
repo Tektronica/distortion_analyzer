@@ -1,172 +1,109 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
-import pprint
-from scipy import interpolate
-from scipy.signal.windows import hann, blackman, blackmanharris
-from scipy.fftpack import fft
-from numpy.fft import rfft, irfft
+import matplotlib.pylab as pylab
+
+FILE = "../results/history/generated_Harmonics_Noise.csv"
+
+pylab_params = {'legend.fontsize': 'medium',
+                'font.family': 'Segoe UI',
+                'axes.titleweight': 'bold',
+                'figure.figsize': (15, 5),
+                'axes.labelsize': 'medium',
+                'axes.titlesize': 'medium',
+                'xtick.labelsize': 'medium',
+                'ytick.labelsize': 'medium'}
+pylab.rcParams.update(pylab_params)
 
 
-def rms_flat(a):
-    """
-    Return the root mean square of all the elements of *a*, flattened out.
-    """
-    return np.sqrt(np.mean(np.absolute(a) ** 2))
+def open_history(file):
+    df = pd.read_csv(file)
+
+    try:
+        xt = df['xt'].to_numpy()
+        yt = df['yt'].to_numpy()
+        xf = df['xf'].to_numpy()
+
+        # https://stackoverflow.com/a/18919965/3382269
+        # https://stackoverflow.com/a/51725795/3382269
+        df['yf'] = df['yf'].str.replace('i', 'j').apply(lambda x: np.complex(x))
+        yf = df['yf'].to_numpy()
+    except KeyError:
+        raise ValueError('Incorrect file attempted to be opened. '
+                         '\nCheck data headers. xt, yt, xf, yf should be present')
+
+    return xt, yt, xf, yf
 
 
-def find_range(f, x):
-    """
-    Find range between nearest local minima from peak at index x
-    """
-    lowermin = 0
-    uppermin = 0
-    for i in np.arange(x + 1, len(f)):
-        if f[i + 1] >= f[i]:
-            uppermin = i
-            break
-    for i in np.arange(x - 1, 0, -1):
-        if f[i] <= f[i - 1]:
-            lowermin = i + 1
-            break
-    return lowermin, uppermin
-
-
-def THDN(y, fs, lpf):
-    """
-    Performs a windowed fft of a time-series signal y and calculate THDN.
-        + Estimates fundamental frequency by finding peak value in fft
-        + Skirts the fundamental by finding local minimas and throws those values away
-        + Applies a Low-pass filter at fc (100kHz)
-        + Calculates THD+N by calculating the rms ratio of the entire signal to the fundamental removed signal
-
-    :returns: THD and fundamental frequency
-    """
-    # PERFORM FFT
-    # TODO: Do this in the frequency domain, and take any skirts with it?
-    y -= np.mean(y)
-    w = blackman(len(y))  # TODO Kaiser?
-    yf = np.fft.rfft(y * w)
-    ywf = yf.copy()
-
-    freqs = np.fft.rfftfreq(len(yf))
-
-    # FIND FUNDAMENTAL (peak of frequency spectrum)
-    idx = np.argmax(np.abs(yf))
-    freq = freqs[idx]  # no units
-    f0 = freq * fs / 2  # in hertz
-
-    # APPLY LOW PASS FILTERING
-    if lpf != 0:
-        fc = int(lpf * len(y) / fs)
-        yf[fc:] = 1e-10
-
-    total_rms = np.sqrt(np.sum(np.abs(yf / len(y)) ** 2))  # Parseval'amp_string Theorem
-
-    # NOTCH REJECT FUNDAMENTAL AND MEASURE NOISE
-    # Find local minimas around fundamental frequency and throw away values within boundaries of minima window.
-    # TODO: create boundary w.r.thread_continuous. mainlobe width of the windowing function rather than finding local minimas
-    lowermin, uppermin = find_range(abs(yf), idx)
-    print(f'Boundary window: {lowermin * fs / len(y)} and {uppermin * fs / len(y)}')
-    yf[lowermin:uppermin] = 1e-10
-    yf_notch_removed = yf.copy()
-
-    noise_rms = np.sqrt(np.sum(np.abs(yf / len(y)) ** 2))  # Parseval'amp_string Theorem
-    THDN = noise_rms / total_rms
-
-    Nf = len(yf)
-    N = len(y)
-    x = np.arange(0.0, len(y), 1)
-    xf = np.linspace(0.0, Fs / 2, int(N / 2 + 1))
-
-    # TODO Here's a plot!
-    plot_temporal(x, y, title='Sampled Data')
-    plot_temporal(x, w, title='Blackman Window')
-    plot_temporal(x, y*w, title='Convolution of Sampled Data and Blackman Window')
-    plot_spectrum(xf, 20 * np.log10(2 * np.abs(ywf[0:N] / N)), title='FFT of Windowed Data')
-    plot_spectrum(xf, 20 * np.log10(2 * np.abs(yf_notch_removed[0:N] / N)), title='FFT of Windowed Data with Rejected Fundamental Frequency')
-
-    return THDN, f0, ywf, yf_notch_removed, freqs
-
-
-def THDN_scipy(y, fs, lpf):
-    # TODO: Do this in the frequency domain, and take any skirts with it?
-    y -= np.mean(y)
-    windowed = y * blackmanharris(len(y))  # TODO Kaiser?
-
-    # Measure the total signal before filtering but after windowing
-    total_rms = rms_flat(windowed)
-
-    # Find the peak of the frequency spectrum (fundamental frequency), and
-    # filter the signal by throwing away values between the nearest local
-    # minima
-    f = rfft(windowed)
-    i = np.argmax(abs(f))
-
-    # Not exact
-    print('Frequency: %f Hz' % (fs * (i / len(windowed))))
-    lowermin, uppermin = find_range(abs(f), i)
-    f[lowermin: uppermin] = 0
-
-    # Transform noise back into the signal domain and measure it
-    # TODO: Could probably calculate the RMS directly in the frequency domain
-    # instead
-    noise = irfft(f)
-    THDN = rms_flat(noise) / total_rms
-    print("DEMO: THD+N:     %.4f%% or %.1f dB" % (THDN * 100, 20 * np.log10(THDN)))
-
-
-def plot_temporal(x, y, title=''):
-    fig, ax = plt.subplots(1, 1, constrained_layout=True)
+def plot_temporal(x, y, title='', filename='saved_plot'):
+    fig, ax = plt.subplots(1, 1, figsize=(12.8, 4.8), constrained_layout=True)  # default: figsize=(6.4, 4.8)
     ax.plot(x, y, '-')  # scaling is applied.
 
     # ax.legend(['data'])
-    ax.set_title(title)
-    ax.set_xlabel('Samples (#)')
-    ax.set_ylabel('Amplitude')
+    ax.set_title(title.upper())
+    ax.set_xlabel('SAMPLES (#)')
+    ax.set_ylabel('AMPLITUDE')
+    ax.margins(x=0)
     ax.grid()
-    plt.show()
+    plt.savefig(f'../images/static/{filename}.jpg')
 
 
-def plot_spectrum(xf, yf, title=''):
-    fig, ax = plt.subplots(1, 1, constrained_layout=True)
+def plot_spectrum(xf, yf, title='', filename='saved_plot'):
+    fig, ax = plt.subplots(1, 1, figsize=(12.8, 4.8), constrained_layout=True)  # default: figsize=(6.4, 4.8)
     ax.plot(xf, yf, '-')  # scaling is applied.
 
-    # ax.set_xlim(20, 100000)
-    # ax.legend(['FFT'])
-    ax.set_title(title)
-    ax.set_xlabel('frequency (Hz)')
-    ax.set_ylabel('magnitude (dB)')
+    ax.set_title(title.upper())
+    ax.set_xlabel('FREQUENCY (kHz)')
+    ax.set_ylabel('MAGNITUDE (dB)')
+    ax.margins(x=0)
     ax.grid()
-    plt.show()
+    plt.savefig(f'../images/static/{filename}.jpg')
 
 
-data = pd.read_csv('./demos/y_data.csv')
-# TODO: For some reason, df.to_numpy(np.complex) doesn't work
-# yf = np.array((data['yf_old'].dropna()).tolist()).astype(np.complex)
-# yf_filtered = np.array((data['yf_filter'].dropna()).tolist()).astype(np.complex)
-y = data['ydata'].dropna().to_numpy(np.float)
-Fs = 714285.714285714286
+def main():
+    xt, yt, xf, yf = open_history(FILE)
+    N = len(xt)
+    Fs = round(1 / (xt[1] - xt[0]), 2)
 
-thdn, f0, ywf, yf_notch_removed, freqs = THDN(y, Fs, 100e3)
+    plot_temporal(range(N), yt, title=f'Sampled Data (N={N})', filename='00_sampled_data')
 
-N = len(y)  # 10000
-# xf = np.linspace(0.0, Fs, int(N/2 + 1))
-xf = np.linspace(0.0, Fs/2, int(N/2 + 1))
-yrms = rms_flat(y)
-print(f"{round(thdn * 100, 4)}% or {round(20 * np.log10(thdn), 1)}dB")
-THDN_scipy(y, Fs, 100e3)
+    # remove DC offset -------------------------------------------------------------------------------------------------
+    yt -= np.mean(yt)
 
-# PLOT frequency response ==========================================================================================
-fig, (ax1, ax2) = plt.subplots(2, 1, constrained_layout=True)
-ax1.plot(xf, 20 * np.log10(2 * np.abs(ywf[0:N] / (yrms * N))), '-b')  # scaling is applied.
-ax2.plot(xf, 20 * np.log10(2 * np.abs(yf_notch_removed[0:N] / (yrms * N))),
-         '-b')  # scaling is applied.
+    # Calculate windowing function and its length ----------------------------------------------------------------------
+    w = np.blackman(N)
+    main_lobe_width = 6 * (Fs / N)
+    plot_temporal(range(N), w, title=f'Blackman Window (N={N})', filename='01_blackman_window')
 
-ax1.set_xlim(20, 30000)
-ax1.legend(['FFT', 'FFT w. window'])
-ax1.set_title('Generated Waveform Spectral Response')
-ax1.set_xlabel('frequency (Hz)')
-ax1.set_ylabel('magnitude (dB)')
-ax1.grid()
-plt.show()
+    # Calculate amplitude correction factor after windowing ------------------------------------------------------------
+    # https://stackoverflow.com/q/47904399/3382269
+    amplitude_correction_factor = 1 / np.mean(w)
+
+    # Calculate the length of the FFT ----------------------------------------------------------------------------------
+    if (N % 2) == 0:
+        # for even values of N: FFT length is (N / 2) + 1
+        fft_length = int(N / 2) + 1
+    else:
+        # for odd values of N: FFT length is (N + 1) / 2
+        fft_length = int((N + 2) / 2)
+
+    """
+    Compute the FFT of the signal Divide by the length of the FFT to recover the original amplitude. Note dividing 
+    alternatively by N samples of the time-series data splits the power between the positive and negative sides. 
+    However, we are only looking at one side of the FFT.
+    """
+    ytw = yt * w
+    plot_temporal(range(N), ytw, title=f'Sampled Data with imposed Blackman Window (N={N})', filename='02_windowed_data')
+
+    yf_fft = (np.fft.fft(ytw) / fft_length) * amplitude_correction_factor
+
+    yf_rfft = yf_fft[:fft_length]
+    xf_fft = np.linspace(0.0, Fs, N)
+    xf_rfft = np.linspace(0.0, Fs / 2, fft_length)
+
+    plot_spectrum(xf_rfft/1000, 20 * np.log10(np.abs(yf_rfft)), title=f'FFT of Windowed Data (N={fft_length})',
+                  filename='03_FFT_of_windowed_data')
+
+
+if __name__ == "__main__":
+    main()

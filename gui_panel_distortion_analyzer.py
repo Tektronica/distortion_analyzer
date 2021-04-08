@@ -455,7 +455,7 @@ class DistortionAnalyzerTab(wx.Panel):
         N = results['N']
         aperture = results['Aperture']
         rms = results['RMS']
-        output_type = results['output_type']
+        units = results['units']
         thdn = results['THDN']
         thd = results['THD']
         rms_noise = results['RMS NOISE']
@@ -463,7 +463,7 @@ class DistortionAnalyzerTab(wx.Panel):
         self.label_fs_report.SetLabelText(str(fs))
         self.label_samples_report.SetLabelText(str(N))
         self.label_aperture_report.SetLabelText(str(aperture))
-        self.text_rms_report.SetValue(f"{'{:0.3e}'.format(rms)} {output_type}")
+        self.text_rms_report.SetValue(f"{'{:0.3e}'.format(rms)} {units}")
         self.text_thdn_report.SetValue(f"{round(thdn * 100, 3)}% or {round(np.log10(thdn), 1)}dB")
         self.text_thd_report.SetValue(f"{round(thd * 100, 3)}% or {round(np.log10(thd), 1)}dB")
 

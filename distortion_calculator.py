@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 
 """
 FFT Fundamentals
@@ -183,7 +182,7 @@ def THDN_F(yf, fs, N, main_lobe_width=None, hpf=0, lpf=100e3):
     # REJECT FUNDAMENTAL FOR NOISE RMS ---------------------------------------------------------------------------------
     # Throws out values within the region of the main lobe fundamental frequency
     _yf[left_of_lobe:right_of_lobe] = 1e-10
-    # __yf = np.array(_yf, copy=True)  # TODO: used for internal plotting only
+    __yf = np.array(_yf, copy=True)  # TODO: used for internal plotting only
 
     # COMPUTE RMS NOISE ------------------------------------------------------------------------------------------------
     rms_noise = np.sqrt(np.sum(np.abs(_yf) ** 2))  # Parseval's Theorem
@@ -191,18 +190,6 @@ def THDN_F(yf, fs, N, main_lobe_width=None, hpf=0, lpf=100e3):
     # THDN CALCULATION -------------------------------------------------------------------------------------------------
     # https://www.thierry-lequeu.fr/data/PESL-00101-2003-R2.pdf
     THDN = rms_noise / rms_fundamental
-
-    """    
-    # TODO: Uncomment to save plots (can only save one temporal and spectrum plot per run)
-    xt = np.arange(0, N, 1)
-    xf = np.linspace(0.0, fs/2, int(N/2)+1)/1000
-    plot_temporal(xt, y, title='Sampled Data')
-    plot_temporal(xt, w, title='Blackman Window')
-    plot_temporal(xt, yt * w, title='Sampled Data with imposed Blackman Window')
-    plot_spectrum(xf, 20 * np.log10(2 * np.abs(yf_first[0:N] / N)), title='FFT of Windowed Data')
-    plot_spectrum(xf, 20 * np.log10(2 * np.abs(yf_second[0:N] / N)),
-                  title='FFT of Windowed Data with Rejected Fundamental Frequency')
-    """
 
     return THDN, fundamental, round(1e6 * rms_noise, 2)
 
@@ -326,28 +313,3 @@ def flicker_noise(yf, fs, N, hpf=0.1, lpf=10):
 
     return yf
 
-
-# TODO: These methods are used only for internal plotting! -------------------------------------------------------------
-def plot_temporal(x, y, title=''):
-    fig, ax = plt.subplots(1, 1, constrained_layout=True)
-    ax.plot(x, y, '-')  # scaling is applied.
-
-    # ax.legend(['data'])
-    ax.set_title(title)
-    ax.set_xlabel('Samples (#)')
-    ax.set_ylabel('Amplitude')
-    ax.grid()
-    plt.savefig('images/static/a.jpg')
-
-
-def plot_spectrum(xf, yf, title=''):
-    fig, ax = plt.subplots(1, 1, constrained_layout=True)
-    ax.plot(xf, yf, '-')  # scaling is applied.
-
-    # ax.set_xlim(20, 100000)
-    # ax.legend(['FFT'])
-    ax.set_title(title)
-    ax.set_xlabel('frequency (kHz)')
-    ax.set_ylabel('magnitude (dB)')
-    ax.grid()
-    plt.savefig('images/static/b.jpg')

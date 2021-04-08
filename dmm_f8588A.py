@@ -150,9 +150,10 @@ class f8588A_instrument:
     def _get_function_params(self, **kwds):
         """
         method accepts several keyword pairs as arguments. Specify at least two of the following:
-            + 'output_type' ('VOLT' or 'CURR') and 'mode' ('AC' or 'DC')
-            + 'output_type' ('VOLT' or 'CURR') and 'frequency' (a float value >= 0)
-            + 'units' ('A' or 'V') and 'frequency' (a float value >= 0)
+            + 'output_type' ('VOLT' or 'CURR')  and  'mode' ('AC' or 'DC')
+            + 'output_type' ('VOLT' or 'CURR')  and  'frequency' (a float value >= 0)
+            + 'units' ('A' or 'V')              and  'frequency' (a float value >= 0)
+            + 'units' ('A' or 'V')              and  'mode' ('AC' or 'DC')
 
         :param kwds: dictionary containing at least two of the following: 'output_type', 'mode', 'units', 'frequency'
         :return: output and mode used for setting up the Fluke 884xA
@@ -160,12 +161,24 @@ class f8588A_instrument:
         # SORT through what keywords were provided =====================================================================
         keys = kwds.keys()
 
-        # provided output and mode -------------------------------------------------------------------------------------
-        if keys >= {'output_type', 'mode'}:
-            output_type = kwds['output_type']
+        # provided mode and either 'output type' or 'units' ------------------------------------------------------------
+        if 'mode' in keys:
             mode = kwds['mode']
 
-        # provided frequency and either output or units ----------------------------------------------------------------
+            if 'output_type' in keys and kwds['output_type'] in ('VOLT', 'CURR'):
+                output_type = kwds['output_type']
+
+            elif 'units' in keys:
+                if kwds['units'] == 'A':
+                    output_type = 'CURR'
+                else:
+                    output_type = 'VOLT'
+            else:
+                raise ValueError("The 'mode' parameter was identified an operating 'mode' for the Fluke "
+                                 "8588A. However, insufficient or missing values for either 'output type' or "
+                                 "'units'.")
+
+        # provided frequency and either 'output type' or 'units' -------------------------------------------------------
         elif 'frequency' in keys:
             if kwds['frequency'] > 0:
                 mode = 'AC'
@@ -183,8 +196,9 @@ class f8588A_instrument:
                 else:
                     output_type = 'CURR'
             else:
-                raise ValueError("Could not determine appropriate mode ('VOLT' or 'CURR') for meter from "
-                                 "the provided arguments!")
+                raise ValueError("The 'frequency' parameter was able to identify an operating 'mode' for the Fluke "
+                                 "8588A. However, insufficient or missing values for either 'output type' or "
+                                 "'units'.")
         else:
             raise ValueError("Provided keywords or keyword values are insufficient for determining appropriate output "
                              "and mode values for the Fluke 8588A configuration!")

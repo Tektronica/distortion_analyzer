@@ -122,7 +122,7 @@ class DistortionAnalyzer:
         source = self.params['source']
         amplitude, units, ft = self.get_string_value(user_input['amplitude'], user_input['frequency'])
         self.params['amplitude'] = amplitude
-        self.params['output_type'] = units.capitalize()
+        self.params['units'] = units.capitalize()
         self.params['frequency'] = ft
 
         message = f"{amplitude} {units} @ {ft} Hz"
@@ -214,11 +214,11 @@ class DistortionAnalyzer:
                 if not self.DUMMY_DATA:
                     self.frame.text_amplitude.SetValue(str(row.amplitude))
                     self.frame.text_frequency.SetValue(str(row.frequency))
-                    amplitude, output_type, ft = self.get_string_value(row.amplitude, str(row.frequency))
+                    amplitude, units, ft = self.get_string_value(row.amplitude, str(row.frequency))
 
                     self.params['amplitude'] = amplitude
                     self.params['frequency'] = ft
-                    self.params['output_type'] = output_type
+                    self.params['units'] = units
 
                     try:
                         results[idx] = func(setup=True)
@@ -228,7 +228,7 @@ class DistortionAnalyzer:
                 else:
                     self.params['amplitude'] = 1
                     self.params['frequency'] = 1000
-                    self.params['output_type'] = 'V'
+                    self.params['units'] = 'V'
                     results[idx] = func(setup=True)
             else:
                 break
@@ -266,7 +266,7 @@ class DistortionAnalyzer:
             amplitude = amplitude / np.sqrt(2)
             print('Provided amplitude converted to RMS.')
 
-        output_type = self.params['output_type']
+        units = self.params['units']
         time.sleep(1)
 
         # DIGITIZER ----------------------------------------------------------------------------------------------------
@@ -310,10 +310,10 @@ class DistortionAnalyzer:
         if not self.DUMMY_DATA:
             # TODO: shouldn't we always want to setup digitizer for new range??
             if setup:
-                self.M.setup_digitizer(output_type, amplitude, filter_val, N, aperture)
+                self.M.setup_digitizer(units, amplitude, filter_val, N, aperture)
             if self.params['source']:
                 try:
-                    self.M.run_source(output_type, amplitude, Ft)
+                    self.M.run_source(units, amplitude, Ft)
                     try:
                         y = self.M.retrieve_digitize()
                     except ValueError:
@@ -340,14 +340,14 @@ class DistortionAnalyzer:
             amplitude = amplitude / np.sqrt(2)
             print('Provided amplitude converted to RMS.')
 
-        source_output_type = self.params['output_type']
-        self.M.run_source(source_output_type, amplitude, Ft)
+        source_units = self.params['units']
+        self.M.run_source(source_units, amplitude, Ft)
         time.sleep(1)
 
         # METER
         self.M.setup_f8588A_meter(autorange=True, output='VOLT', mode='AC')
         meter_outval, meter_range, meter_ft = self.M.read_f8588A_meter()
-        meter_output_type = 'V'
+        meter_units = 'V'
 
         # DIGITIZER
         error = self.params['error']
@@ -370,7 +370,7 @@ class DistortionAnalyzer:
 
         # START DATA COLLECTION ----------------------------------------------------------------------------------------
         if setup:
-            self.M.setup_digitizer(meter_output_type, meter_range, filter_val, N, aperture)
+            self.M.setup_digitizer(meter_units, meter_range, filter_val, N, aperture)
         y = self.M.retrieve_digitize()
 
         pd.DataFrame(data=y, columns=['ydata']).to_csv('results/y_data.csv')
@@ -401,7 +401,7 @@ class DistortionAnalyzer:
         # append units column ------------------------------------------------------------------------------------------
         for key, value in results_row.items():
             self.results[key].append(value)
-        results_row['output_type'] = self.params['output_type']
+        results_row['units'] = self.params['units']
 
         # report results to main panel ---------------------------------------------------------------------------------
         self.frame.results_update(results_row)
@@ -459,7 +459,7 @@ class DistortionAnalyzer:
         # https://stackoverflow.com/a/35610194
         amplitude = 0.0
         frequency = 0.0
-        output_type = ''
+        units = ''
 
         prefix = {'p': '1e-12', 'n': '1e-9', 'u': '1e-6', 'm': '1e-3'}
         units_list = ("A", "a", "V", "v")
@@ -469,11 +469,11 @@ class DistortionAnalyzer:
         try:
             if len(s_split) == 3 and s_split[1] in prefix.keys() and s_split[2] in units_list:
                 amplitude = float(Decimal(s_split[0]) * Decimal(prefix[s_split[1]]))
-                output_type = s_split[2].capitalize()  # example: 'V'
+                units = s_split[2].capitalize()  # example: 'V'
                 self.amplitude_good = True
             elif len(s_split) == 2 and s_split[1] in units_list:
                 amplitude = float(s_split[0])
-                output_type = s_split[1].capitalize()  # example: 'V'
+                units = s_split[1].capitalize()  # example: 'V'
                 self.amplitude_good = True
             elif len(s_split) == 2 and s_split[1]:
                 self.frame.error_dialog('prefix used, but units not specified!')
@@ -498,4 +498,4 @@ class DistortionAnalyzer:
         else:
             self.frequency_good = True
 
-        return amplitude, output_type, frequency
+        return amplitude, units, frequency
