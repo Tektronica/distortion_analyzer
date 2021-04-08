@@ -38,6 +38,9 @@ sampling frequency. Consequently, the sampling frequency is calculated
 twice: once more after calculating an integer number of samples to
 average by the digitizer.
 
+    # The digitizer's sampling frequency
+    DIGITIZER_SAMPLING_FREQUENCY = 5e6
+
     # Ideal sampling frequency
     _Fs = max(2 * bw, 100 * f0)
 
@@ -65,8 +68,8 @@ frequency, **ldf**.
     ldf = f0 * error            # lowest detectable frequency by FFT
     M = int(6 * (fs / ldf))     # samples required for window
 
-    ldf = 100  # Hz
-    M = 12000  # number of samples
+    ldf = 100                   # Hz
+    M = 12000                   # number of samples
 
 Finally, the aperture is calculated. For this discussion, however, this
 won't be covered. Please review **Section F** to better understand how
@@ -220,7 +223,7 @@ There are two approaches for rejecting the fundamental frequency. Once the local
     # Throws out values within the region of the main lobe fundamental frequency
     yf[left_min:right_min] = 1e-10
 
-    # COMPUTE RMS NOISE
+    # RMS NOISE
     rms_noise = np.sqrt(np.sum(np.abs(_yf) ** 2))  # Parseval's Theorem
 
     # THDN CALCULATION
