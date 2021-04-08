@@ -224,7 +224,7 @@ There are two approaches for rejecting the fundamental frequency. Once the local
     yf[left_min:right_min] = 1e-10
 
     # RMS NOISE
-    rms_noise = np.sqrt(np.sum(np.abs(_yf) ** 2))  # Parseval's Theorem
+    rms_noise = np.sqrt(np.sum(np.abs(yf) ** 2))  # Parseval's Theorem
 
     # THDN CALCULATION
     THDN = rms_noise / rms_fundamental
