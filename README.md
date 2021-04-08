@@ -1,7 +1,6 @@
-The Distortion Analyzer:
-=================================
-A. Introduction
--------------------
+# The Distortion Analyzer:
+
+## Introduction
 
 The distortion analyzer computes the total harmonic distortion (THD) and
 total harmonic distortion and noise (THD+N) using time series data
@@ -12,8 +11,7 @@ collected by the Fluke 8588A Digitizer.
 STEPS FOR CALCULATING DISTORTION:
 =================================
 
-A. Time Series Data
--------------------
+## Time Series Data
 
 Time series data is retrieved by the Fluke 8588A digitizer. The
 digitizer has a fixed sampling frequency of **5MHz**, which depending on
@@ -70,8 +68,7 @@ to compute the aperture provided the sampling frequency, Fs.
 
 ![](images/static/00_sampled_data.jpg)
 
-B. Windowing to reduce spectral leakage of non-integer periods
---------------------------------------------------------------
+## Windowing to reduce spectral leakage of non-integer periods
 
 The FFT of discrete time series data (DFT) requires an integer number of
 cycles, otherwise, spectral leakage occurs in the form of additional
@@ -105,8 +102,7 @@ data is observed.
 
 ![](images/static/02_windowed_data.jpg)
 
-C. The FFT
-----------
+## The FFT
 
 The FFT of the time series data with windowing applied is presented below. The fundamental at 1kHz and two odd order harmonics are resolved by the FFT.
 
@@ -144,7 +140,20 @@ Since each point of the FFT transform is the result of a sum over a certain time
     # The one-dimensional discrete Fourier Transform for real input.
     yf_rfft = yf_fft[:fft_length]
 
-**Total Harmonic Distortion**
+**Parseval's theorem**
+
+Parseval's Theorem states for discretized signals the total energy of a signal is preserved under the Fourier transform, such that:
+
+![\frac{1}{N}\sum\limits_{n=0}^{N-1}{|X[n]|^{2}}](https://latex.codecogs.com/svg.latex?\frac{1}{N}\sum\limits_{n=0}^{N-1}{|X[n]|^{2}})
+
+Thus, the total RMS amplitude for the FFT is:
+
+    import numpy as np
+    rms_total = np.sqrt(np.mean(np.abs(yf)**2))
+
+## Computing the Total Harmonic Distortion
+
+### Overview
 
 There are three methods for computing Total Harmonic Distortion we will discuss:
 
@@ -160,17 +169,9 @@ There are three methods for computing Total Harmonic Distortion we will discuss:
 
 **THD_R:** compares the harmonic content of a waveform to the waveform's entire RMS signal. This method was inherited from the area of audio amplifiers, where the THD serves as a measure of the systems linearity where its numerical value is always much less than 1 (practically it ranges from 0.1% - 0.3% in Hi-Fi systems up to a few percent in conventional audio systems). Thus, for this range of THD values, the error caused by mixing up the two definitions of THD was acceptable. However, THDF  is a much better measure of harmonics content. Employment of THDR in measurements may yield high errors in significant quantities such as power-factor and distortion-factor, derived from THD measurement. Refer to the table below for window specific calculations.
 
-**Parseval's theorem**
+**Search and Destroy (the Fundamental Frequency)**
 
-Parseval's Theorem states for discretized signals the total energy of a signal is preserved under the Fourier transform, such that:
-
-![\frac{1}{N}\sum\limits_{n=0}^{N-1}{|X[n]|^{2}}](https://latex.codecogs.com/svg.latex?\frac{1}{N}\sum\limits_{n=0}^{N-1}{|X[n]|^{2}})
-Thus, the total RMS amplitude for the FFT is:
-
-    import numpy as np
-    rms_total = np.sqrt(np.mean(np.abs(yf)**2))
-
-**Reject the Fundamental Frequency**
+In either instance for calculating **THDF** or **THDR**, main lobe region of the fundamental frequency must be identified. In the case of THDF, the RMS amplitude of this region is found and the region then rejected to compute the RMS amplitude of the harmonic content. In the case of THDR, the region is rejected after a total RMS amplitude is computed.
 
 There are two approaches for rejecting the fundamental frequency. Once the local minimas centered about the fundamental frequency are located, the values within these bounds are thrown out.
 
@@ -212,6 +213,9 @@ Again, as per Parseval's theorem:
     rms_noise = np.sqrt(np.sum(np.abs(_yf) ** 2))
     THDN = rms_noise / rms_fundamental
 
+### THDF
+
+### THDR
 
 D. Characterizing an FFT
 ------------------------
