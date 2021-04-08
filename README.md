@@ -154,7 +154,6 @@ Thus, the total RMS amplitude for the FFT is:
 ## Computing the Total Harmonic Distortion
 
 ### Overview
-
 There are three methods for computing Total Harmonic Distortion we will discuss:
 
 |Method| Short Description (Compares...)| Expression|
@@ -169,8 +168,7 @@ There are three methods for computing Total Harmonic Distortion we will discuss:
 
 **THD_R:** compares the harmonic content of a waveform to the waveform's entire RMS signal. This method was inherited from the area of audio amplifiers, where the THD serves as a measure of the systems linearity where its numerical value is always much less than 1 (practically it ranges from 0.1% - 0.3% in Hi-Fi systems up to a few percent in conventional audio systems). Thus, for this range of THD values, the error caused by mixing up the two definitions of THD was acceptable. However, THDF  is a much better measure of harmonics content. Employment of THDR in measurements may yield high errors in significant quantities such as power-factor and distortion-factor, derived from THD measurement. Refer to the table below for window specific calculations.
 
-**Search and Destroy (the Fundamental Frequency)**
-
+### Search and Destroy (the Fundamental Frequency)
 In either instance for calculating **THDF** or **THDR**, main lobe region of the fundamental frequency must be identified. In the case of THDF, the RMS amplitude of this region is found and the region then rejected to compute the RMS amplitude of the harmonic content. In the case of THDR, the region is rejected after a total RMS amplitude is computed.
 
 There are two approaches for rejecting the fundamental frequency. Once the local minimas centered about the fundamental frequency are located, the values within these bounds are thrown out.
@@ -204,9 +202,6 @@ There are two approaches for rejecting the fundamental frequency. Once the local
 
 
 ![](images/static/04_rejected_fundamental.jpg)
-
-A noise rms measurement is computed from the FFT data to later be used
-computing the THD+N.
 
 ### THDF
 
