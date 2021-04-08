@@ -111,9 +111,11 @@ C. The FFT
 The FFT of the time series data with windowing applied is presented below. The fundamental at 1kHz and two odd order harmonics are resolved by the FFT.
 
 **Sampling Theorem**
+
 While the FFT returns spectral content with equal length N to the time series data, the content is composed of complex conjugate pairs. Consequently, the FFT only resolves unique-valued spectral content up to only approximately half the length of N. As per Nyquist's sampling theorem, the FFT can only resolve spectral content up to half the sampling frequency.
 
 **Amplitude Correction**
+
 Since each point of the FFT transform is the result of a sum over a certain time interval of the time-series data, the FFT must also be divided by the length of the FFT to appropriately recover the amplitude. In addition, since we applied a windowing function to the original data, the amplitude of the the time series data must be recovered from the FFT by applying an amplitude correction factor to compensate for the weighting.
 
     import numpy as np
@@ -141,6 +143,7 @@ Since each point of the FFT transform is the result of a sum over a certain time
     yf_rfft = yf_fft[:fft_length]
 
 **Total Harmonic Distortion**
+
 There are three methods for computing Total Harmonic Distortion we will discuss:
 
 |Method| Short Description (Compares...)| Expression|
@@ -149,15 +152,11 @@ There are three methods for computing Total Harmonic Distortion we will discuss:
 | **THD_F** | harmonic content **:**  fundamental lobe | ![\frac{\sqrt{\sum\limits^{\infty}_{n=2}{V_{n}^{2}}}}{V_1}](https://latex.codecogs.com/svg.latex?\frac{\sqrt{\sum\limits^{\infty}_{n=2}{V_{n}^{2}}}}{V_1}) |
 | **THD_R** | harmonic content **:** entire RMS signal | ![\frac{\sqrt{\sum\limits^{\infty}_{n=2}{V_{n}^{2}}}}{\sqrt{\sum\limits^{\infty}_{n=1}{V_{n}^{2}}}](https://latex.codecogs.com/svg.latex?\frac{\sqrt{\sum\limits^{\infty}_{n=2}{V_{n}^{2}}}}{\sqrt{\sum\limits^{\infty}_{n=1}{V_{n}^{2}}}) |
 
-compares the harmonic content of a waveform to the waveform's entire RMS signal.] This method was inherited
-from the area of audio amplifiers, where the THD serves as a measure of the systems linearity where its numerical
-value is always much less than 1 (practically it ranges from 0.1% - 0.3% in Hi-Fi systems up to a few percent in
-conventional audio systems). Thus, for this range of THD values, the error caused by mixing up the two
-definitions of THD was acceptable. However, THDF  is a much better measure of harmonics content. Employment of
-THDR in measurements may yield high errors in significant quantities such as power-factor and distortion-factor,
-derived from THD measurement.
+**THD:** the most basic concept for computing total harmonic distortion. Here only the peaks are compared. Noise (except where superimposed onto the peaks) is rejected. It's an imprecise calculation where typically the amplitude of each of the harmonic frequencies is recorded.
 
-THDF compares the harmonic content of a waveform to its fundamental] and is a much better measure of harmonics content than THDR. Thus, the usage of THDF is advocated .
+**THD_F:** compares the harmonic content of a waveform to its fundamental and is a much better measure of harmonics content than THDR. Thus, the usage of THDF is advocated.
+
+**THD_R:** compares the harmonic content of a waveform to the waveform's entire RMS signal. This method was inherited from the area of audio amplifiers, where the THD serves as a measure of the systems linearity where its numerical value is always much less than 1 (practically it ranges from 0.1% - 0.3% in Hi-Fi systems up to a few percent in conventional audio systems). Thus, for this range of THD values, the error caused by mixing up the two definitions of THD was acceptable. However, THDF  is a much better measure of harmonics content. Employment of THDR in measurements may yield high errors in significant quantities such as power-factor and distortion-factor, derived from THD measurement.
 
 As per Parseval's theorem:
 
