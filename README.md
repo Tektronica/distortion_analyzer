@@ -110,6 +110,8 @@ C. The FFT
 
 The FFT of the time series data with windowing applied is presented below. The fundamental at 1kHz and two odd order harmonics are resolved by the FFT.
 
+![](images/static/03_fft_of_windowed_data.jpg)
+
 **Sampling Theorem**
 
 While the FFT returns spectral content with equal length N to the time series data, the content is composed of complex conjugate pairs. Consequently, the FFT only resolves unique-valued spectral content up to only approximately half the length of N. As per Nyquist's sampling theorem, the FFT can only resolve spectral content up to half the sampling frequency.
@@ -156,20 +158,50 @@ There are three methods for computing Total Harmonic Distortion we will discuss:
 
 **THD_F:** compares the harmonic content of a waveform to its fundamental and is a much better measure of harmonics content than THDR. Thus, the usage of THDF is advocated.
 
-**THD_R:** compares the harmonic content of a waveform to the waveform's entire RMS signal. This method was inherited from the area of audio amplifiers, where the THD serves as a measure of the systems linearity where its numerical value is always much less than 1 (practically it ranges from 0.1% - 0.3% in Hi-Fi systems up to a few percent in conventional audio systems). Thus, for this range of THD values, the error caused by mixing up the two definitions of THD was acceptable. However, THDF  is a much better measure of harmonics content. Employment of THDR in measurements may yield high errors in significant quantities such as power-factor and distortion-factor, derived from THD measurement.
+**THD_R:** compares the harmonic content of a waveform to the waveform's entire RMS signal. This method was inherited from the area of audio amplifiers, where the THD serves as a measure of the systems linearity where its numerical value is always much less than 1 (practically it ranges from 0.1% - 0.3% in Hi-Fi systems up to a few percent in conventional audio systems). Thus, for this range of THD values, the error caused by mixing up the two definitions of THD was acceptable. However, THDF  is a much better measure of harmonics content. Employment of THDR in measurements may yield high errors in significant quantities such as power-factor and distortion-factor, derived from THD measurement. Refer to the table below for window specific calculations.
 
-As per Parseval's theorem:
+**Parseval's theorem**
 
-    rms_total = np.sqrt(np.sum(np.abs(yf / N) \*\* 2))
+Parseval's Theorem states for discretized signals the total energy of a signal is preserved under the Fourier transform, such that:
+
+![\frac{1}{N}\sum\limits_{n=0}^{N-1}{|X[n]|^{2}}](https://latex.codecogs.com/svg.latex?\frac{1}{N}\sum\limits_{n=0}^{N-1}{|X[n]|^{2}})
+Thus, the total RMS amplitude for the FFT is:
+
+    import numpy as np
+    rms_total = np.sqrt(np.mean(np.abs(yf)**2))
+
+To reject the fundamental frequency, there are two approaches:
+
+**main lobe bandwidth** the preferable and more accurate approach is to calculate the main lobe width centered around the fundamental. The main lobe width is defined as the smallest frequency recoverable by the FFT and is specific to each windowing function. Note, it's important to distinguish that this quantity is not equal to the resolution of the FFT.
+
+    main_lobe_width = 6 * (Fs / N)
+    left_of_lobe = int((fundamental - main_lobe_width / 2) * (N/fs)) + 1
+    right_of_lobe = int((fundamental + main_lobe_width / 2) * (N/fs)) + 2
+
+    rms_fundamental = np.sqrt(np.sum(np.abs(_yf[left_of_lobe:right_of_lobe]) ** 2))  # Parseval's Theorem
 
 
-![](images/static/03_fft_of_windowed_data.jpg)
+**Local Minimas:** When the main lobe width cannot be calculated, a decently reliable method is to identify the local minimas on either side of the fundamental. The idea here is to start at the index of the fundamental peak and index down the sides of the lobe and stop once the data begins to rise again.
 
-To reject the fundamental frequency, the local minimas centered about
-the fundamental frequency are lcoated and values within these bounds are
-thrown out. This is more or less a crude attempt at notch rejection. A
-more appropriate method would be to calculate the main lobe width and
-reject within this bandwidth.
+    lowermin = 0
+    uppermin = 0
+
+    # right side
+    for i in np.arange(x + 1, len(f)):
+        if f[i + 1] >= f[i]:
+            uppermin = i
+            break
+    # left side
+    for i in np.arange(x - 1, 0, -1):
+        if f[i] <= f[i - 1]:
+            lowermin = i + 1
+            break
+
+    return lowermin, uppermin
+
+Once the local minimas centered about the fundamental frequency are located, the values within these bounds are thrown out.
+
+![](images/static/04_rejected_fundamental.jpg)
 
 A noise rms measurement is computed from the FFT data to later be used
 computing the THD+N.
@@ -179,7 +211,6 @@ Again, as per Parseval's theorem:
     rms_noise = np.sqrt(np.sum(np.abs(_yf) ** 2))
     THDN = rms_noise / rms_fundamental
 
-![](images/static/04_rejected_fundamental.jpg)
 
 D. Characterizing an FFT
 ------------------------
