@@ -38,9 +38,15 @@ sampling frequency. Consequently, the sampling frequency is calculated
 twice: once more after calculating an integer number of samples to
 average by the digitizer.
 
-1.  **\_Fs** = max( (2 \* bw), (100 \* F0) )
-2.  **samples\_to\_average** = int( 5MHz / \_Fs ) = **25**
-3.  **Fs** = 5MHz / samples\_to\_average = **200kHz**
+    # Ideal sampling frequency
+    _Fs = max(2 * bw, 100 * f0)
+
+    # An integer number of samples averaged per measurement determines actual sampling frequency
+    samples_to_average = max(round(DIGITIZER_SAMPLING_FREQUENCY / _Fs), 1)
+    Fs = DIGITIZER_SAMPLING_FREQUENCY / samples_to_average
+
+    samples_to_average = 25 # number of samples collected at digitizing frequency before being averaged
+    Fs = 200000             # sampling frequency
 
 Next, the sample length, **N**, is computed by finding the window length
 of the measurement. An error is expressed since the main lobe width is
@@ -55,9 +61,12 @@ In this example, an error of 10% is specified. For a 1kHz fundamental,
 the main lobe width will maximally be 100Hz, the lowest detectable
 frequency, **ldf**.
 
-1.  **error** = 10%
-2.  **ldf** = f0 \* error = **100Hz**
-3.  **N** = int(6 \* (fs / ldf)) = **12,000 samples**
+    error = 0.1                 # 10%
+    ldf = f0 * error            # lowest detectable frequency by FFT
+    M = int(6 * (fs / ldf))     # samples required for window
+
+    ldf = 100  # Hz
+    M = 12000  # number of samples
 
 Finally, the aperture is calculated. For this discussion, however, this
 won't be covered. Please review **Section F** to better understand how
@@ -79,7 +88,7 @@ so false harmonics are observed.
 
 A windowing function aims to mitigate the spectral error associated with
 data discontinuity by tapering the head and tail of the data series to
-attenuate the effect of the disconinuity. In this example, a blackman
+attenuate the effect of the discontinuity. In this example, a blackman
 window was selected since it has greater side lobe attenuation at the
 cost of wider main lobe width. However, the main lobe width is equal to
 6/N. That is, at least 6 cycles of the frequency of interest is required
@@ -205,7 +214,7 @@ There are two approaches for rejecting the fundamental frequency. Once the local
 
 ### THDF
 
-    rms_fundamental = np.sqrt(np.sum(np.abs(_yf[left_of_lobe:right_of_lobe]) ** 2))  # Parseval's Theorem
+    rms_fundamental = np.sqrt(np.sum(np.abs(_yf[left_min:right_min]) ** 2))  # Parseval's Theorem
 
     # REJECT FUNDAMENTAL FOR NOISE RMS
     # Throws out values within the region of the main lobe fundamental frequency
@@ -231,13 +240,11 @@ There are two approaches for rejecting the fundamental frequency. Once the local
     # THDN CALCULATION
     THDN = rms_noise / rms_total
 
-D. Characterizing an FFT
-------------------------
+## Characterizing an FFT
 
 ![](images/static/FFTResolution.jpg)
 
-E. More on Windowing
---------------------
+## More on Windowing
 
 The two characteristics that define a window in the time domain are the
 window length and shape. The two most relevant window characteristics in
