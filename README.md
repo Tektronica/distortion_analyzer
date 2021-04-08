@@ -178,29 +178,29 @@ There are two approaches for rejecting the fundamental frequency. Once the local
  1. **main lobe bandwidth** the preferable and more accurate approach is to calculate the main lobe width centered around the fundamental. The main lobe width is defined as the smallest frequency recoverable by the FFT and is specific to each windowing function. Note, it's important to distinguish that this quantity is not equal to the resolution of the FFT.
 
         main_lobe_width = 6 * (Fs / N)
-        left_of_lobe = int((fundamental - main_lobe_width / 2) * (N/fs)) + 1
-        right_of_lobe = int((fundamental + main_lobe_width / 2) * (N/fs)) + 2
+        left_min = int((fundamental - main_lobe_width / 2) * (N/fs)) + 1
+        right_min = int((fundamental + main_lobe_width / 2) * (N/fs)) + 2
 
         rms_fundamental = np.sqrt(np.sum(np.abs(_yf[left_of_lobe:right_of_lobe]) ** 2))  # Parseval's
 
  2. **Local Minimas:** When the main lobe width cannot be calculated, a decently reliable method is to identify the local minimas on either side of the fundamental. The idea here is to start at the index of the fundamental peak and index down the sides of the lobe and stop once the data begins to rise again.
 
-        lowermin = 0
-        uppermin = 0
+        left_min = 0
+        right_min = 0
 
         # right side
         for i in np.arange(x + 1, len(f)):
                 if f[i + 1] >= f[i]:
-                    uppermin = i
+                    right_min = i
                     break
 
           # left side
             for i in np.arange(x - 1, 0, -1):
                 if f[i] <= f[i - 1]:
-                    lowermin = i + 1
+                    left_min = i + 1
                     break
 
-        return lowermin, uppermin
+        return left_min, right_min
 
 
 ![](images/static/04_rejected_fundamental.jpg)
@@ -208,14 +208,33 @@ There are two approaches for rejecting the fundamental frequency. Once the local
 A noise rms measurement is computed from the FFT data to later be used
 computing the THD+N.
 
-Again, as per Parseval's theorem:
-
-    rms_noise = np.sqrt(np.sum(np.abs(_yf) ** 2))
-    THDN = rms_noise / rms_fundamental
-
 ### THDF
 
+    rms_fundamental = np.sqrt(np.sum(np.abs(_yf[left_of_lobe:right_of_lobe]) ** 2))  # Parseval's Theorem
+
+    # REJECT FUNDAMENTAL FOR NOISE RMS
+    # Throws out values within the region of the main lobe fundamental frequency
+    yf[left_min:right_min] = 1e-10
+
+    # COMPUTE RMS NOISE
+    rms_noise = np.sqrt(np.sum(np.abs(_yf) ** 2))  # Parseval's Theorem
+
+    # THDN CALCULATION
+    THDN = rms_noise / rms_fundamental
+
 ### THDR
+
+    # RMS TOTAL
+    rms_total = np.sqrt(np.sum(np.abs(yf) ** 2))  # Parseval'amp_string Theorem
+
+    # REJECT FUNDAMENTAL FOR NOISE RMS
+    yf[left_min:right_min] = 1e-10
+
+    # RMS NOISE
+    rms_noise = np.sqrt(np.sum(np.abs(yf) ** 2))  # Parseval'amp_string Theorem
+
+    # THDN CALCULATION
+    THDN = rms_noise / rms_total
 
 D. Characterizing an FFT
 ------------------------
