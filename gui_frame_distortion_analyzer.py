@@ -12,7 +12,7 @@ import wx.adv
 import wx.html
 import webbrowser
 
-APP_VERSION = 'v2.0.2'
+APP_VERSION = 'v2.3.1'
 APP_ICON = 'images/hornet.ico'
 
 
