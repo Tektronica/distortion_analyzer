@@ -78,7 +78,7 @@ class MultimeterTab(wx.Panel):
                            }
 
         self.x, self.y, self.std = np.NaN, np.NaN, np.NaN
-        self.errorbars = True
+        self.errorbars = False
         self.ax1 = self.figure.add_subplot(111)
         self.line, (self.err_top, self.err_btm), (self.bars,) = self.ax1.errorbar(np.NaN, np.NaN, yerr=np.NaN, fmt='o',
                                                                                   ecolor='red', capsize=4)
@@ -133,14 +133,14 @@ class MultimeterTab(wx.Panel):
         self.combo_rms_or_peak.SetSelection(0)
         self.combo_mode.SetSelection(0)
         self.checkbox_always_voltage.SetValue(1)
-        self.checkbox_errorbar.SetValue(1)
+        self.checkbox_errorbar.SetValue(0)
 
         self.spreadsheet.CreateGrid(60, 3)
         self.spreadsheet.SetRowLabelSize(40)
         self.spreadsheet.SetColLabelValue(0, 'Frequency')
         self.spreadsheet.SetColLabelValue(1, 'Value')
         self.spreadsheet.SetColLabelValue(2, 'STD')
-        self.spreadsheet.SetMinSize((300, 184))
+        self.spreadsheet.SetMinSize((300, 212))
 
         self.combo_mode.SetMinSize((110, 23))
 

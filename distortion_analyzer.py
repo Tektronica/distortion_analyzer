@@ -96,7 +96,7 @@ class DistortionAnalyzer:
         self.frequency_good = False  # Flag indicates user input for frequency value is good (True)
 
         self.params = {}
-        self.results = {'Amplitude': [], 'Frequency': [], 'RMS': [],
+        self.results = {'Amplitude': [], 'Frequency': [], 'yrms': [],
                         'THDN': [], 'THD': [], 'RMS NOISE': [],
                         'N': [], 'Fs': [], 'Aperture': []}
 
@@ -206,7 +206,7 @@ class DistortionAnalyzer:
     def run_sweep(self, df, func):
         print('Running Sweep.')
         self.frame.flag_complete = False
-        headers = ['amplitude', 'frequency', 'rms', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'aperture']
+        headers = ['amplitude', 'frequency', 'yrms', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'aperture']
         results = np.zeros(shape=(len(df.index), len(headers)))
         t = threading.currentThread()
         for idx, row in df.iterrows():
@@ -260,9 +260,10 @@ class DistortionAnalyzer:
     def test(self, setup):
         # SOURCE -------------------------------------------------------------------------------------------------------
         amplitude = self.params['amplitude']
-        rms = self.params['rms']
+        coupling = self.params['coupling']
         Ft = self.params['frequency']
-        if rms != 0:
+
+        if self.params['rms'] != 0:
             amplitude = amplitude / np.sqrt(2)
             print('Provided amplitude converted to RMS.')
 
@@ -310,7 +311,7 @@ class DistortionAnalyzer:
         if not self.DUMMY_DATA:
             # TODO: shouldn't we always want to setup digitizer for new range??
             if setup:
-                self.M.setup_digitizer(units=units, ideal_range_val=amplitude,
+                self.M.setup_digitizer(units=units, ideal_range_val=amplitude, coupling=coupling,
                                        filter_val=filter_val, N=N, aperture=aperture)
             if self.params['source']:
                 try:
@@ -334,10 +335,10 @@ class DistortionAnalyzer:
     # ------------------------------------------------------------------------------------------------------------------
     def test_analyze_shunt_voltage(self, setup):
         amplitude = self.params['amplitude']
-        rms = self.params['rms']
+        coupling = self.params['coupling']
         Ft = self.params['frequency']
 
-        if rms != 0:
+        if self.params['rms'] != 0:
             amplitude = amplitude / np.sqrt(2)
             print('Provided amplitude converted to RMS.')
 
@@ -371,7 +372,7 @@ class DistortionAnalyzer:
 
         # START DATA COLLECTION ----------------------------------------------------------------------------------------
         if setup:
-            self.M.setup_digitizer(units=meter_units, ideal_range_val=meter_range,
+            self.M.setup_digitizer(units=meter_units, ideal_range_val=meter_range, coupling=coupling,
                                    filter_val=filter_val, N=N, aperture=aperture)
         y = self.M.retrieve_digitize()
 

@@ -335,7 +335,7 @@ class f8588A_instrument:
         return mean, freqval, std
 
     # DIGITIZER ########################################################################################################
-    def setup_digitizer(self, units, ideal_range_val, filter_val, N, aperture):
+    def setup_digitizer(self, units, ideal_range_val, coupling, filter_val, N, aperture):
         # determine the appropriate digitzer mode from output_type. Setting the mode here doesn't matter
         self.output_type, self.mode = self._get_function_params(units=units, mode='AC')
 
@@ -354,6 +354,13 @@ class f8588A_instrument:
                 self.f8588A.write(f':DIGitize:FILTer {filter_val}')
             else:
                 self.f8588A.write(f':DIGitize:FILTer OFF')
+
+            # AC1M = AC Coupling, 1Mohm input impedance
+            # AC10M = AC Coupling, 10Mohm input impedance
+            # DC1M = DC Coupling, 1Mohm input impedance
+            # DC10M - DC Coupling, 10 Mohm input impedance
+            # DCAuto = DC Coupling, maximum avialable input impedance
+            self.f8588A.write(f':DIGitize:VOLTage:COUPling:SIGNal {coupling}')
 
             # f8588A has a 5MHz sampled rate clock. adjusting aperture time,
             # averages more points, which adjusts sample rate

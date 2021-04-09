@@ -25,7 +25,7 @@ class TestFrame(wx.Frame):
         kwds["style"] = kwds.get("style", 0) | wx.DEFAULT_FRAME_STYLE
         wx.Frame.__init__(self, *args, **kwds)
 
-        self.SetSize((1055, 640))
+        self.SetSize((1055, 663))
         # https://stackoverflow.com/a/24704039/3382269
         # Sets minimum window dimensions
         # self.SetSizeHints(1055, 640, -1, -1)
