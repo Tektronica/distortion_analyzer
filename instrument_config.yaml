@@ -1,11 +1,11 @@
 f5560A:
   mode: SOCKET
-  address: 129.196.136.130
+  address: 10.205.95.238
   port: '3490'
   gpib: '6'
 f8588A:
   mode: SOCKET
-  address: 10.205.92.183
+  address: 10.205.92.71
   port: '3490'
   gpib: '6'
 f884xA:

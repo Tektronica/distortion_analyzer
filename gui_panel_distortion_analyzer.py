@@ -365,7 +365,7 @@ class DistortionAnalyzerTab(wx.Panel):
             self.thread_this(self.da.start, (self.user_input,))
             self.btn_start.SetLabel('STOP')
 
-        elif self.t.is_alive() and self.user_input['mode'] in (1, 4):
+        elif self.t.is_alive() and self.user_input['selected_test'] in (1, 4):
             # stop continuous
             # https://stackoverflow.com/a/36499538
             self.t.do_run = False
@@ -454,7 +454,7 @@ class DistortionAnalyzerTab(wx.Panel):
         fs = results['Fs']
         N = results['N']
         aperture = results['Aperture']
-        rms = results['RMS']
+        yrms = results['yrms']
         units = results['units']
         thdn = results['THDN']
         thd = results['THD']
@@ -463,11 +463,11 @@ class DistortionAnalyzerTab(wx.Panel):
         self.label_fs_report.SetLabelText(str(fs))
         self.label_samples_report.SetLabelText(str(N))
         self.label_aperture_report.SetLabelText(str(aperture))
-        self.text_rms_report.SetValue(f"{'{:0.3e}'.format(rms)} {units}")
+        self.text_rms_report.SetValue(f"{'{:0.3e}'.format(yrms)} {units}")
         self.text_thdn_report.SetValue(f"{round(thdn * 100, 3)}% or {round(np.log10(thdn), 1)}dB")
         self.text_thd_report.SetValue(f"{round(thd * 100, 3)}% or {round(np.log10(thd), 1)}dB")
 
-        row = [amplitude, frequency, rms, thdn, thd, rms_noise, fs, N, aperture]
+        row = [amplitude, frequency, yrms, thdn, thd, rms_noise, fs, N, aperture]
         self.frame.append_row(row)
 
     def error_dialog(self, error_message):

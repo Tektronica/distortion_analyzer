@@ -122,7 +122,7 @@ class DistortionAnalyzer:
         source = self.params['source']
         amplitude, units, ft = self.get_string_value(user_input['amplitude'], user_input['frequency'])
         self.params['amplitude'] = amplitude
-        self.params['units'] = units.capitalize()
+        self.params['units'] = units
         self.params['frequency'] = ft
 
         message = f"{amplitude} {units} @ {ft} Hz"
@@ -310,7 +310,8 @@ class DistortionAnalyzer:
         if not self.DUMMY_DATA:
             # TODO: shouldn't we always want to setup digitizer for new range??
             if setup:
-                self.M.setup_digitizer(units, amplitude, filter_val, N, aperture)
+                self.M.setup_digitizer(units=units, ideal_range_val=amplitude,
+                                       filter_val=filter_val, N=N, aperture=aperture)
             if self.params['source']:
                 try:
                     self.M.run_source(units, amplitude, Ft)
@@ -345,7 +346,7 @@ class DistortionAnalyzer:
         time.sleep(1)
 
         # METER
-        self.M.setup_f8588A_meter(autorange=True, output='VOLT', mode='AC')
+        self.M.setup_f8588A_meter(autorange=True, output_type='VOLT', mode='AC')
         meter_outval, meter_range, meter_ft = self.M.read_f8588A_meter()
         meter_units = 'V'
 
@@ -370,7 +371,8 @@ class DistortionAnalyzer:
 
         # START DATA COLLECTION ----------------------------------------------------------------------------------------
         if setup:
-            self.M.setup_digitizer(meter_units, meter_range, filter_val, N, aperture)
+            self.M.setup_digitizer(units=meter_units, ideal_range_val=meter_range,
+                                   filter_val=filter_val, N=N, aperture=aperture)
         y = self.M.retrieve_digitize()
 
         pd.DataFrame(data=y, columns=['ydata']).to_csv('results/y_data.csv')
@@ -393,7 +395,7 @@ class DistortionAnalyzer:
         except ValueError as e:
             raise
         results_row = {'Amplitude': amplitude, 'Frequency': Ft,
-                       'RMS': yrms,
+                       'yrms': yrms,
                        'THDN': round(thdn, 5), 'THD': round(thd, 5), 'RMS NOISE': noise_rms,
                        'N': N, 'Fs': f'{round(Fs / 1000, 2)} kHz', 'Aperture': f'{round(aperture * 1e6, 4)}us'}
 
@@ -469,11 +471,11 @@ class DistortionAnalyzer:
         try:
             if len(s_split) == 3 and s_split[1] in prefix.keys() and s_split[2] in units_list:
                 amplitude = float(Decimal(s_split[0]) * Decimal(prefix[s_split[1]]))
-                units = s_split[2].capitalize()  # example: 'V'
+                units = s_split[2].upper()  # example: 'V'
                 self.amplitude_good = True
             elif len(s_split) == 2 and s_split[1] in units_list:
                 amplitude = float(s_split[0])
-                units = s_split[1].capitalize()  # example: 'V'
+                units = s_split[1].upper()  # example: 'V'
                 self.amplitude_good = True
             elif len(s_split) == 2 and s_split[1]:
                 self.frame.error_dialog('prefix used, but units not specified!')

@@ -56,15 +56,14 @@ class Instruments(dut.f5560A_instrument, dmm1.f884xA_instrument, dmm2.f8588A_ins
             DMM_id = instruments[self.parent.DMM_choice]
 
             self.connect_to_f5560A(f5560A_id)
+
             if self.parent.DMM_choice == 'f884xA':
                 self.connect_to_f884xA(DMM_id)
-            elif self.parent.DMM_choice == 'f8588A':
-                self.connect_to_f8588A(DMM_id)
-            else:
-                raise ValueError("Invalid DMM choice selected!")
+                if self.f5560A.healthy and self.f884xA.healthy:
+                    self.connected = True
+                else:
+                    raise ValueError('Unable to connect to all instruments')
 
-            if self.f5560A.healthy and (self.f884xA.healthy or self.f8588A.healthy):
-                self.connected = True
                 try:
                     idn_dict = {'DUT': self.f5560A_IDN, 'DMM': self.f884xA_IDN}
                     # TODO: parent.parent. --nice
@@ -72,8 +71,25 @@ class Instruments(dut.f5560A_instrument, dmm1.f884xA_instrument, dmm2.f8588A_ins
                     self.setup_source()
                 except ValueError:
                     raise
+
+            elif self.parent.DMM_choice == 'f8588A':
+                self.connect_to_f8588A(DMM_id)
+                if self.f5560A.healthy and self.f8588A.healthy:
+                    self.connected = True
+                else:
+                    raise ValueError('Unable to connect to all instruments')
+
+                try:
+                    idn_dict = {'DUT': self.f5560A_IDN, 'DMM': self.f8588A_IDN}
+                    # TODO: parent.parent. --nice
+                    self.parent.parent.set_ident(idn_dict)
+                    self.setup_source()
+                except ValueError:
+                    raise
+
             else:
-                print('Unable to connect to all instruments.\n')
+                raise ValueError("Invalid DMM choice selected!")
+
         except ValueError:
             raise ValueError('Could not connect. Timeout error occurred.')
 
@@ -265,14 +281,25 @@ class DMM_Measurement:
             autorange = params['autorange']
 
             # Usually enters on each new measurement, but only once for each loop (measurement sweep) ------------------
-            if setup:
-                self.M.setup_f884xA_meter(autorange=autorange, units=dmm_units, frequency=Ft)
-                self._Ft = Ft
+            if self.DMM_choice == 'f884xA':
+                if setup:
+                    self.M.setup_f884xA_meter(autorange=autorange, units=dmm_units, frequency=Ft)
+                    self._Ft = Ft
 
-            # During a loop (measurement sweep) we want to catch changes from either AC to DC or vice-versa ------------
-            elif (Ft * self._Ft) == 0 and Ft != self._Ft:
-                self.M.setup_f884xA_meter(autorange=autorange, units=dmm_units, frequency=Ft)
-                self._Ft = Ft
+                # During a loop (measurement sweep) we want to catch changes from either AC to DC or vice-versa --------
+                elif (Ft * self._Ft) == 0 and Ft != self._Ft:
+                    self.M.setup_f884xA_meter(autorange=autorange, units=dmm_units, frequency=Ft)
+                    self._Ft = Ft
+
+            elif self.DMM_choice == 'f8588A':
+                if setup:
+                    self.M.setup_f8588A_meter(autorange=autorange, units=dmm_units, frequency=Ft)
+                    self._Ft = Ft
+
+                # During a loop (measurement sweep) we want to catch changes from either AC to DC or vice-versa --------
+                elif (Ft * self._Ft) == 0 and Ft != self._Ft:
+                    self.M.setup_f8588A_meter(autorange=autorange, units=dmm_units, frequency=Ft)
+                    self._Ft = Ft
 
             try:
                 if not autorange:

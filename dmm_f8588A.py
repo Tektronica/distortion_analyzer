@@ -174,8 +174,8 @@ class f8588A_instrument:
                 else:
                     output_type = 'VOLT'
             else:
-                raise ValueError("The 'mode' parameter was identified an operating 'mode' for the Fluke "
-                                 "8588A. However, insufficient or missing values for either 'output type' or "
+                raise ValueError("While the 'mode' parameter was specified, insufficient or missing values for either "
+                                 "'output type' or "
                                  "'units'.")
 
         # provided frequency and either 'output type' or 'units' -------------------------------------------------------
@@ -208,7 +208,7 @@ class f8588A_instrument:
     # RANGE ############################################################################################################
     def determine_f8588A_range(self, ideal_range_val: float, output_type: str):
         # overange is 20%. Max value must be less than (1 + 20%) of nominal range --------------------------------------
-        if output_type.capitalize() in ('A', 'CURR', 'CURRENT'):
+        if output_type.upper() in ('A', 'CURR', 'CURRENT'):
             if ideal_range_val < 10e-6 * (1 + 0.2):
                 range_val = 10e-6
                 range_string = '10uA'
@@ -234,7 +234,7 @@ class f8588A_instrument:
                 range_val = 30
                 range_string = '30A'
 
-        elif output_type.capitalize() in ('V', 'VOLT', 'VOLTAGE'):
+        elif output_type.upper() in ('V', 'VOLT', 'VOLTAGE'):
             if ideal_range_val < 0.10 * (1 + 0.2):
                 range_val = 0.1
                 range_string = '100mV'
@@ -271,7 +271,7 @@ class f8588A_instrument:
         :param kwds: dictionary containing at least two of the following: 'output_type', 'mode', 'units', 'frequency'
         :return: True iff range is set successfully
         """
-        # Get function parameters for Fluke 884xA ----------------------------------------------------------------------
+        # Get function parameters for Fluke 8588A ----------------------------------------------------------------------
         self.output_type, self.mode = self._get_function_params(**kwds)  # ('VOLT', 'AC')
 
         # Causes the meter to exit autoranging on the primary display and enter manual ranging. The present range ------
@@ -387,14 +387,28 @@ class f8588A_instrument:
 
 # Run
 if __name__ == "__main__":
-    instr = f8588A_instrument()
-    instr.connect_to_f8588A(instruments)
+    DUMMY_DATA = True
 
-    # 1. Setup the meter for measurement
-    instr.setup_f8588A_meter(autorange=True, output_type='VOLT', mode='AC')
-    # 2. Get Average Reading
-    outval, freqval, std = instr.average_f8588A_reading(samples=10, dt=0.1)
+    if not DUMMY_DATA:
+        instr = f8588A_instrument()
+        instr.connect_to_f8588A(instruments)
 
-    print(f"\nOutput: {outval}\nFrequency: {freqval} Hz")
+        # 1. Setup the meter for measurement
+        instr.setup_f8588A_meter(autorange=True, output_type='VOLT', mode='AC')
+        # 2. Get Average Reading
+        outval, freqval, std = instr.average_f8588A_reading(samples=10, dt=0.1)
 
-    instr.close_f8588A()
+        print(f"\nOutput: {outval}\nFrequency: {freqval} Hz")
+
+        instr.close_f8588A()
+
+    else:
+        instr = f8588A_instrument()
+        output_type, mode = instr._get_function_params(units='A', mode='AC')
+        print(output_type, mode)
+
+        try:
+            instr.setup_digitizer(units='A', ideal_range_val=1,
+                                  filter_val='100kHz', N=20000, aperture=0)
+        except AttributeError:
+            print("AttributeError was raised. The instrument isn't currently connected.")
