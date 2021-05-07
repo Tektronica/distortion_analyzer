@@ -70,9 +70,9 @@ def get_aperture(Fs, N):
     Navg = max(round(DIGITIZER_SAMPLING_FREQUENCY / Fs), 1)  # The number of samples averaged per trigger
 
     # The duration of the digitizer averaging per trigger
-    aperture = max(200e-9 * (Navg - 1), 0)
+    aperture = max(200e-9 * (Navg - 1), 0) # change to if not zero
     if aperture > 1e-3:
-        aperture = max(100e-6 * (Navg - 1), 0)
+        aperture = max(100e-6 * (Navg - 1), 0) # why 100us increments over 1 ms? Does it work the same way averaging?
 
     runtime = N * (aperture + 200e-9)  # The total runtime
 
@@ -354,13 +354,24 @@ class f8588A_instrument:
                 self.f8588A.write(f':DIGitize:FILTer {filter_val}')
             else:
                 self.f8588A.write(f':DIGitize:FILTer OFF')
+            # AC or DC coupling, and input impedance for voltage
+            # The GUI should probably reflect that input impedance cannot be
+            # changed for current measurements.
+            if self.output_type == 'CURR':
+                if 'AC' in coupling:
+                    self.f8588A.write(f':DIGitize:CURRent:COUPling AC')
+                elif 'DC' in coupling:
+                    self.f8588A.write(f':DIGitize:CURRent:COUPling DC')
+            elif self.output_type == 'VOLT':
+                # AC1M = AC Coupling, 1Mohm input impedance
+                # AC10M = AC Coupling, 10Mohm input impedance
+                # DC1M = DC Coupling, 1Mohm input impedance
+                # DC10M - DC Coupling, 10 Mohm input impedance
+                # DCAuto = DC Coupling, maximum avialable input impedance
+                self.f8588A.write(f':DIGitize:VOLTage:COUPling:SIGNal {coupling}')
+            else:
+                raise ValueError('Unanticipated self.output_type while setting digitize coupling and input impedance.')
 
-            # AC1M = AC Coupling, 1Mohm input impedance
-            # AC10M = AC Coupling, 10Mohm input impedance
-            # DC1M = DC Coupling, 1Mohm input impedance
-            # DC10M - DC Coupling, 10 Mohm input impedance
-            # DCAuto = DC Coupling, maximum avialable input impedance
-            self.f8588A.write(f':DIGitize:VOLTage:COUPling:SIGNal {coupling}')
 
             # f8588A has a 5MHz sampled rate clock. adjusting aperture time,
             # averages more points, which adjusts sample rate

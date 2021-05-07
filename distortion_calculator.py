@@ -275,6 +275,8 @@ def THD(yf, Fs):
         for h in range(n_harmonics):
             local = int(idx * (h + 1))
             try:
+                # The bandwidth over which a harmonic is searched for should be
+                # specified by a variable rather than the number 4.
                 amplitude[h] = np.max(np.abs(yf[local - 4:local + 4])) / _yf_data_peak
             except ValueError:
                 raise ValueError('Failed to capture all peaks for calculating THD.\nMost likely zero-size array.')

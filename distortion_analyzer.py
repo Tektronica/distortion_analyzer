@@ -280,6 +280,9 @@ class DistortionAnalyzer:
             hpf = 3  # high pass filter cutoff frequency
             Fs, N, aperture, runtime = get_FFT_parameters(Ft=10, lpf=lpf, error=error)
         else:
+            # This code needs to separate the analog filter in the 8588 from the
+            # digital filter in the code. Currently,  the 2 MHz and 2.4 MHz
+            # selections use no analog filter, resulting in aliasing.
             if filter_val == 'None':
                 lpf = 0  # low pass filter cutoff frequency
                 hpf = 0
