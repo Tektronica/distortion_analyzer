@@ -122,7 +122,7 @@ class TestFrame(wx.Frame):
         self.notebook_information.SetBackgroundColour(wx.Colour(255, 0, 255))
 
         # Set default window selection in the appended submenu radio list
-        self.radio_menu_windowing.Check(id=self.menu_windowing_rect.GetId(), check=True)
+        self.radio_menu_windowing.Check(id=self.menu_windowing_blac.GetId(), check=True)
 
     def __do_layout(self):
         sizer_7 = wx.BoxSizer(wx.VERTICAL)

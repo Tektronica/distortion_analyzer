@@ -96,7 +96,7 @@ class DistortionAnalyzer:
     def __init__(self, parent):
         self.panel = parent
         self.DUMMY_DATA = False  # can be toggled by the gui
-        self.WINDOW_SELECTION = "rectangular"  # selected windowing
+        self.WINDOW_SELECTION = "blackman"  # selected windowing
 
         self.amplitude_good = False  # Flag indicates user input for amplitude value is good (True)
         self.frequency_good = False  # Flag indicates user input for frequency value is good (True)
