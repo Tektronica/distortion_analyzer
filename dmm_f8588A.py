@@ -33,6 +33,31 @@ def getSamplingFrequency(f0, bw=100e3):
     return Fs
 
 
+def getStuff(f0, LDF=100, BW=100e3, windfunc='rectangular'):
+    # Ideal sampling frequency
+    _Fs = max(2 * BW, 10 * f0)
+
+    if windfunc == 'rectangular':
+        K = 2
+    elif windfunc in ('bartlett', 'hanning', 'hamming'):
+        K = 4
+    elif windfunc == 'blackman':
+        K = 6
+    else:
+        raise ValueError('Not a valid windowing function.')
+
+    res = LDF / K
+    Navg = np.ceil(min(DIGITIZER_SAMPLING_FREQUENCY / (res * f0), DIGITIZER_SAMPLING_FREQUENCY / _Fs))
+    print(Navg)
+    f0 = round(DIGITIZER_SAMPLING_FREQUENCY / (res * Navg), 2)
+    Fs = DIGITIZER_SAMPLING_FREQUENCY / Navg
+
+    N = int(np.ceil(Fs / res))
+    ldf = round(K * (Fs / N), 3)
+    print(ldf)
+    return f0, Fs, N
+
+
 def get_aperture(Fs, N):
     """
     The aperture is the duration after trigger where samples at a rate of 5 MHz are averaged together.

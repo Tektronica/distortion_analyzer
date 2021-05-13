@@ -30,28 +30,41 @@ class TestFrame(wx.Frame):
         # Sets minimum window dimensions
         # self.SetSizeHints(1055, 640, -1, -1)
 
-        # Menu Bar -----------------------------------------------------------------------------------------------------
+        # FILE menu tab ------------------------------------------------------------------------------------------------
         self.frame_menubar = wx.MenuBar()
-        wxglade_tmp_menu = wx.Menu()
-        self.menu_results = wxglade_tmp_menu.Append(wx.ID_ANY, "Open Results", "")
-        self.menu_history = wxglade_tmp_menu.Append(wx.ID_ANY, "Open History", "")
-        wxglade_tmp_menu.AppendSeparator()
-        self.menu_export = wxglade_tmp_menu.Append(wx.ID_ANY, "Export Data", "")
-        self.frame_menubar.Append(wxglade_tmp_menu, "File")
+        menu_tree = wx.Menu()
+        self.menu_results = menu_tree.Append(wx.ID_ANY, "Open Results", "")
+        self.menu_history = menu_tree.Append(wx.ID_ANY, "Open History", "")
+        menu_tree.AppendSeparator()
+        self.menu_export = menu_tree.Append(wx.ID_ANY, "Export Data", "")
+        self.frame_menubar.Append(menu_tree, "File")
 
-        wxglade_tmp_menu = wx.Menu()
-        self.menu_config = wxglade_tmp_menu.Append(wx.ID_ANY, "Configure Instruments", "")
-        self.menu_close_instruments = wxglade_tmp_menu.Append(wx.ID_ANY, "Close Instruments", "")
-        self.menu_DUMMY = wxglade_tmp_menu.AppendCheckItem(wx.ID_ANY, "Use DUMMY Data?")
-        # self.menu_brkpts = wxglade_tmp_menu.Append(wx.ID_ANY, "Open Breakpoints", "")
-        self.frame_menubar.Append(wxglade_tmp_menu, "Settings")
+        # SETTINGS menu tab --------------------------------------------------------------------------------------------
+        menu_tree = wx.Menu()
+        self.menu_config = menu_tree.Append(wx.ID_ANY, "Configure Instruments", "")
+        self.menu_close_instruments = menu_tree.Append(wx.ID_ANY, "Close Instruments", "")
+        menu_tree.AppendSeparator()
 
-        wxglade_tmp_menu = wx.Menu()
-        self.menu_reset_view = wxglade_tmp_menu.Append(wx.ID_ANY, "Reset Window Size", "")
-        wxglade_tmp_menu.AppendSeparator()
-        self.menu_about = wxglade_tmp_menu.Append(wx.ID_ANY, '&About')
+        self.radio_menu_windowing = wx.Menu()  # submenu
+        self.menu_windowing_rect = self.radio_menu_windowing.AppendRadioItem(wx.ID_ANY, 'Rectangular', '1')
+        self.menu_windowing_bart = self.radio_menu_windowing.AppendRadioItem(wx.ID_ANY, 'Bartlett', '2')
+        self.menu_windowing_hann = self.radio_menu_windowing.AppendRadioItem(wx.ID_ANY, 'Hanning', '3')
+        self.menu_windowing_hann = self.radio_menu_windowing.AppendRadioItem(wx.ID_ANY, 'Hamming', '3')
+        self.menu_windowing_blac = self.radio_menu_windowing.AppendRadioItem(wx.ID_ANY, 'Blackman', '4')
+        menu_tree.AppendSubMenu(self.radio_menu_windowing, 'W&indowing')
+        menu_tree.AppendSeparator()
+
+        self.menu_DUMMY = menu_tree.AppendCheckItem(wx.ID_ANY, "Use DUMMY Data?")
         # self.menu_brkpts = wxglade_tmp_menu.Append(wx.ID_ANY, "Open Breakpoints", "")
-        self.frame_menubar.Append(wxglade_tmp_menu, "View")
+        self.frame_menubar.Append(menu_tree, "Settings")
+
+        # VIEW menu tab ------------------------------------------------------------------------------------------------
+        menu_tree = wx.Menu()
+        self.menu_reset_view = menu_tree.Append(wx.ID_ANY, "Reset Window Size", "")
+        menu_tree.AppendSeparator()
+        self.menu_about = menu_tree.Append(wx.ID_ANY, '&About')
+        # self.menu_brkpts = wxglade_tmp_menu.Append(wx.ID_ANY, "Open Breakpoints", "")
+        self.frame_menubar.Append(menu_tree, "View")
         self.SetMenuBar(self.frame_menubar)
 
         # NOTEBOOK =====================================================================================================
@@ -82,6 +95,10 @@ class TestFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.grid_1.export, self.menu_export)
         self.Bind(wx.EVT_MENU, self.config_all_instruments, self.menu_config)
         self.Bind(wx.EVT_MENU, self.close_all_instruments, self.menu_close_instruments)
+        self.Bind(wx.EVT_MENU, self.OnWindowSelection, self.menu_windowing_rect)
+        self.Bind(wx.EVT_MENU, self.OnWindowSelection, self.menu_windowing_bart)
+        self.Bind(wx.EVT_MENU, self.OnWindowSelection, self.menu_windowing_hann)
+        self.Bind(wx.EVT_MENU, self.OnWindowSelection, self.menu_windowing_blac)
         self.Bind(wx.EVT_MENU, self.OnDummyChecked, self.menu_DUMMY)
         # self.Bind(wx.EVT_MENU, self.open_breakpoints, self.menu_brkpts)
         self.Bind(wx.EVT_MENU, self.reset_view, self.menu_reset_view)
@@ -103,6 +120,9 @@ class TestFrame(wx.Frame):
         self.notebook_history.SetBackgroundColour(wx.Colour(255, 255, 255))
         self.notebook_multimeter.SetBackgroundColour(wx.Colour(255, 255, 255))
         self.notebook_information.SetBackgroundColour(wx.Colour(255, 0, 255))
+
+        # Set default window selection in the appended submenu radio list
+        self.radio_menu_windowing.Check(id=self.menu_windowing_rect.GetId(), check=True)
 
     def __do_layout(self):
         sizer_7 = wx.BoxSizer(wx.VERTICAL)
@@ -160,6 +180,15 @@ class TestFrame(wx.Frame):
         self.tab_multimeter.dmm.close_instruments()
         print("\tremote connection to instruments used in multimeter are closed.")
 
+    def OnWindowSelection(self, evt):
+        window_value = "rectangular"
+        for item in self.radio_menu_windowing.GetMenuItems():
+            if item.IsChecked():
+                window_value = item.GetItemLabelText().lower()
+
+        self.tab_analyzer.da.WINDOW_SELECTION = window_value
+        print(f"[{window_value}] Selected as the windowing function.")
+
     def OnDummyChecked(self, event):
         if self.menu_DUMMY.IsChecked():
             self.tab_analyzer.da.DUMMY_DATA = True
@@ -172,7 +201,8 @@ class TestFrame(wx.Frame):
 
     # ------------------------------------------------------------------------------------------------------------------
     def __do_table_header(self):
-        header = ['Amplitude', 'Frequency', 'RMS', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'Samples', 'Aperture']
+        header = ['Amplitude', 'freq_ideal', 'freq_fudged', 'freq_actual',
+                  'RMS', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'Samples', 'Aperture']
         self.grid_1.append_rows(header)
 
     def append_row(self, row):

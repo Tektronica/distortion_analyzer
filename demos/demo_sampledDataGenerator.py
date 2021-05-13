@@ -72,7 +72,7 @@ def plot(xt, yt, xf, yf, N):
 
     # SPECTRAL ---------------------------------------------------------------------------------------------------------
     yf_peak = max(abs(yf))
-    ax2.plot(xf, 20*np.log10(np.abs(yf/yf_peak)), linestyle='-')
+    ax2.plot(xf, 20 * np.log10(np.abs(yf / yf_peak)), linestyle='-')
 
     xf_left = 0
     xf_right = xf[int(N / 2) - 1]
@@ -114,22 +114,32 @@ def write_to_csv(path, fname, header, *args):
             writer.writerow(row)
 
 
-def main():
-    Ft = 1e3
-    lpf = 100e3
-    error = 0.1
+def GetData(amplitude, f0, Fs, N, has_harmonics=True, has_noise=True):
+    print(f0)
+    # TEMPORAL ---------------------------------------------------------------------------------------------------------
+    ypeak = amplitude*np.sqrt(2)
+    xt = np.arange(0, N, 1) / Fs
+    yt = ypeak * np.sin(2 * np.pi * f0 * xt)
 
-    Fs, N = get_FFT_parameters(Ft, lpf, error)
+    if has_harmonics:
+        yt = yt + 1e-3 * ypeak * np.sin(2 * np.pi * 3 * f0 * xt) + 1e-4 * ypeak * np.sin(2 * np.pi * 5 * f0 * xt)
+    if has_noise:
+        yt = yt + 1e-4 * ypeak * np.random.normal(0, 1, N)
+
+    return xt, yt
+
+
+def main():
+    f0 = 1492.54
+    lpf = 100e3
+    mainlobe_value = 0.1
+
+    Fs, N = get_FFT_parameters(f0, lpf, mainlobe_value)
 
     # TEMPORAL ---------------------------------------------------------------------------------------------------------
-    xt = np.arange(0, N, 1) / Fs
-    yt = 2*np.sin(2 * np.pi * Ft * xt)
-    if CONTAINS_HARMONICS:
-        yt = yt + 0.001 * np.sin(2 * np.pi * 3 * Ft * xt) + 0.0001 * np.sin(2 * np.pi * 5 * Ft * xt)
-    if CONTAINS_NOISE:
-        yt = yt + np.random.normal(0, 1, N)*0.0001
-
+    xt, yt = GetData(1, f0, Fs, N, CONTAINS_HARMONICS, CONTAINS_NOISE)
     yrms = np.sqrt(np.mean(np.absolute(yt) ** 2))
+    print(yrms)
 
     # SPECTRAL ---------------------------------------------------------------------------------------------------------
     xf = np.linspace(0.0, Fs, N)

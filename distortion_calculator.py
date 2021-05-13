@@ -1,4 +1,5 @@
 import numpy as np
+import math
 
 """
 FFT Fundamentals
@@ -32,7 +33,12 @@ def rms_flat(a):
     """
     Return the root mean square of all the elements of *a*, flattened out.
     """
-    return np.sqrt(np.mean(np.absolute(a) ** 2))
+    # https://stackoverflow.com/a/17463210
+    # https://code.activestate.com/recipes/393090/
+    # https://stackoverflow.com/a/33004170
+    sqr = np.absolute(a) ** 2
+    mean = math.fsum(sqr)/len(sqr)  # computed from partial sums
+    return np.sqrt(mean)
 
 
 def find_range(f, x):
@@ -52,7 +58,7 @@ def find_range(f, x):
     return lowermin, uppermin
 
 
-def getWindowLength(f0=10e3, fs=2.5e6, windfunc='blackman', error=0.1):
+def getWindowLength(f0=10e3, fs=2.5e6, windfunc='blackman', error=0.1, mainlobe_type='relative'):
     """
     Computes the window length of the measurement. An error is expressed since the main lobe width is directly
     proportional to the number of cycles captured. The minimum value of M correlates to the lowest detectable frequency
@@ -68,11 +74,16 @@ def getWindowLength(f0=10e3, fs=2.5e6, windfunc='blackman', error=0.1):
     """
     # lowest detectable frequency by window
     # aka - the main lobe width
-    ldf = f0 * error
+    if mainlobe_type == 'relative':
+        ldf = f0 * error
+    elif mainlobe_type == 'absolute':
+        ldf = error
+    else:
+        raise ValueError('Incorrect main lobe type used!\nSelection should either be relative or absolute.')
 
-    if windfunc == 'Rectangular':
-        M = int(fs / ldf)
-    elif windfunc in ('Bartlett', 'Hanning', 'Hamming'):
+    if windfunc == 'rectangular':
+        M = int(2 * (fs / ldf))
+    elif windfunc in ('bartlett', 'hanning', 'hamming'):
         M = int(4 * (fs / ldf))
     elif windfunc == 'blackman':
         M = int(6 * (fs / ldf))
@@ -88,7 +99,10 @@ def windowed_fft(yt, Fs, N, windfunc='blackman'):
     yt -= np.mean(yt)
 
     # Calculate windowing function and its length ----------------------------------------------------------------------
-    if windfunc == 'bartlett':
+    if windfunc == 'rectangular':
+        w = np.ones(N)
+        main_lobe_width = 2 * (Fs / N)
+    elif windfunc == 'bartlett':
         w = np.bartlett(N)
         main_lobe_width = 4 * (Fs / N)
     elif windfunc == 'hanning':
@@ -121,11 +135,16 @@ def windowed_fft(yt, Fs, N, windfunc='blackman'):
     alternatively by N samples of the time-series data splits the power between the positive and negative sides. 
     However, we are only looking at one side of the FFT.
     """
-    yf_fft = (np.fft.fft(yt * w) / fft_length) * amplitude_correction_factor
+    try:
+        yf_fft = (np.fft.fft(yt * w) / fft_length) * amplitude_correction_factor
 
-    yf_rfft = yf_fft[:fft_length]
-    xf_fft = np.linspace(0.0, Fs, N)
-    xf_rfft = np.linspace(0.0, Fs / 2, fft_length)
+        yf_rfft = yf_fft[:fft_length]
+        xf_fft = np.linspace(0.0, Fs, N)
+        xf_rfft = np.linspace(0.0, Fs / 2, fft_length)
+    except ValueError as e:
+        print('\n!!!\nError caught while performing fft of presumably length mismatched arrays.'
+              '\nwindowed_fft method in distortion_calculator.py\n!!!\n')
+        raise ValueError(e)
 
     return xf_fft, yf_fft, xf_rfft, yf_rfft, main_lobe_width
 
@@ -172,8 +191,8 @@ def THDN_F(yf, fs, N, main_lobe_width=None, hpf=0, lpf=100e3):
     # https://stackoverflow.com/questions/23341935/find-rms-value-in-frequency-domain
     # Find the local minimals of the main lobe fundamental frequency
     if main_lobe_width:
-        left_of_lobe = int((fundamental - main_lobe_width / 2) * (N/fs)) + 1
-        right_of_lobe = int((fundamental + main_lobe_width / 2) * (N/fs)) + 2
+        left_of_lobe = int((fundamental - main_lobe_width / 2) * (N / fs)) + 1
+        right_of_lobe = int((fundamental + main_lobe_width / 2) * (N / fs)) + 2
     else:
         left_of_lobe, right_of_lobe = find_range(abs(_yf), idx)
 
@@ -314,4 +333,3 @@ def flicker_noise(yf, fs, N, hpf=0.1, lpf=10):
         yf[fc:] = 1e-10
 
     return yf
-
