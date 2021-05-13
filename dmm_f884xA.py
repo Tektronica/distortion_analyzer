@@ -41,9 +41,9 @@ class f884xA_instrument:
             except ValueError:
                 raise
         else:
-            print('Unable to connect to the Fluke 884xA. Check software configuration, ensure instrument is'
-                  'connected properly or not being used by another remote session. Consider power cycling the '
-                  'suspected instrument\n')
+            print('[*]Unable to connect to the Fluke 884xA. Check software configuration, ensure instrument is'
+                  '\nconnected properly or not being used by another remote session. Consider power cycling the '
+                  '\nsuspected instrument\n')
 
     # SETUP METER ######################################################################################################
     def setup_f884xA_meter(self, autorange=True, **kwds):
@@ -61,6 +61,8 @@ class f884xA_instrument:
 
         try:
             self.f884xA.write(f'CONF:{self.output_type}:{self.mode}')
+            time.sleep(0.5)
+
             if autorange:
                 self.f884xA.write(f'{self.output_type}:{self.mode}:RANGE:AUTO ON')
             else:

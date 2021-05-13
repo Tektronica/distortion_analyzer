@@ -114,7 +114,7 @@ class f8588A_instrument:
         self.f8588_connected = False
 
         self.setup_complete = True
-        self.output_type = 'VOLT'
+        self.meter_fn = 'VOLT'
         self.mode = 'DC'
 
     def connect_to_f8588A(self, instr_id):
@@ -128,9 +128,9 @@ class f8588A_instrument:
             except ValueError:
                 raise
         else:
-            print('Unable to connect to the Fluke 8588A. Check software configuration, ensure instrument is'
-                  'connected properly or not being used by another remote session. Consider power cycling the '
-                  'suspected instrument\n')
+            print('[*]Unable to connect to the Fluke 8588A. Check software configuration, ensure instrument is'
+                  '\nconnected properly or not being used by another remote session. Consider power cycling the '
+                  '\nsuspected instrument\n')
 
     # SETUP METER ######################################################################################################
     def setup_f8588A_meter(self, autorange=True, **kwds):
@@ -145,15 +145,17 @@ class f8588A_instrument:
         :return: True if completion successful
         """
 
-        self.output_type, self.mode = self._get_function_params(**kwds)  # Example: ('VOLT', 'AC')
+        self.meter_fn, self.mode = self._get_function_params(**kwds)  # Example: ('VOLT', 'AC')
 
         try:
-            self.f8588A.write(f'CONF:{self.output_type}:{self.mode}')
+            self.f8588A.write(f'CONF:{self.meter_fn}:{self.mode}')
+            time.sleep(0.5)
+
             if autorange:
-                self.f8588A.write(f'{self.output_type}:{self.mode}:RANGE:AUTO ON')
+                self.f8588A.write(f'{self.meter_fn}:{self.mode}:RANGE:AUTO ON')
             else:
                 # Set Fluke 884xA to largest range for internal protection by default.
-                self.set_f8588A_range(ideal_range_val=1000, output_type=self.output_type, mode=self.mode)
+                self.set_f8588A_range(ideal_range_val=1000, output_type=self.meter_fn, mode=self.mode)
             time.sleep(1)
             return True
 
@@ -169,7 +171,7 @@ class f8588A_instrument:
         with switching ranges. This method allows the meter to range correctly before performing the measurement.
         :return:
         """
-        dmm_range = to_float(self.f8588A.query(f'{self.output_type}:{self.mode}:RANGE?'))
+        dmm_range = to_float(self.f8588A.query(f'{self.meter_fn}:{self.mode}:RANGE?'))
         return dmm_range
 
     def _get_function_params(self, **kwds):
@@ -297,18 +299,18 @@ class f8588A_instrument:
         :return: True iff range is set successfully
         """
         # Get function parameters for Fluke 8588A ----------------------------------------------------------------------
-        self.output_type, self.mode = self._get_function_params(**kwds)  # ('VOLT', 'AC')
+        self.meter_fn, self.mode = self._get_function_params(**kwds)  # ('VOLT', 'AC')
 
         # Causes the meter to exit autoranging on the primary display and enter manual ranging. The present range ------
         # becomes the selected range. ----------------------------------------------------------------------------------
-        self.f8588A.write(f"{self.output_type}:{self.mode}:FIXED")
+        self.f8588A.write(f"{self.meter_fn}:{self.mode}:FIXED")
 
         # Calculate the closest range for measurement ------------------------------------------------------------------
-        range_val, range_string = self.determine_f8588A_range(ideal_range_val, self.output_type)
+        range_val, range_string = self.determine_f8588A_range(ideal_range_val, self.meter_fn)
 
         # Set new range ------------------------------------------------------------------------------------------------
         try:
-            self.f8588A.write(f"{self.output_type}:{self.mode}:RANGE {range_val}")
+            self.f8588A.write(f"{self.meter_fn}:{self.mode}:RANGE {range_val}")
             print(f"Successfully set range of Fluke 884xA to {range_val} ({range_string})")
             return True
         except Exception:
@@ -362,16 +364,16 @@ class f8588A_instrument:
     # DIGITIZER ########################################################################################################
     def setup_digitizer(self, units, ideal_range_val, coupling, filter_val, N, aperture):
         # determine the appropriate digitzer mode from output_type. Setting the mode here doesn't matter
-        self.output_type, self.mode = self._get_function_params(units=units, mode='AC')
+        self.meter_fn, self.mode = self._get_function_params(units=units, mode='AC')
 
         # Calculate the closest range for measurement ------------------------------------------------------------------
-        range_val, range_string = self.determine_f8588A_range(ideal_range_val, self.output_type)  # (0.1, '0.1A')
+        range_val, range_string = self.determine_f8588A_range(ideal_range_val, self.meter_fn)  # (0.1, '0.1A')
 
         self.f8588A.write('*RST')
 
         try:
-            self.f8588A.write(f':FUNC "DIGitize:{self.output_type}" ')
-            self.f8588A.write(f':DIGitize:{self.output_type}:RANGe {range_val}')
+            self.f8588A.write(f':FUNC "DIGitize:{self.meter_fn}" ')
+            self.f8588A.write(f':DIGitize:{self.meter_fn}:RANGe {range_val}')
             print(f"Successfully set range of Fluke 8588A to {range_string}")
 
             # :FILTer OFF|100Khz|3MHZ
@@ -413,6 +415,7 @@ class f8588A_instrument:
     def close_f8588A(self):
         if self.f8588_connected:
             time.sleep(1)
+            self.f8588A.write('LOCal')
             self.f8588A.close()
             self.f8588_connected = False
 

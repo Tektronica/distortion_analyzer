@@ -30,7 +30,7 @@ class MultimeterTab(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent, wx.ID_ANY)
 
-        self.parent = parent
+        self.frame = parent
         self.left_panel = wx.Panel(self, wx.ID_ANY)
         self.plot_panel = wx.Panel(self, wx.ID_ANY, style=wx.SIMPLE_BORDER)
 

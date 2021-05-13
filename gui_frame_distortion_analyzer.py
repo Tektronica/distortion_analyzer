@@ -173,12 +173,22 @@ class TestFrame(wx.Frame):
         dlg.ShowModal()
         dlg.Destroy()
 
+    def popup_dialog(self, error_message):
+        print(error_message)
+        dial = wx.MessageDialog(None, str(error_message), 'Error', wx.OK | wx.ICON_ERROR)
+        dial.ShowModal()
+
     def close_all_instruments(self, evt):
+        wait = wx.BusyCursor()
         print("Closing all possible remote connections to instruments:")
         self.tab_analyzer.da.close_instruments()
         print("\tremote connection to instruments used in distortion analyzer are closed.")
         self.tab_multimeter.dmm.close_instruments()
         print("\tremote connection to instruments used in multimeter are closed.")
+
+        del wait
+        self.popup_dialog('All instruments have been closed.')
+
 
     def OnWindowSelection(self, evt):
         window_value = "rectangular"

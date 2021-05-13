@@ -45,7 +45,7 @@ class Instruments(dut.f5560A_instrument, dmm1.f884xA_instrument, dmm2.f8588A_ins
         dmm1.f884xA_instrument.__init__(self)
         dmm2.f8588A_instrument.__init__(self)
 
-        self.parent = parent
+        self.multimeter = parent
         self.measurement = []
         self.connected = False
 
@@ -53,11 +53,11 @@ class Instruments(dut.f5560A_instrument, dmm1.f884xA_instrument, dmm2.f8588A_ins
         try:
             # ESTABLISH COMMUNICATION TO INSTRUMENTS -------------------------------------------------------------------
             f5560A_id = instruments['f5560A']
-            DMM_id = instruments[self.parent.DMM_choice]
+            DMM_id = instruments[self.multimeter.DMM_choice]
 
             self.connect_to_f5560A(f5560A_id)
 
-            if self.parent.DMM_choice == 'f884xA':
+            if self.multimeter.DMM_choice == 'f884xA':
                 self.connect_to_f884xA(DMM_id)
                 if self.f5560A.healthy and self.f884xA.healthy:
                     self.connected = True
@@ -67,12 +67,12 @@ class Instruments(dut.f5560A_instrument, dmm1.f884xA_instrument, dmm2.f8588A_ins
                 try:
                     idn_dict = {'DUT': self.f5560A_IDN, 'DMM': self.f884xA_IDN}
                     # TODO: parent.parent. --nice
-                    self.parent.parent.set_ident(idn_dict)
+                    self.multimeter.panel.set_ident(idn_dict)
                     self.setup_source()
                 except ValueError:
                     raise
 
-            elif self.parent.DMM_choice == 'f8588A':
+            elif self.multimeter.DMM_choice == 'f8588A':
                 self.connect_to_f8588A(DMM_id)
                 if self.f5560A.healthy and self.f8588A.healthy:
                     self.connected = True
@@ -82,7 +82,7 @@ class Instruments(dut.f5560A_instrument, dmm1.f884xA_instrument, dmm2.f8588A_ins
                 try:
                     idn_dict = {'DUT': self.f5560A_IDN, 'DMM': self.f8588A_IDN}
                     # TODO: parent.parent. --nice
-                    self.parent.parent.set_ident(idn_dict)
+                    self.multimeter.panel.set_ident(idn_dict)
                     self.setup_source()
                 except ValueError:
                     raise
@@ -96,20 +96,21 @@ class Instruments(dut.f5560A_instrument, dmm1.f884xA_instrument, dmm2.f8588A_ins
     def close_instruments(self):
         time.sleep(1)
         self.close_f5560A()
-        if self.parent.DMM_choice == 'f884xA':
+        if self.multimeter.DMM_choice == 'f884xA':
             self.close_f884xA()
-        elif self.parent.DMM_choice == 'f8588A':
+        elif self.multimeter.DMM_choice == 'f8588A':
             self.close_f8588A()
         else:
             raise ValueError("Failed to close DMM instrument!"
                              "\nThe DMM selected may not match what is currently in remote.")
+
         self.connected = False
 
 
 class DMM_Measurement:
     # ------------------------------------------------------------------------------------------------------------------
     def __init__(self, parent):
-        self.parent = parent
+        self.panel = parent
         self.DUMMY_DATA = False  # can be toggled by the gui
         self.amplitude_good = False  # Flag indicates user input for amplitude value is good (True)
         self.frequency_good = False  # Flag indicates user input for frequency value is good (True)
@@ -132,11 +133,14 @@ class DMM_Measurement:
         try:
             self.M.connect(instruments)
         except ValueError as e:
-            self.parent.error_dialog(e)
+            self.panel.popup_dialog(e)
 
     def close_instruments(self):
-        if hasattr(self.M, 'DUT') and hasattr(self.M, 'DMM'):
+        if hasattr(self.M, 'f5560A') and (hasattr(self.M, 'f8588A') or hasattr(self.M, 'f884xA')):
             self.M.close_instruments()
+
+        self.panel.text_DUT_report.Clear()
+        self.panel.text_DMM_report.Clear()
 
     # ##################################################################################################################
     def start(self, user_input):
@@ -161,27 +165,27 @@ class DMM_Measurement:
                 elif self.amplitude_good and self.frequency_good:
                     self.run_selected_function(selection)
                 else:
-                    self.parent.error_dialog('\nCheck amplitude and frequency values.')
+                    self.panel.popup_dialog('\nCheck amplitude and frequency values.')
             elif self.DUMMY_DATA:
-                self.DMM_choice = self.parent.DMM_choice
+                self.DMM_choice = self.panel.DMM_choice
                 self.run_selected_function(selection)
             else:
-                self.parent.error_dialog('\nConnect to instruments first.')
-            self.parent.btn_start.SetLabel('START')
-            self.parent.checkbox_autorange.Enable()
-            self.parent.checkbox_always_voltage.Enable()
+                self.panel.popup_dialog('\nConnect to instruments first.')
+            self.panel.btn_start.SetLabel('START')
+            self.panel.checkbox_autorange.Enable()
+            self.panel.checkbox_always_voltage.Enable()
 
         except ValueError as e:
             message = 'finished with errors.'
             print(f"{message} {'-' * (100 - len(message))}")
 
-            self.parent.flag_complete = True
-            self.parent.btn_start.SetLabel('START')
-            self.parent.error_dialog(e)
+            self.panel.flag_complete = True
+            self.panel.btn_start.SetLabel('START')
+            self.panel.popup_dialog(e)
         else:
             message = 'done'
             print(f"{message} {'-' * (100 - len(message))}\n")
-            self.parent.flag_complete = True
+            self.panel.flag_complete = True
 
     def run_selected_function(self, selection):
         try:
@@ -203,30 +207,30 @@ class DMM_Measurement:
     # ------------------------------------------------------------------------------------------------------------------
     def run_single(self, func):
         print('Running Single Measurement with Multimeter.')
-        self.parent.toggle_controls()
-        self.parent.flag_complete = False
+        self.panel.toggle_controls()
+        self.panel.flag_complete = False
         try:
             func(setup=True)
             if not self.DUMMY_DATA:
                 self.M.standby()
         except ValueError:
-            self.parent.toggle_controls()
+            self.panel.toggle_controls()
             raise
 
-        self.parent.toggle_controls()
-        self.parent.flag_complete = True
+        self.panel.toggle_controls()
+        self.panel.flag_complete = True
 
     def run_sweep(self, df, func):
         print('Running Sweep.')
-        self.parent.flag_complete = False
+        self.panel.flag_complete = False
         headers = ['amplitude', 'frequency', 'measured', 'freq_meas', 'std']
         results = np.zeros(shape=(len(df.index), len(headers)))
         t = threading.currentThread()
         for idx, row in df.iterrows():
             if getattr(t, "do_run", True):
                 if not self.DUMMY_DATA:
-                    self.parent.text_amplitude.SetValue(str(row.amplitude))
-                    self.parent.text_frequency.SetValue(str(row.frequency))
+                    self.panel.text_amplitude.SetValue(str(row.amplitude))
+                    self.panel.text_frequency.SetValue(str(row.frequency))
                     amplitude, units, ft = self.get_string_value(row.amplitude, str(row.frequency))
 
                     self.params['amplitude'] = amplitude
@@ -252,7 +256,7 @@ class DMM_Measurement:
         # https://stackoverflow.com/a/28058264
         results_df = pd.DataFrame(results, columns=headers)
         results_df.to_csv(path_or_buf=_getFilepath('results', 'multimeter'), sep=',', index=False)
-        self.parent.flag_complete = True
+        self.panel.flag_complete = True
 
     # TEST FUNCTIONS ###################################################################################################
     def test_multimeter(self, setup):
@@ -273,7 +277,6 @@ class DMM_Measurement:
             dmm_units = 'V'
         else:
             dmm_units = units
-
         time.sleep(1)
 
         # START DATA COLLECTION ----------------------------------------------------------------------------------------
@@ -336,13 +339,14 @@ class DMM_Measurement:
                 M = dmm1.f884xA_instrument()
             elif self.DMM_choice == 'f8588A':
                 M = dmm2.f8588A_instrument()
+                # M.setup_f8588A_meter(autorange=True, units=dmm_units, frequency=Ft)
             else:
                 raise ValueError("Invalid DMM selection made!")
 
             print(f"Fluke 5560A operating units: {units}")
             print(f"Measured units: {dmm_units}")
 
-        self.parent.update_plot(freqval, outval, std)
+        self.panel.update_plot(freqval, outval, std)
         return amplitude, Ft, outval, freqval, std
 
     # MISCELLANEOUS ####################################################################################################
@@ -367,16 +371,16 @@ class DMM_Measurement:
                 self.amplitude_good = True
 
             elif len(s_split) == 2 and s_split[1]:
-                self.parent.error_dialog('prefix used, but units not specified!')
+                self.panel.popup_dialog('prefix used, but units not specified!')
                 self.amplitude_good = False
             elif len(s_split) == 1:
-                self.parent.error_dialog('units not specified!')
+                self.panel.popup_dialog('units not specified!')
                 self.amplitude_good = False
             else:
-                self.parent.error_dialog('improper prefix used!')
+                self.panel.popup_dialog('improper prefix used!')
                 self.amplitude_good = False
         except ValueError:
-            self.parent.error_dialog('Invalid amplitude entered!')
+            self.panel.popup_dialog('Invalid amplitude entered!')
             self.amplitude_good = False
             pass
 
@@ -384,7 +388,7 @@ class DMM_Measurement:
         try:
             frequency = float(freq_string)
         except ValueError:
-            self.parent.error_dialog(f"The value {freq_string} is not a valid frequency!")
+            self.panel.popup_dialog(f"The value {freq_string} is not a valid frequency!")
             self.frequency_good = False
         else:
             self.frequency_good = True
