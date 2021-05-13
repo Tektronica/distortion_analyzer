@@ -51,13 +51,20 @@ class DistortionAnalyzerTab(wx.Panel):
                                              style=wx.CB_DROPDOWN | wx.CB_READONLY)
         self.text_frequency = wx.TextCtrl(self.left_sub_panel, wx.ID_ANY, "1000")
 
-        self.text_error = wx.TextCtrl(self.left_panel, wx.ID_ANY, "0.1")
+        self.combo_mainlobe = wx.ComboBox(self.left_panel, wx.ID_ANY,
+                                          choices=["Relative", "Absolute"],
+                                          style=wx.CB_DROPDOWN | wx.CB_READONLY)
+        self.combo_mainlobe.SetToolTip("Mainlobe width can be set relative to the signal frequency\n"
+                                       "or as an absolute width independent of signal frequency")
+        self.text_mainlobe = wx.TextCtrl(self.left_panel, wx.ID_ANY, "100")
+        self.label_mainlobe = wx.StaticText(self.left_panel, wx.ID_ANY, "MLW (Hz)")
+
         self.combo_filter = wx.ComboBox(self.left_panel, wx.ID_ANY,
                                         choices=["None", "100kHz", "2MHz", "2.4MHz", "3MHz"],
                                         style=wx.CB_DROPDOWN | wx.CB_READONLY)
         self.combo_coupling = wx.ComboBox(self.left_panel, wx.ID_ANY,
-                                        choices=["AC1M", "AC10M", "DC1M", "DC10M", "DCAuto"],
-                                        style=wx.CB_DROPDOWN | wx.CB_READONLY)
+                                          choices=["AC1M", "AC10M", "DC1M", "DC10M", "DCAuto"],
+                                          style=wx.CB_DROPDOWN | wx.CB_READONLY)
 
         self.label_fs_report = wx.StaticText(self.left_panel, wx.ID_ANY, "--")
         self.label_samples_report = wx.StaticText(self.left_panel, wx.ID_ANY, "--")
@@ -69,8 +76,8 @@ class DistortionAnalyzerTab(wx.Panel):
         self.btn_start = wx.Button(self.left_panel, wx.ID_ANY, "RUN")
         self.combo_selected_test = wx.ComboBox(self.left_panel, wx.ID_ANY,
                                                choices=["Single", "Sweep",
-                                                    "Single w/ shunt", "Sweep w/ shunt",
-                                                    "Continuous"],
+                                                        "Single w/ shunt", "Sweep w/ shunt",
+                                                        "Continuous"],
                                                style=wx.CB_DROPDOWN)
 
         # PLOT Panel ---------------------------------------------------------------------------------------------------
@@ -98,6 +105,9 @@ class DistortionAnalyzerTab(wx.Panel):
 
         on_config = lambda event: self.config(event)
         self.Bind(wx.EVT_BUTTON, on_config, self.btn_config)
+
+        on_mainlobe = lambda event: self.on_mainlobe_change(event)
+        self.Bind(wx.EVT_COMBOBOX_CLOSEUP, on_mainlobe, self.combo_mainlobe)
 
         # Run Measurement (start subprocess) ---------------------------------------------------------------------------
         on_run_event = lambda event: self.on_run(event)
@@ -131,6 +141,9 @@ class DistortionAnalyzerTab(wx.Panel):
         self.checkbox_1.SetValue(1)
         self.combo_rms_or_peak.SetSelection(0)
 
+        self.combo_mainlobe.SetSelection(1)
+        self.combo_mainlobe.SetMinSize((96, 23))
+
         self.combo_filter.SetSelection(1)
         self.combo_filter.SetMinSize((110, 23))
         self.combo_coupling.SetSelection(0)
@@ -151,22 +164,22 @@ class DistortionAnalyzerTab(wx.Panel):
         # TITLE --------------------------------------------------------------------------------------------------------
         label_1 = wx.StaticText(self.left_panel, wx.ID_ANY, "DISTORTION ANALYZER")
         label_1.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_left_panel.Add(label_1, (0, 0), (1, 2), 0, 0)
+        grid_sizer_left_panel.Add(label_1, (0, 0), (1, 3), 0, 0)
 
         static_line_1 = wx.StaticLine(self.left_panel, wx.ID_ANY)
         static_line_1.SetMinSize((300, 2))
-        grid_sizer_left_panel.Add(static_line_1, (1, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
+        grid_sizer_left_panel.Add(static_line_1, (1, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
         # INSTRUMENT INFO  ---------------------------------------------------------------------------------------------
-        label_DUT = wx.StaticText(self.left_panel, wx.ID_ANY, "DUT")
+        label_DUT = wx.StaticText(self.left_panel, wx.ID_ANY, "Fluke 5560A")
         label_DUT.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
         grid_sizer_left_panel.Add(label_DUT, (2, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
-        grid_sizer_left_panel.Add(self.text_DUT_report, (2, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(self.text_DUT_report, (2, 1), (1, 2), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
 
-        label_DMM = wx.StaticText(self.left_panel, wx.ID_ANY, "DMM (f8588A)")
+        label_DMM = wx.StaticText(self.left_panel, wx.ID_ANY, "Fluke 8588A")
         label_DMM.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
         grid_sizer_left_panel.Add(label_DMM, (3, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
-        grid_sizer_left_panel.Add(self.text_DMM_report, (3, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(self.text_DMM_report, (3, 1), (1, 2), wx.BOTTOM | wx.LEFT, 5)
 
         grid_sizer_left_panel.Add(self.btn_connect, (4, 0), (1, 1), wx.BOTTOM, 5)
         grid_sizer_left_panel.Add(self.btn_config, (4, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
@@ -179,7 +192,7 @@ class DistortionAnalyzerTab(wx.Panel):
 
         static_line_2 = wx.StaticLine(self.left_panel, wx.ID_ANY)
         static_line_2.SetMinSize((300, 2))
-        grid_sizer_left_panel.Add(static_line_2, (6, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
+        grid_sizer_left_panel.Add(static_line_2, (6, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
         # SUB PANEL  ---------------------------------------------------------------------------------------------------
         label_amplitude = wx.StaticText(self.left_sub_panel, wx.ID_ANY, "Amplitude:")
@@ -198,7 +211,7 @@ class DistortionAnalyzerTab(wx.Panel):
         grid_sizer_left_sub_panel.Add(label_Hz, (1, 2), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
 
         self.left_sub_panel.SetSizer(grid_sizer_left_sub_panel)
-        grid_sizer_left_panel.Add(self.left_sub_panel, (7, 0), (1, 2), wx.LEFT, 0)
+        grid_sizer_left_panel.Add(self.left_sub_panel, (7, 0), (1, 3), wx.LEFT, 0)
 
         # Measurement --------------------------------------------------------------------------------------------------
         label_measure = wx.StaticText(self.left_panel, wx.ID_ANY, "Measurement")
@@ -207,11 +220,13 @@ class DistortionAnalyzerTab(wx.Panel):
 
         static_line_3 = wx.StaticLine(self.left_panel, wx.ID_ANY)
         static_line_3.SetMinSize((300, 2))
-        grid_sizer_left_panel.Add(static_line_3, (9, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
+        grid_sizer_left_panel.Add(static_line_3, (9, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
-        label_error = wx.StaticText(self.left_panel, wx.ID_ANY, "Lobe Error:")
-        grid_sizer_left_panel.Add(label_error, (10, 0), (1, 1), 0, 0)
-        grid_sizer_left_panel.Add(self.text_error, (10, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
+        # label_error = wx.StaticText(self.left_panel, wx.ID_ANY, "Lobe Error:")
+        # grid_sizer_left_panel.Add(label_error, (10, 0), (1, 1), 0, 0)
+        grid_sizer_left_panel.Add(self.combo_mainlobe, (10, 0), (1, 1), 0, 0)
+        grid_sizer_left_panel.Add(self.text_mainlobe, (10, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(self.label_mainlobe, (10, 2), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
 
         label_filter = wx.StaticText(self.left_panel, wx.ID_ANY, "Filter:")
         grid_sizer_left_panel.Add(label_filter, (11, 0), (1, 1), 0, 0)
@@ -236,7 +251,7 @@ class DistortionAnalyzerTab(wx.Panel):
         # REPORT -------------------------------------------------------------------------------------------------------
         static_line_4 = wx.StaticLine(self.left_panel, wx.ID_ANY)
         static_line_4.SetMinSize((300, 2))
-        grid_sizer_left_panel.Add(static_line_4, (16, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
+        grid_sizer_left_panel.Add(static_line_4, (16, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
         label_rms = wx.StaticText(self.left_panel, wx.ID_ANY, "RMS:")
         grid_sizer_left_panel.Add(label_rms, (17, 0), (1, 1), 0, 0)
@@ -253,7 +268,7 @@ class DistortionAnalyzerTab(wx.Panel):
         # BUTTONS ------------------------------------------------------------------------------------------------------
         static_line_9 = wx.StaticLine(self.left_panel, wx.ID_ANY)
         static_line_9.SetMinSize((300, 2))
-        grid_sizer_left_panel.Add(static_line_9, (20, 0), (1, 2), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
+        grid_sizer_left_panel.Add(static_line_9, (20, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
         grid_sizer_left_panel.Add(self.btn_start, (21, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
         grid_sizer_left_panel.Add(self.combo_selected_test, (21, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
@@ -343,11 +358,21 @@ class DistortionAnalyzerTab(wx.Panel):
             self.combo_rms_or_peak.Enable()
             self.text_frequency.Enable()
 
+    def on_mainlobe_change(self, evt):
+        value = self.combo_mainlobe.GetValue()
+        if value == 'Relative':
+            self.text_mainlobe.SetValue('0.1')
+            self.label_mainlobe.SetLabelText('(MLW/f0)')
+        else:
+            self.text_mainlobe.SetValue('100')
+            self.label_mainlobe.SetLabelText('MLW (Hz)')
+
     # ------------------------------------------------------------------------------------------------------------------
     def get_values(self):
         selected_test = self.combo_selected_test.GetSelection()
         source = self.checkbox_1.GetValue()
-        error = float(self.text_error.GetValue())
+        mainlobe_type = self.combo_mainlobe.GetValue().lower()
+        mainlobe_value = float(self.text_mainlobe.GetValue())
         rms = self.combo_rms_or_peak.GetSelection()
 
         coupling = self.combo_coupling.GetValue()
@@ -362,7 +387,8 @@ class DistortionAnalyzerTab(wx.Panel):
                            'frequency': freq_string,
                            'rms': rms,
                            'coupling': coupling,
-                           'error': error,
+                           'mainlobe_type': mainlobe_type,
+                           'mainlobe_value': mainlobe_value,
                            'filter': filter
                            }
 
@@ -463,7 +489,9 @@ class DistortionAnalyzerTab(wx.Panel):
 
     def results_update(self, results):
         amplitude = results['Amplitude']
-        frequency = results['Frequency']
+        freq_ideal = results['freq_ideal']
+        freq_fudged = results['freq_fudged']
+        freq_actual = results['freq_actual']
 
         fs = results['Fs']
         N = results['N']
@@ -481,7 +509,7 @@ class DistortionAnalyzerTab(wx.Panel):
         self.text_thdn_report.SetValue(f"{round(thdn * 100, 3)}% or {round(np.log10(thdn), 1)}dB")
         self.text_thd_report.SetValue(f"{round(thd * 100, 3)}% or {round(np.log10(thd), 1)}dB")
 
-        row = [amplitude, frequency, yrms, thdn, thd, rms_noise, fs, N, aperture]
+        row = [amplitude, freq_ideal, freq_fudged, freq_actual, yrms, thdn, thd, rms_noise, fs, N, aperture]
         self.frame.append_row(row)
 
     def error_dialog(self, error_message):
