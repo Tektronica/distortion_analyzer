@@ -246,12 +246,22 @@ class MyDemoPanel(wx.Panel):
         static_line_3.SetMinSize((300, 2))
         grid_sizer_left_panel.Add(static_line_3, (row, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
-        row += 2
+        row += 1
         lbl_samples = wx.StaticText(self.left_panel, wx.ID_ANY, "Samples (N):")
         grid_sizer_left_panel.Add(lbl_samples, (row, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
         grid_sizer_left_panel.Add(self.text_ctrl_samples, (row, 1), (1, 2), wx.BOTTOM, 5)
 
         row += 1
+        lbl_cycles = wx.StaticText(self.left_panel, wx.ID_ANY, "cycles:")
+        grid_sizer_left_panel.Add(lbl_cycles, (row, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
+        grid_sizer_left_panel.Add(self.text_ctrl_cycles, (row, 1), (1, 2), wx.BOTTOM, 5)
+
+        row += 1
+        lbl_samples_per_cycle = wx.StaticText(self.left_panel, wx.ID_ANY, "N/cycles:")
+        grid_sizer_left_panel.Add(lbl_samples_per_cycle, (row, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
+        grid_sizer_left_panel.Add(self.text_ctrl_samples_per_cycle, (row, 1), (1, 2), wx.BOTTOM, 5)
+
+        row += 2
         lbl_rms_true = wx.StaticText(self.left_panel, wx.ID_ANY, "RMS (True):")
         grid_sizer_left_panel.Add(lbl_rms_true, (row, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
         grid_sizer_left_panel.Add(self.text_ctrl_rms_true, (row, 1), (1, 2), wx.BOTTOM, 5)
@@ -267,16 +277,6 @@ class MyDemoPanel(wx.Panel):
         grid_sizer_left_panel.Add(self.text_ctrl_rms_delta, (row, 1), (1, 1), wx.BOTTOM, 5)
         lbl_units_ppm = wx.StaticText(self.left_panel, wx.ID_ANY, "(ppm):")
         grid_sizer_left_panel.Add(lbl_units_ppm, (row, 2), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
-
-        row += 2
-        lbl_cycles = wx.StaticText(self.left_panel, wx.ID_ANY, "cycles:")
-        grid_sizer_left_panel.Add(lbl_cycles, (row, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
-        grid_sizer_left_panel.Add(self.text_ctrl_cycles, (row, 1), (1, 2), wx.BOTTOM, 5)
-
-        row += 1
-        lbl_samples_per_cycle = wx.StaticText(self.left_panel, wx.ID_ANY, "N/cycles:")
-        grid_sizer_left_panel.Add(lbl_samples_per_cycle, (row, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
-        grid_sizer_left_panel.Add(self.text_ctrl_samples_per_cycle, (row, 1), (1, 2), wx.BOTTOM, 5)
 
         row += 2
         lbl_aliased = wx.StaticText(self.left_panel, wx.ID_ANY, "Aliased Frequency:")
@@ -338,8 +338,8 @@ class MyDemoPanel(wx.Panel):
         N = getWindowLength(f0, Fs, windfunc='blackman', error=LDF, mainlobe_type='absolute')
         xdt, ydt = ADC(signal_peak, f0, Fs, N, CONTAINS_HARMONICS, CONTAINS_NOISE)
 
-        rms_true = true_signal(signal_peak, N, CONTAINS_HARMONICS, CONTAINS_NOISE)
-        rms_sampled = rms_flat(ydt)
+        rms_true = round(true_signal(signal_peak, N, CONTAINS_HARMONICS, CONTAINS_NOISE), 8)
+        rms_sampled = round(rms_flat(ydt), 8)
         rms_delta = round(1e6 * (rms_true - rms_sampled), 2)
 
         cycles = N * f0 / Fs
@@ -379,7 +379,12 @@ class MyDemoPanel(wx.Panel):
         yf_rfft = yf_fft[:fft_length]
         xf_rfft = np.linspace(0.0, Fs / 2, fft_length)
 
-        self.plot(f0, xdt, ydt, fft_length, xf_rfft, yf_rfft)
+        if aliased_freq[0] == 0:
+            fh1 = f0
+        else:
+            fh1 = 1000 * aliased_freq[0]
+
+        self.plot(fh1, xdt, ydt, fft_length, xf_rfft, yf_rfft)
         self.results_update(N, rms_true, rms_sampled, rms_delta, np.floor(cycles), samples_per_cycles, aliased_freq)
 
     # ------------------------------------------------------------------------------------------------------------------
