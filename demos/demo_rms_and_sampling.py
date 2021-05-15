@@ -349,6 +349,7 @@ class MyDemoPanel(wx.Panel):
         aliased_freq = [1.0, 3.0, 5.0]
 
         for idx, harmonic in enumerate(aliased_freq):
+            # https://ez.analog.com/partnerzone/fidus-partnerzone/m/file-uploads/212
             Fn = Fs/2
             nyquist_zone = np.floor(f0*harmonic/Fn) + 1
 
