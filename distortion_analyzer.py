@@ -75,7 +75,7 @@ class Instruments(dut.f5560A_instrument, dmm.f8588A_instrument):
                 self.connected = True
                 try:
                     idn_dict = {'DUT': self.f5560A_IDN, 'DMM': self.f8588A_IDN}
-                    self.analyzer.frame.set_ident(idn_dict)
+                    self.analyzer.panel.set_ident(idn_dict)
                     self.setup_source()
                 except ValueError:
                     raise
@@ -94,9 +94,9 @@ class Instruments(dut.f5560A_instrument, dmm.f8588A_instrument):
 class DistortionAnalyzer:
     # ------------------------------------------------------------------------------------------------------------------
     def __init__(self, parent):
-        self.frame = parent
+        self.panel = parent
         self.DUMMY_DATA = False  # can be toggled by the gui
-        self.WINDOW_SELECTION = "rectangular"  # selected windowing
+        self.WINDOW_SELECTION = "blackman"  # selected windowing
 
         self.amplitude_good = False  # Flag indicates user input for amplitude value is good (True)
         self.frequency_good = False  # Flag indicates user input for frequency value is good (True)
@@ -114,11 +114,13 @@ class DistortionAnalyzer:
         try:
             self.M.connect(instruments)
         except ValueError as e:
-            self.frame.error_dialog(e)
+            self.panel.popup_dialog(e)
 
     def close_instruments(self):
-        if hasattr(self.M, 'DUT') and hasattr(self.M, 'DMM'):
+        if hasattr(self.M, 'f5560A') and hasattr(self.M, 'f8588A'):
             self.M.close_instruments()
+        self.panel.text_DUT_report.Clear()
+        self.panel.text_DMM_report.Clear()
 
     # ##################################################################################################################
     def start(self, user_input):
@@ -143,31 +145,31 @@ class DistortionAnalyzer:
                     elif not source or (self.amplitude_good and self.frequency_good):
                         self.run_selected_function(selected_test)
                     else:
-                        self.frame.error_dialog('\nCheck amplitude and frequency values.')
+                        self.panel.popup_dialog('\nCheck amplitude and frequency values.')
                 elif self.DUMMY_DATA:
                     self.run_selected_function(selected_test)
                 else:
-                    self.frame.error_dialog('\nConnect to instruments first.')
-                self.frame.btn_start.SetLabel('RUN')
+                    self.panel.popup_dialog('\nConnect to instruments first.')
+                self.panel.btn_start.SetLabel('RUN')
 
             except ValueError as e:
                 message = 'finished with errors.'
                 print(f"{message} {'-' * (100 - len(message))}")
 
-                self.frame.flag_complete = True
-                self.frame.btn_start.SetLabel('START')
-                self.frame.error_dialog(e)
+                self.panel.flag_complete = True
+                self.panel.btn_start.SetLabel('START')
+                self.panel.popup_dialog(e)
             else:
                 message = 'done'
                 print(f"{message} {'-' * (100 - len(message))}\n")
-                self.frame.flag_complete = True
+                self.panel.flag_complete = True
         except ValueError as e:
             message = 'finished with errors.'
             print(f"{message} {'-' * (100 - len(message))}")
 
-            self.frame.flag_complete = True
-            self.frame.btn_start.SetLabel('START')
-            self.frame.error_dialog(str(e))
+            self.panel.flag_complete = True
+            self.panel.btn_start.SetLabel('START')
+            self.panel.popup_dialog(str(e))
 
     def run_selected_function(self, selection):
         try:
@@ -204,22 +206,22 @@ class DistortionAnalyzer:
     # ------------------------------------------------------------------------------------------------------------------
     def run_single(self, func):
         print('Running Single Measurement.')
-        self.frame.toggle_controls()
-        self.frame.flag_complete = False
+        self.panel.toggle_controls()
+        self.panel.flag_complete = False
         try:
             func(setup=True)
             if not self.DUMMY_DATA:
                 self.M.standby()
         except ValueError:
-            self.frame.toggle_controls()
+            self.panel.toggle_controls()
             raise
 
-        self.frame.toggle_controls()
-        self.frame.flag_complete = True
+        self.panel.toggle_controls()
+        self.panel.flag_complete = True
 
     def run_sweep(self, df, func):
         print('Running Sweep.')
-        self.frame.flag_complete = False
+        self.panel.flag_complete = False
         headers = ['amplitude', 'freq_ideal', 'freq_fudged', 'freq_actual',
                    'yrms', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'aperture']
         results = np.zeros(shape=(len(df.index), len(headers)))
@@ -227,13 +229,13 @@ class DistortionAnalyzer:
         for idx, row in df.iterrows():
             if getattr(t, "do_run", True):
                 if not self.DUMMY_DATA:
-                    self.frame.text_amplitude.SetValue(str(row.amplitude))
-                    self.frame.text_frequency.SetValue(str(row.frequency))
+                    self.panel.text_amplitude.SetValue(str(row.amplitude))
+                    self.panel.text_frequency.SetValue(str(row.frequency))
                     try:
                         amplitude, units, ft = self.get_string_value(row.amplitude, str(row.frequency))
                     except ValueError as e:
                         print('\n!!!\nAccounted error! exiting sweep\n!!!\n')
-                        self.frame.error_dialog(str(e))
+                        self.panel.popup_dialog(str(e))
                         raise
                     self.params['amplitude'] = amplitude
                     self.params['frequency'] = ft
@@ -256,11 +258,11 @@ class DistortionAnalyzer:
         # https://stackoverflow.com/a/28058264
         results_df = pd.DataFrame(results, columns=headers)
         results_df.to_csv(path_or_buf=_getFilepath('results', 'distortion'), sep=',', index=False)
-        self.frame.flag_complete = True
+        self.panel.flag_complete = True
 
     def run_continuous(self, func):
         print('Running a continuous run!')
-        self.frame.flag_complete = False
+        self.panel.flag_complete = False
         t = threading.currentThread()
         setup = True
         while getattr(t, "do_run", True):
@@ -448,7 +450,7 @@ class DistortionAnalyzer:
         results_row['units'] = self.params['units']
 
         # report results to main panel ---------------------------------------------------------------------------------
-        self.frame.results_update(results_row)
+        self.panel.results_update(results_row)
 
         # save measurement to csv --------------------------------------------------------------------------------------
         header = ['xt', 'yt', 'xf', 'yf']
@@ -496,7 +498,7 @@ class DistortionAnalyzer:
                   'yf_btm': yf_btm, 'yf_top': yf_top
                   }
 
-        self.frame.plot(params)
+        self.panel.plot(params)
 
     # MISCELLANEOUS ####################################################################################################
     def get_string_value(self, amp_string, freq_string):
@@ -532,7 +534,7 @@ class DistortionAnalyzer:
         try:
             frequency = float(freq_string)
         except ValueError:
-            self.frame.error_dialog(f"The value {freq_string} is not a valid frequency!")
+            self.panel.popup_dialog(f"The value {freq_string} is not a valid frequency!")
             self.frequency_good = False
         else:
             self.frequency_good = True
