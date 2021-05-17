@@ -58,6 +58,7 @@ class DistortionAnalyzerTab(wx.Panel):
                                        "or as an absolute width independent of signal frequency")
         self.text_mainlobe = wx.TextCtrl(self.left_panel, wx.ID_ANY, "100")
         self.label_mainlobe = wx.StaticText(self.left_panel, wx.ID_ANY, "MLW (Hz)")
+        self.label_mainlobe.SetToolTip("Main Lobe Width")
 
         self.combo_filter = wx.ComboBox(self.left_panel, wx.ID_ANY,
                                         choices=["None", "100kHz", "2MHz", "2.4MHz", "3MHz"],
@@ -371,9 +372,11 @@ class DistortionAnalyzerTab(wx.Panel):
         if value == 'Relative':
             self.text_mainlobe.SetValue('0.1')
             self.label_mainlobe.SetLabelText('(MLW/f0)')
+            self.label_mainlobe.SetToolTip("Relative Main Lobe Width (MLW)\nwith respect to the fundamental")
         else:
             self.text_mainlobe.SetValue('100')
             self.label_mainlobe.SetLabelText('MLW (Hz)')
+            self.label_mainlobe.SetToolTip("Main Lobe Width")
 
     # ------------------------------------------------------------------------------------------------------------------
     def get_values(self):
