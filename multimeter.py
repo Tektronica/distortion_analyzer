@@ -133,7 +133,7 @@ class DMM_Measurement:
         try:
             self.M.connect(instruments)
         except ValueError as e:
-            self.panel.popup_dialog(e)
+            self.panel.error_dialog(e)
 
     def close_instruments(self):
         if hasattr(self.M, 'f5560A') and (hasattr(self.M, 'f8588A') or hasattr(self.M, 'f884xA')):
@@ -165,12 +165,12 @@ class DMM_Measurement:
                 elif self.amplitude_good and self.frequency_good:
                     self.run_selected_function(selection)
                 else:
-                    self.panel.popup_dialog('\nCheck amplitude and frequency values.')
+                    self.panel.error_dialog('\nCheck amplitude and frequency values.')
             elif self.DUMMY_DATA:
                 self.DMM_choice = self.panel.DMM_choice
                 self.run_selected_function(selection)
             else:
-                self.panel.popup_dialog('\nConnect to instruments first.')
+                self.panel.error_dialog('\nConnect to instruments first.')
             self.panel.btn_start.SetLabel('START')
             self.panel.checkbox_autorange.Enable()
             self.panel.checkbox_always_voltage.Enable()
@@ -181,7 +181,7 @@ class DMM_Measurement:
 
             self.panel.flag_complete = True
             self.panel.btn_start.SetLabel('START')
-            self.panel.popup_dialog(e)
+            self.panel.error_dialog(e)
         else:
             message = 'done'
             print(f"{message} {'-' * (100 - len(message))}\n")
@@ -371,16 +371,16 @@ class DMM_Measurement:
                 self.amplitude_good = True
 
             elif len(s_split) == 2 and s_split[1]:
-                self.panel.popup_dialog('prefix used, but units not specified!')
+                self.panel.error_dialog('prefix used, but units not specified!')
                 self.amplitude_good = False
             elif len(s_split) == 1:
-                self.panel.popup_dialog('units not specified!')
+                self.panel.error_dialog('units not specified!')
                 self.amplitude_good = False
             else:
-                self.panel.popup_dialog('improper prefix used!')
+                self.panel.error_dialog('improper prefix used!')
                 self.amplitude_good = False
         except ValueError:
-            self.panel.popup_dialog('Invalid amplitude entered!')
+            self.panel.error_dialog('Invalid amplitude entered!')
             self.amplitude_good = False
             pass
 
@@ -388,7 +388,7 @@ class DMM_Measurement:
         try:
             frequency = float(freq_string)
         except ValueError:
-            self.panel.popup_dialog(f"The value {freq_string} is not a valid frequency!")
+            self.panel.error_dialog(f"The value {freq_string} is not a valid frequency!")
             self.frequency_good = False
         else:
             self.frequency_good = True
