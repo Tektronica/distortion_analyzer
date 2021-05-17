@@ -17,9 +17,8 @@ def to_float(string_val):
     try:
         float_val = float(string_val)
     except ValueError:
-        print('[ERROR] Measurement could not be converted to float. Possible issues with configuration.')
-        raise ValueError('Prospective measurement obtained by the Fluke 8588A could not be converted to float. Suspect '
-                         'null value or over-range')
+        print(f'[ERROR] Invalid Input. Could not convert {string_val} to float.')
+        raise ValueError(f'Invalid Input. Could not convert {string_val} to float.')
     else:
         return float_val
 
@@ -324,69 +323,77 @@ class MyDemoPanel(wx.Panel):
         self.SetSizer(sizer_2)
         self.Layout()
 
+    def popup_dialog(self, message):
+        print(message)
+        dial = wx.MessageDialog(None, str(message), 'Error', wx.OK | wx.ICON_ERROR)
+        dial.ShowModal()
+
     def update(self, evt):
-        f0 = 1000
-        signal_peak = 1
+        try:
+            f0 = 1000
+            signal_peak = 1
 
-        Fs = to_float(self.text_ctrl_fs.GetValue()) * 1e3
-        LDF = to_float(self.text_ctrl_ldf.GetValue())
+            Fs = to_float(self.text_ctrl_fs.GetValue()) * 1e3
+            LDF = to_float(self.text_ctrl_ldf.GetValue())
 
-        # TEMPORAL -----------------------------------------------------------------------------------------------------
-        N = getWindowLength(f0, 200e3, windfunc='blackman', error=LDF, mainlobe_type='absolute')
-        self.x, self.y = ADC(signal_peak, f0, 200e3, N, CONTAINS_HARMONICS, CONTAINS_NOISE)
+            # TEMPORAL -------------------------------------------------------------------------------------------------
+            N = getWindowLength(f0, 200e3, windfunc='blackman', error=LDF, mainlobe_type='absolute')
+            self.x, self.y = ADC(signal_peak, f0, 200e3, N, CONTAINS_HARMONICS, CONTAINS_NOISE)
 
-        N = getWindowLength(f0, Fs, windfunc='blackman', error=LDF, mainlobe_type='absolute')
-        xdt, ydt = ADC(signal_peak, f0, Fs, N, CONTAINS_HARMONICS, CONTAINS_NOISE)
+            N = getWindowLength(f0, Fs, windfunc='blackman', error=LDF, mainlobe_type='absolute')
+            xdt, ydt = ADC(signal_peak, f0, Fs, N, CONTAINS_HARMONICS, CONTAINS_NOISE)
 
-        rms_true = round(true_signal(signal_peak, N, CONTAINS_HARMONICS, CONTAINS_NOISE), 8)
-        rms_sampled = round(rms_flat(ydt), 8)
-        rms_delta = round(1e6 * (rms_true - rms_sampled), 2)
+            rms_true = round(true_signal(signal_peak, N, CONTAINS_HARMONICS, CONTAINS_NOISE), 8)
+            rms_sampled = round(rms_flat(ydt), 8)
+            rms_delta = round(1e6 * (rms_true - rms_sampled), 2)
 
-        cycles = N * f0 / Fs
-        samples_per_cycles = N / cycles
+            cycles = N * f0 / Fs
+            samples_per_cycles = N / cycles
 
-        # ALIASING -----------------------------------------------------------------------------------------------------
-        aliased_freq = [1.0, 3.0, 5.0]
+            # ALIASING -------------------------------------------------------------------------------------------------
+            aliased_freq = [1.0, 3.0, 5.0]
 
-        for idx, harmonic in enumerate(aliased_freq):
-            # https://ez.analog.com/partnerzone/fidus-partnerzone/m/file-uploads/212
-            Fn = Fs/2
-            nyquist_zone = np.floor(f0*harmonic/Fn) + 1
+            for idx, harmonic in enumerate(aliased_freq):
+                # https://ez.analog.com/partnerzone/fidus-partnerzone/m/file-uploads/212
+                Fn = Fs/2
+                nyquist_zone = np.floor(f0*harmonic/Fn) + 1
 
-            if nyquist_zone % 2 == 0:
-                aliased_freq[idx] = (Fn - (f0*harmonic % Fn))/1000
+                if nyquist_zone % 2 == 0:
+                    aliased_freq[idx] = (Fn - (f0*harmonic % Fn))/1000
+                else:
+                    aliased_freq[idx] = (f0*harmonic % Fn)/1000
+
+            # SPECTRAL -------------------------------------------------------------------------------------------------
+            xf_fft = np.linspace(0.0, Fs, N)
+            w = np.blackman(N)
+
+            # Calculate amplitude correction factor after windowing ----------------------------------------------------
+            # https://stackoverflow.com/q/47904399/3382269
+            amplitude_correction_factor = 1 / np.mean(w)
+
+            # Calculate the length of the FFT --------------------------------------------------------------------------
+            if (N % 2) == 0:
+                # for even values of N: FFT length is (N / 2) + 1
+                fft_length = int(N / 2) + 1
             else:
-                aliased_freq[idx] = (f0*harmonic % Fn)/1000
+                # for odd values of N: FFT length is (N + 1) / 2
+                fft_length = int((N + 2) / 2)
 
-        # SPECTRAL -----------------------------------------------------------------------------------------------------
-        xf_fft = np.linspace(0.0, Fs, N)
-        w = np.blackman(N)
+            xf_fft = np.linspace(0.0, Fs, N)
+            yf_fft = (np.fft.fft(ydt * w) / fft_length) * amplitude_correction_factor
 
-        # Calculate amplitude correction factor after windowing --------------------------------------------------------
-        # https://stackoverflow.com/q/47904399/3382269
-        amplitude_correction_factor = 1 / np.mean(w)
+            yf_rfft = yf_fft[:fft_length]
+            xf_rfft = np.linspace(0.0, Fs / 2, fft_length)
 
-        # Calculate the length of the FFT ------------------------------------------------------------------------------
-        if (N % 2) == 0:
-            # for even values of N: FFT length is (N / 2) + 1
-            fft_length = int(N / 2) + 1
-        else:
-            # for odd values of N: FFT length is (N + 1) / 2
-            fft_length = int((N + 2) / 2)
+            if aliased_freq[0] == 0:
+                fh1 = f0
+            else:
+                fh1 = 1000 * aliased_freq[0]
 
-        xf_fft = np.linspace(0.0, Fs, N)
-        yf_fft = (np.fft.fft(ydt * w) / fft_length) * amplitude_correction_factor
-
-        yf_rfft = yf_fft[:fft_length]
-        xf_rfft = np.linspace(0.0, Fs / 2, fft_length)
-
-        if aliased_freq[0] == 0:
-            fh1 = f0
-        else:
-            fh1 = 1000 * aliased_freq[0]
-
-        self.plot(fh1, xdt, ydt, fft_length, xf_rfft, yf_rfft)
-        self.results_update(N, rms_true, rms_sampled, rms_delta, np.floor(cycles), samples_per_cycles, aliased_freq)
+            self.plot(fh1, xdt, ydt, fft_length, xf_rfft, yf_rfft)
+            self.results_update(N, rms_true, rms_sampled, rms_delta, np.floor(cycles), samples_per_cycles, aliased_freq)
+        except ValueError as e:
+            self.popup_dialog(e)
 
     # ------------------------------------------------------------------------------------------------------------------
     def __do_plot_layout(self):
