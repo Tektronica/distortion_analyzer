@@ -317,10 +317,18 @@ class DistortionAnalyzerTab(wx.Panel):
         self.text_DMM_report.SetValue(idn_dict['DMM'])  # current DMM
 
     def on_connect_instr(self, evt):
+        wait = wx.BusyCursor()
+        msg = "Establishing remote connections to instruments."
+        busyDlg = wx.BusyInfo(msg, parent=self)
+
         print('\nResetting connection. Closing communication with any connected instruments')
         self.text_DUT_report.Clear()
         self.text_DMM_report.Clear()
-        self.thread_this(self.da.connect, (self.get_instruments(),))
+        # self.thread_this(self.da.connect, (self.get_instruments(),))
+        self.da.connect(self.get_instruments(),)
+
+        busyDlg = None
+        del wait
 
     # ------------------------------------------------------------------------------------------------------------------
     def toggle_panel(self, evt):
@@ -490,8 +498,7 @@ class DistortionAnalyzerTab(wx.Panel):
     def results_update(self, results):
         amplitude = results['Amplitude']
         freq_ideal = results['freq_ideal']
-        freq_fudged = results['freq_fudged']
-        freq_actual = results['freq_actual']
+        freq_sampled = results['freq_sampled']
 
         fs = results['Fs']
         N = results['N']
@@ -509,7 +516,7 @@ class DistortionAnalyzerTab(wx.Panel):
         self.text_thdn_report.SetValue(f"{round(thdn * 100, 3)}% or {round(np.log10(thdn), 1)}dB")
         self.text_thd_report.SetValue(f"{round(thd * 100, 3)}% or {round(np.log10(thd), 1)}dB")
 
-        row = [amplitude, freq_ideal, freq_fudged, freq_actual, yrms, thdn, thd, rms_noise, fs, N, aperture]
+        row = [amplitude, freq_ideal, freq_sampled, yrms, thdn, thd, rms_noise, fs, N, aperture]
         self.frame.append_row(row)
 
     def error_dialog(self, error_message):

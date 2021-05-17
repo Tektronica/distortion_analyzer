@@ -102,7 +102,7 @@ class DistortionAnalyzer:
         self.frequency_good = False  # Flag indicates user input for frequency value is good (True)
 
         self.params = {}
-        self.results = {'Amplitude': [], 'freq_ideal': [], 'freq_fudged': [], 'freq_actual': [],
+        self.results = {'Amplitude': [], 'freq_ideal': [], 'freq_sampled': [],
                         'yrms': [], 'THDN': [], 'THD': [], 'RMS NOISE': [], 'N': [], 'Fs': [], 'Aperture': []}
 
         self.M = Instruments(self)
@@ -114,7 +114,7 @@ class DistortionAnalyzer:
         try:
             self.M.connect(instruments)
         except ValueError as e:
-            self.panel.popup_dialog(e)
+            self.panel.error_dialog(e)
 
     def close_instruments(self):
         if hasattr(self.M, 'f5560A') and hasattr(self.M, 'f8588A'):
@@ -145,11 +145,11 @@ class DistortionAnalyzer:
                     elif not source or (self.amplitude_good and self.frequency_good):
                         self.run_selected_function(selected_test)
                     else:
-                        self.panel.popup_dialog('\nCheck amplitude and frequency values.')
+                        self.panel.error_dialog('\nCheck amplitude and frequency values.')
                 elif self.DUMMY_DATA:
                     self.run_selected_function(selected_test)
                 else:
-                    self.panel.popup_dialog('\nConnect to instruments first.')
+                    self.panel.error_dialog('\nConnect to instruments first.')
                 self.panel.btn_start.SetLabel('RUN')
 
             except ValueError as e:
@@ -158,7 +158,7 @@ class DistortionAnalyzer:
 
                 self.panel.flag_complete = True
                 self.panel.btn_start.SetLabel('START')
-                self.panel.popup_dialog(e)
+                self.panel.error_dialog(e)
             else:
                 message = 'done'
                 print(f"{message} {'-' * (100 - len(message))}\n")
@@ -169,7 +169,7 @@ class DistortionAnalyzer:
 
             self.panel.flag_complete = True
             self.panel.btn_start.SetLabel('START')
-            self.panel.popup_dialog(str(e))
+            self.panel.error_dialog(str(e))
 
     def run_selected_function(self, selection):
         try:
@@ -222,8 +222,8 @@ class DistortionAnalyzer:
     def run_sweep(self, df, func):
         print('Running Sweep.')
         self.panel.flag_complete = False
-        headers = ['amplitude', 'freq_ideal', 'freq_fudged', 'freq_actual',
-                   'yrms', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'aperture']
+        headers = ['amplitude', 'freq_ideal', 'freq_sampled',
+                   'yrms', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'N', 'aperture']
         results = np.zeros(shape=(len(df.index), len(headers)))
         t = threading.currentThread()
         for idx, row in df.iterrows():
@@ -231,11 +231,12 @@ class DistortionAnalyzer:
                 if not self.DUMMY_DATA:
                     self.panel.text_amplitude.SetValue(str(row.amplitude))
                     self.panel.text_frequency.SetValue(str(row.frequency))
+
                     try:
                         amplitude, units, ft = self.get_string_value(row.amplitude, str(row.frequency))
                     except ValueError as e:
                         print('\n!!!\nAccounted error! exiting sweep\n!!!\n')
-                        self.panel.popup_dialog(str(e))
+                        self.panel.error_dialog(str(e))
                         raise
                     self.params['amplitude'] = amplitude
                     self.params['frequency'] = ft
@@ -282,7 +283,7 @@ class DistortionAnalyzer:
         # SOURCE -------------------------------------------------------------------------------------------------------
         amplitude = self.params['amplitude']
         coupling = self.params['coupling']
-        Ft = self.params['frequency']
+        f0 = self.params['frequency']
 
         if self.params['rms'] != 0:
             amplitude = amplitude / np.sqrt(2)
@@ -297,7 +298,7 @@ class DistortionAnalyzer:
         filter_val = self.params['filter']
 
         # DIGITIZED SIGNAL =============================================================================================
-        if Ft == 0:
+        if f0 == 0:
             lpf = 10e3
             hpf = 3  # high pass filter cutoff frequency
             f0, Fs, N, aperture, runtime = get_FFT_parameters(f0=10, lpf=lpf,
@@ -328,7 +329,7 @@ class DistortionAnalyzer:
                 hpf = 0
             else:
                 raise ValueError("Invalid filter cutoff selected!")
-            f0, Fs, N, aperture, runtime = get_FFT_parameters(f0=Ft, lpf=lpf,
+            f0, Fs, N, aperture, runtime = get_FFT_parameters(f0=f0, lpf=lpf,
                                                               mainlobe_type=mainlobe_type,
                                                               mainlobe_width=mainlobe_value,
                                                               window=self.WINDOW_SELECTION)
@@ -362,20 +363,20 @@ class DistortionAnalyzer:
                 print('\n!!!\nCould not generate new dummy data. Using the DUMMY.csv currently available.\n!!!\n')
                 yt = pd.read_csv('results/history/DUMMY.csv')['yt'].to_numpy()
 
-        return self.fft(yt, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft, f0)
+        return self.fft(yt, runtime, Fs, N, aperture, hpf, lpf, amplitude, f0)
 
     # ------------------------------------------------------------------------------------------------------------------
     def test_analyze_shunt_voltage(self, setup):
         amplitude = self.params['amplitude']
         coupling = self.params['coupling']
-        Ft = self.params['frequency']
+        f0 = self.params['frequency']
 
         if self.params['rms'] != 0:
             amplitude = amplitude / np.sqrt(2)
             print('Provided amplitude converted to RMS.')
 
         source_units = self.params['units']
-        self.M.run_source(source_units, amplitude, Ft)
+        self.M.run_source(source_units, amplitude, f0)
         time.sleep(1)
 
         # METER
@@ -389,7 +390,7 @@ class DistortionAnalyzer:
         filter_val = self.params['filter']
 
         # DIGITIZED SIGNAL =============================================================================================
-        if Ft == 0:
+        if f0 == 0:
             lpf = 10e3
             hpf = 3  # high pass filter cutoff frequency
             f0, Fs, N, aperture, runtime = get_FFT_parameters(f0=10, lpf=lpf,
@@ -404,7 +405,7 @@ class DistortionAnalyzer:
             else:
                 lpf = 0
             hpf = 0
-            f0, Fs, N, aperture, runtime = get_FFT_parameters(f0=Ft, lpf=lpf,
+            f0, Fs, N, aperture, runtime = get_FFT_parameters(f0=f0, lpf=lpf,
                                                               mainlobe_type=mainlobe_type,
                                                               mainlobe_width=mainlobe_width,
                                                               window=self.WINDOW_SELECTION)
@@ -417,10 +418,10 @@ class DistortionAnalyzer:
 
         pd.DataFrame(data=y, columns=['ydata']).to_csv('results/y_data.csv')
 
-        return self.fft(y, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft, f0)
+        return self.fft(y, runtime, Fs, N, aperture, hpf, lpf, amplitude, f0)
 
     # FFT ##############################################################################################################
-    def fft(self, yt, runtime, Fs, N, aperture, hpf, lpf, amplitude, Ft, f0):
+    def fft(self, yt, runtime, Fs, N, aperture, hpf, lpf, amplitude, f0):
         yrms = rms_flat(yt)
         xt = np.arange(0, N, 1) / Fs
 
@@ -428,15 +429,14 @@ class DistortionAnalyzer:
 
         # Find THD and THD+N -------------------------------------------------------------------------------------------
         try:
-            thdn, _f0, noise_rms = THDN_F(yf_rfft, Fs, N, main_lobe_width, hpf, lpf)
+            thdn, f0_sampled, noise_rms = THDN_F(yf_rfft, Fs, N, main_lobe_width, hpf, lpf)
             thd = THD(yf_rfft, Fs)
             data = {'xt': xt, 'yt': yt, 'xf': xf_rfft, 'yf': yf_rfft,
                     'N': N, 'runtime': runtime, 'Fs': Fs, 'f0': f0}
         except ValueError as e:
             print('check fft method in distortion_analyzer.py')
             raise
-        results_row = {'Amplitude': amplitude, 'freq_ideal': Ft, 'freq_fudged': f0, 'freq_actual': _f0,
-                       'yrms': yrms,
+        results_row = {'Amplitude': amplitude, 'freq_ideal': f0, 'freq_sampled': f0_sampled, 'yrms': yrms,
                        'THDN': round(thdn, 5), 'THD': round(thd, 5), 'RMS NOISE': noise_rms,
                        'N': N, 'Fs': f'{round(Fs / 1000, 2)} kHz', 'Aperture': f'{round(aperture * 1e6, 4)}us'}
 
@@ -454,7 +454,7 @@ class DistortionAnalyzer:
         write_to_csv('results/history', 'measurement', header, xt, yt, xf_fft, yf_fft)
         self.plot(data)
 
-        return [amplitude, Ft, f0, yrms, thdn, thd, noise_rms, Fs, aperture]
+        return [amplitude, f0, f0_sampled, yrms, thdn, thd, noise_rms, N, Fs, aperture]
 
     # PLOT #############################################################################################################
     def plot(self, data):
@@ -531,7 +531,7 @@ class DistortionAnalyzer:
         try:
             frequency = float(freq_string)
         except ValueError:
-            self.panel.popup_dialog(f"The value {freq_string} is not a valid frequency!")
+            self.panel.error_dialog(f"The value {freq_string} is not a valid frequency!")
             self.frequency_good = False
         else:
             self.frequency_good = True

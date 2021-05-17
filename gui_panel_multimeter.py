@@ -65,7 +65,7 @@ class MultimeterTab(wx.Panel):
         self.toolbar.Realize()
 
         # instance variables -------------------------------------------------------------------------------------------
-        self.DMM_choice = 'f884xA'
+        self.DMM_choice = 'f8588A'
         self.dmm = dmm(self)
         self.t = threading.Thread()
         self.flag_complete = True  # Flag indicates any active threads (False) or thread completed (True)
@@ -128,7 +128,7 @@ class MultimeterTab(wx.Panel):
         self.text_DMM_report.SetMinSize((200, 23))
         self.checkbox_autorange.SetValue(1)
 
-        self.combo_DMM_choice.SetSelection(0)
+        self.combo_DMM_choice.SetSelection(1)
         self.combo_DMM_choice.SetMinSize((87, 23))
         self.combo_rms_or_peak.SetSelection(0)
         self.combo_mode.SetSelection(0)
@@ -291,11 +291,19 @@ class MultimeterTab(wx.Panel):
         self.text_DMM_report.SetValue(idn_dict['DMM'])  # current DMM
 
     def on_connect_instr(self, evt):
+        wait = wx.BusyCursor()
+        msg = "Establishing remote connections to instruments."
+        busyDlg = wx.BusyInfo(msg, parent=self)
+
         print('\nResetting connection. Closing communication with any connected instruments')
         self.text_DUT_report.Clear()
         self.text_DMM_report.Clear()
         self.dmm.DMM_choice = self.DMM_choice
-        self.thread_this(self.dmm.connect, (self.get_instruments(),))
+        # self.thread_this(self.dmm.connect, (self.get_instruments(),))
+        self.dmm.connect(self.get_instruments(),)
+
+        busyDlg = None
+        del wait
 
     # ------------------------------------------------------------------------------------------------------------------
     def lock_controls(self, evt):

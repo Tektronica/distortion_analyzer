@@ -94,7 +94,7 @@ class TestFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, on_open_history_dir, self.menu_history)
         self.Bind(wx.EVT_MENU, self.grid_1.export, self.menu_export)
         self.Bind(wx.EVT_MENU, self.config_all_instruments, self.menu_config)
-        self.Bind(wx.EVT_MENU, self.close_all_instruments, self.menu_close_instruments)
+        self.Bind(wx.EVT_MENU, self.OnCloseInstruments, self.menu_close_instruments)
         self.Bind(wx.EVT_MENU, self.OnWindowSelection, self.menu_windowing_rect)
         self.Bind(wx.EVT_MENU, self.OnWindowSelection, self.menu_windowing_bart)
         self.Bind(wx.EVT_MENU, self.OnWindowSelection, self.menu_windowing_hann)
@@ -167,28 +167,38 @@ class TestFrame(wx.Frame):
     def reset_view(self, evt):
         self.SetSize((1055, 640))
 
+    def popup_dialog(self, error_message):
+        print(error_message)
+        dial = wx.MessageDialog(None, str(error_message), 'Error', wx.OK | wx.ICON_ERROR)
+        dial.ShowModal()
+
     # ------------------------------------------------------------------------------------------------------------------
     def config_all_instruments(self, evt):
         dlg = InstrumentDialog(self, ['f5560A', 'f8588A', 'f884xA'], None, wx.ID_ANY, )
         dlg.ShowModal()
         dlg.Destroy()
 
-    def popup_dialog(self, error_message):
-        print(error_message)
-        dial = wx.MessageDialog(None, str(error_message), 'Error', wx.OK | wx.ICON_ERROR)
-        dial.ShowModal()
-
-    def close_all_instruments(self, evt):
+    def close_all_instruments(self):
         wait = wx.BusyCursor()
+        msg = "Closing all remote connections to instruments"
+        busyDlg = wx.BusyInfo(msg, parent=self)
+
         print("Closing all possible remote connections to instruments:")
         self.tab_analyzer.da.close_instruments()
         print("\tremote connection to instruments used in distortion analyzer are closed.")
         self.tab_multimeter.dmm.close_instruments()
         print("\tremote connection to instruments used in multimeter are closed.")
 
+        busyDlg = None
         del wait
+
+    def OnCloseInstruments(self, evt):
+        self.close_all_instruments()
         self.popup_dialog('All instruments have been closed.')
 
+    def OnCloseWindow(self, evt):
+        self.close_all_instruments()
+        self.Destroy()
 
     def OnWindowSelection(self, evt):
         window_value = "rectangular"
@@ -211,7 +221,7 @@ class TestFrame(wx.Frame):
 
     # ------------------------------------------------------------------------------------------------------------------
     def __do_table_header(self):
-        header = ['Amplitude', 'freq_ideal', 'freq_fudged', 'freq_actual',
+        header = ['Amplitude', 'freq_ideal', 'freq_sampled',
                   'RMS', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'Samples', 'Aperture']
         self.grid_1.append_rows(header)
 
@@ -233,12 +243,6 @@ class TestFrame(wx.Frame):
         info.AddDeveloper('Ryan Holle')
 
         wx.adv.AboutBox(info)
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def OnCloseWindow(self, evt):
-        self.tab_analyzer.da.close_instruments()
-        self.tab_multimeter.dmm.close_instruments()
-        self.Destroy()
 
 
 ########################################################################################################################
