@@ -427,13 +427,12 @@ class DistortionAnalyzer:
     def fft(self, yt, runtime, Fs, N, aperture, hpf, lpf, amplitude, f0):
         yrms = rms_flat(yt)
         xt = np.arange(0, N, 1) / Fs
-
-        xf_fft, yf_fft, xf_rfft, yf_rfft, main_lobe_width = windowed_fft(yt, Fs, N, self.WINDOW_SELECTION)
-
+        xf_rfft, yf_rfft, main_lobe_width = windowed_fft(yt, Fs, N, self.WINDOW_SELECTION)
+        
         # Find THD and THD+N -------------------------------------------------------------------------------------------
         try:
-            thdn, f0_sampled, noise_rms = THDN_F(yf_rfft, Fs, N, main_lobe_width, hpf, lpf)
-            thd = THD(yf_rfft, Fs)
+            thdn, f0_sampled, noise_rms = THDN_F(xf_rfft, yf_rfft, Fs, N, main_lobe_width, hpf, lpf)
+            thd = THD(xf_rfft, yf_rfft, Fs, N, main_lobe_width)
             data = {'xt': xt, 'yt': yt, 'xf': xf_rfft, 'yf': yf_rfft,
                     'N': N, 'runtime': runtime, 'Fs': Fs, 'f0': f0}
         except ValueError as e:
@@ -454,7 +453,7 @@ class DistortionAnalyzer:
 
         # save measurement to csv --------------------------------------------------------------------------------------
         header = ['xt', 'yt', 'xf', 'yf']
-        write_to_csv('results/history', 'measurement', header, xt, yt, xf_fft, yf_fft)
+        write_to_csv('results/history', 'measurement', header, xt, yt, xf_rfft, yf_rfft)
         self.plot(data)
 
         return [amplitude, f0, f0_sampled, yrms, thdn, thd, noise_rms, N, Fs, aperture]

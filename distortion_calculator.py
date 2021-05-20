@@ -1,6 +1,7 @@
 import numpy as np
 import math
-
+from scipy import signal
+from matplotlib import pyplot as plt
 """
 FFT Fundamentals
 https://www.sjsu.edu/people/burford.furman/docs/me120/FFT_tutorial_NI.pdf
@@ -95,62 +96,43 @@ def getWindowLength(f0=10e3, fs=2.5e6, windfunc='blackman', error=0.1, mainlobe_
 
 ########################################################################################################################
 def windowed_fft(yt, Fs, N, windfunc='blackman'):
-    # remove DC offset
-    yt -= np.mean(yt)
-
+    """    
+    Returns
+    -------
+    xf_fft :
+        Two sided frequency axis.
+    yf_fft : TYPE
+        Two sided power spectrum.
+    xf_rfft :
+        One sided frequency axis.
+    yf_rfft :
+        One sided power spectrum.
+    main_lobe_width :
+        The bandwidth (Hz) of the main lobe of the frequency domain window function.
+    """
+    # detrend removes the DC component
+    # scaling returns units of V**2/Hz or A**2/Hz. To get power, sum and multiply by the bandwidth.
+    xf_rfft, yf_rfft = signal.periodogram(yt, Fs, window=windfunc, detrend='constant', return_onesided=True, scaling='density')
     # Calculate windowing function and its length ----------------------------------------------------------------------
     if windfunc == 'rectangular':
-        w = np.ones(N)
         main_lobe_width = 2 * (Fs / N)
     elif windfunc == 'bartlett':
-        w = np.bartlett(N)
         main_lobe_width = 4 * (Fs / N)
     elif windfunc == 'hanning':
-        w = np.hanning(N)
         main_lobe_width = 4 * (Fs / N)
     elif windfunc == 'hamming':
-        w = np.hamming(N)
         main_lobe_width = 4 * (Fs / N)
     elif windfunc == 'blackman':
-        w = np.blackman(N)
         main_lobe_width = 6 * (Fs / N)
     else:
         # TODO - maybe include kaiser as well, but main lobe width varies with alpha
         raise ValueError("Invalid windowing function selected!")
 
-    # Calculate amplitude correction factor after windowing ------------------------------------------------------------
-    # https://stackoverflow.com/q/47904399/3382269
-    amplitude_correction_factor = 1 / np.mean(w)
-
-    # Calculate the length of the FFT ----------------------------------------------------------------------------------
-    if (N % 2) == 0:
-        # for even values of N: FFT length is (N / 2) + 1
-        fft_length = int(N / 2) + 1
-    else:
-        # for odd values of N: FFT length is (N + 1) / 2
-        fft_length = int((N + 2) / 2)
-
-    """
-    Compute the FFT of the signal Divide by the length of the FFT to recover the original amplitude. Note dividing 
-    alternatively by N samples of the time-series data splits the power between the positive and negative sides. 
-    However, we are only looking at one side of the FFT.
-    """
-    try:
-        yf_fft = (np.fft.fft(yt * w) / fft_length) * amplitude_correction_factor
-
-        yf_rfft = yf_fft[:fft_length]
-        xf_fft = np.linspace(0.0, Fs, N)
-        xf_rfft = np.linspace(0.0, Fs / 2, fft_length)
-    except ValueError as e:
-        print('\n!!!\nError caught while performing fft of presumably length mismatched arrays.'
-              '\nwindowed_fft method in distortion_calculator.py\n!!!\n')
-        raise ValueError(e)
-
-    return xf_fft, yf_fft, xf_rfft, yf_rfft, main_lobe_width
+    return xf_rfft, yf_rfft, main_lobe_width
 
 
-########################################################################################################################
-def THDN_F(yf, fs, N, main_lobe_width=None, hpf=0, lpf=100e3):
+
+def THDN_F(xf, yf, fs, N, main_lobe_width=None, hpf=0, lpf=100e3):
     """
     [THDF compares the harmonic content of a waveform to its fundamental] and is a much better measure of harmonics
     content than THDR. Thus, the usage of THDF is advocated .
@@ -166,16 +148,14 @@ def THDN_F(yf, fs, N, main_lobe_width=None, hpf=0, lpf=100e3):
     :returns: THD and fundamental frequency
     """
     _yf = np.array(yf, copy=True)  # protects yf from mutation
-    freqs = np.fft.rfftfreq(len(_yf))
+    freqs = xf
 
     # FIND FUNDAMENTAL (peak of frequency spectrum) --------------------------------------------------------------------
     try:
-        idx = np.argmax(np.abs(_yf))
-        freq = freqs[idx]  # no units
-        fundamental = freq * fs / 2  # in hertz
+        f0_idx = np.argmax(_yf)
     except IndexError:
         raise ValueError('Failed to find fundamental. Most likely index was outside of bounds.')
-
+    print(f'first few elements of _yf: {_yf[:4]}')
     # APPLY HIGH PASS FILTERING ----------------------------------------------------------------------------------------
     if not (hpf == 0) and (hpf < lpf):
         print('>>applying high pass filter<<')
@@ -191,26 +171,28 @@ def THDN_F(yf, fs, N, main_lobe_width=None, hpf=0, lpf=100e3):
     # https://stackoverflow.com/questions/23341935/find-rms-value-in-frequency-domain
     # Find the local minimals of the main lobe fundamental frequency
     if main_lobe_width:
-        left_of_lobe = int((fundamental - main_lobe_width / 2) * (N / fs)) + 1
-        right_of_lobe = int((fundamental + main_lobe_width / 2) * (N / fs)) + 2
+        samples_beside_peak = (main_lobe_width / (fs/N)) / 2 # ([samples in main lobe] - [1 peak sample]) / 2
+        if not float.is_integer(samples_beside_peak):
+            print("Not expecting an even number of samples in the main lobe.")
+        samples_beside_peak = int(samples_beside_peak)
     else:
-        left_of_lobe, right_of_lobe = find_range(abs(_yf), idx)
-
-    rms_fundamental = np.sqrt(np.sum(np.abs(_yf[left_of_lobe:right_of_lobe]) ** 2))  # Parseval's Theorem
+        samples_beside_peak = 0
+    # +1 because slicing doesn't include the end
+    rms_fundamental = math.fsum(_yf[f0_idx - samples_beside_peak:f0_idx + samples_beside_peak + 1])
 
     # REJECT FUNDAMENTAL FOR NOISE RMS ---------------------------------------------------------------------------------
     # Throws out values within the region of the main lobe fundamental frequency
-    _yf[left_of_lobe:right_of_lobe] = 1e-10
+    _yf[f0_idx - samples_beside_peak:f0_idx + samples_beside_peak + 1] = 1e-10
     __yf = np.array(_yf, copy=True)  # TODO: used for internal plotting only
 
     # COMPUTE RMS NOISE ------------------------------------------------------------------------------------------------
-    rms_noise = np.sqrt(np.sum(np.abs(_yf) ** 2))  # Parseval's Theorem
+    rms_noise = math.fsum(_yf)  # Parseval's Theorem
 
     # THDN CALCULATION -------------------------------------------------------------------------------------------------
     # https://www.thierry-lequeu.fr/data/PESL-00101-2003-R2.pdf
     THDN = rms_noise / rms_fundamental
 
-    return THDN, fundamental, round(1e6 * rms_noise, 2)
+    return THDN, freqs[f0_idx], round(1e6 * rms_noise, 2)
 
 
 def THDN_R(yf, fs, N, hpf=0, lpf=100e3):
@@ -276,30 +258,41 @@ def THDN_R(yf, fs, N, hpf=0, lpf=100e3):
 
 
 ########################################################################################################################
-def THD(yf, Fs):
+def THD(xf, yf, Fs, N, main_lobe_width):
     _yf = np.array(yf, copy=True)  # protects yf from mutation
     _yf_data_peak = max(abs(yf))
-    # FIND FUNDAMENTAL (peak of frequency spectrum)
+    # Find the fundamental frqeuency (approximately). Should correspond to the
+    # largest spectral component.
     try:
         idx = np.argmax(np.abs(yf))
-        freqs = np.fft.rfftfreq(len(yf))
-        freq = freqs[idx]  # no units
-        F0 = freq * Fs / 2  # in hertz
+        freqs = xf
+        F0 = freqs[idx]
     except IndexError:
         raise ValueError('Failed to find fundamental for computing the THD.\nMost likely related to a zero-size array.')
 
     if idx != 0:
         n_harmonics = int((Fs / 2) / F0)  # find maximum number of harmonics
-        amplitude = np.zeros(n_harmonics)
+        component_power = np.zeros(n_harmonics)
         for h in range(n_harmonics):
+            # It may be better to replace this with peak finding, since the
+            # fundamental is likely off from the real fundamental.
             local = int(idx * (h + 1))
             try:
-                # The bandwidth over which a harmonic is searched for should be
-                # specified by a variable rather than the number 4.
-                amplitude[h] = np.max(np.abs(yf[local - 4:local + 4])) / _yf_data_peak
+                # The  power of each harmonic is calculated by summing the number
+                # of samples in the main lobe of the window function. Every window
+                # function has a symmetrical spectrum and therefore the main lobe
+                # consists of an odd number of samples, or 1 plus the bandwidth
+                # of the main lobe.
+                samples_beside_peak = (main_lobe_width / (Fs/N)) / 2 # ([samples in main lobe] - [1 peak sample]) / 2
+                if not float.is_integer(samples_beside_peak):
+                    print("Not expecting an even number of samples in the main lobe.")
+                samples_beside_peak = int(samples_beside_peak)
+                # +1 because slicing doesn't include the end
+                component_power[h] = math.fsum(yf[local - samples_beside_peak:local + samples_beside_peak + 1])
             except ValueError:
                 raise ValueError('Failed to capture all peaks for calculating THD.\nMost likely zero-size array.')
-        thd = np.sqrt(np.sum(np.abs(amplitude[1:]) ** 2)) / np.abs(amplitude[0])
+        print(f'component power: {component_power}')
+        thd = np.sum(component_power[1:]) / component_power[0]
     else:
         print('Check the damn connection, you husk of an oat!')
         thd = 1  # bad input usually. Check connection.
