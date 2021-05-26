@@ -8,9 +8,12 @@ import matplotlib.pylab as pylab
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.backends.backend_wxagg import NavigationToolbar2WxAgg as NavigationToolbar
 
+# CONFIG ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 CONTAINS_HARMONICS = True
 CONTAINS_NOISE = False
 GUI = True
+NORMALIZE_FFT = True
+# CONFIG \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
 
 def to_float(string_val):
@@ -62,7 +65,9 @@ def getWindowLength(f0=10e3, fs=2.5e6, windfunc='blackman', error=0.1, mainlobe_
     return M
 
 
-def ADC(ypeak, f0, Fs, N, has_harmonics=True, has_noise=True):
+def ADC(yrms, f0, Fs, N, has_harmonics=True, has_noise=True):
+    ypeak = yrms * np.sqrt(2)
+
     # TEMPORAL ---------------------------------------------------------------------------------------------------------
     xt = np.arange(0, N, 1) / Fs
     yt = ypeak * np.sin(2 * np.pi * f0 * xt)
@@ -76,7 +81,9 @@ def ADC(ypeak, f0, Fs, N, has_harmonics=True, has_noise=True):
     return xt, yt
 
 
-def true_signal(ypeak, N, has_harmonics=True, has_noise=True):
+def true_signal(yrms, N, has_harmonics=True, has_noise=True):
+    ypeak = yrms * np.sqrt(2)
+
     signal_sum = (ypeak / np.sqrt(2))**2
 
     if has_harmonics:
@@ -197,10 +204,10 @@ class MyDemoPanel(wx.Panel):
         grid_sizer_left_panel.Add(lbl_signal, (row, 0), (1, 3), wx.LEFT | wx.RIGHT, 5)
 
         row += 1
-        lbl_signal_peak = wx.StaticText(self.left_panel, wx.ID_ANY, "Peak:")
-        grid_sizer_left_panel.Add(lbl_signal_peak, (row, 0), (1, 1), wx.LEFT | wx.RIGHT, 5)
-        lbl_signal_peak_val = wx.StaticText(self.left_panel, wx.ID_ANY, "1")
-        grid_sizer_left_panel.Add(lbl_signal_peak_val, (row, 1), (1, 2), wx.BOTTOM, 5)
+        lbl_signal_rms = wx.StaticText(self.left_panel, wx.ID_ANY, "RMS:")
+        grid_sizer_left_panel.Add(lbl_signal_rms, (row, 0), (1, 1), wx.LEFT | wx.RIGHT, 5)
+        lbl_signal_rms_val = wx.StaticText(self.left_panel, wx.ID_ANY, "1")
+        grid_sizer_left_panel.Add(lbl_signal_rms_val, (row, 1), (1, 2), wx.BOTTOM, 5)
 
         row += 1
         lbl_signal_freq = wx.StaticText(self.left_panel, wx.ID_ANY, "Frequency (f0):")
@@ -331,19 +338,19 @@ class MyDemoPanel(wx.Panel):
     def update(self, evt):
         try:
             f0 = 1000
-            signal_peak = 1
+            signal_rms = 1
 
             Fs = to_float(self.text_ctrl_fs.GetValue()) * 1e3
             LDF = to_float(self.text_ctrl_ldf.GetValue())
 
             # TEMPORAL -------------------------------------------------------------------------------------------------
             N = getWindowLength(f0, 200e3, windfunc='blackman', error=LDF, mainlobe_type='absolute')
-            self.x, self.y = ADC(signal_peak, f0, 200e3, N, CONTAINS_HARMONICS, CONTAINS_NOISE)
+            self.x, self.y = ADC(signal_rms, f0, 200e3, N, CONTAINS_HARMONICS, CONTAINS_NOISE)
 
             N = getWindowLength(f0, Fs, windfunc='blackman', error=LDF, mainlobe_type='absolute')
-            xdt, ydt = ADC(signal_peak, f0, Fs, N, CONTAINS_HARMONICS, CONTAINS_NOISE)
+            xdt, ydt = ADC(signal_rms, f0, Fs, N, CONTAINS_HARMONICS, CONTAINS_NOISE)
 
-            rms_true = round(true_signal(signal_peak, N, CONTAINS_HARMONICS, CONTAINS_NOISE), 8)
+            rms_true = round(true_signal(signal_rms, N, CONTAINS_HARMONICS, CONTAINS_NOISE), 8)
             rms_sampled = round(rms_flat(ydt), 8)
             rms_delta = round(1e6 * (rms_true - rms_sampled), 2)
 
@@ -363,8 +370,7 @@ class MyDemoPanel(wx.Panel):
                 else:
                     aliased_freq[idx] = (f0*harmonic % Fn)/1000
 
-            # SPECTRAL -------------------------------------------------------------------------------------------------
-            xf_fft = np.linspace(0.0, Fs, N)
+            # WINDOW ---------------------------------------------------------------------------------------------------
             w = np.blackman(N)
 
             # Calculate amplitude correction factor after windowing ----------------------------------------------------
@@ -379,11 +385,12 @@ class MyDemoPanel(wx.Panel):
                 # for odd values of N: FFT length is (N + 1) / 2
                 fft_length = int((N + 2) / 2)
 
-            xf_fft = np.linspace(0.0, Fs, N)
+            # SPECTRAL -------------------------------------------------------------------------------------------------
+            xf_fft = np.round(np.fft.fftfreq(N, d=1./Fs), 6)
             yf_fft = (np.fft.fft(ydt * w) / fft_length) * amplitude_correction_factor
 
             yf_rfft = yf_fft[:fft_length]
-            xf_rfft = np.linspace(0.0, Fs / 2, fft_length)
+            xf_rfft = np.round(np.fft.rfftfreq(N, d=1. / Fs), 6)  # one-sided
 
             if aliased_freq[0] == 0:
                 fh1 = f0
@@ -417,8 +424,13 @@ class MyDemoPanel(wx.Panel):
         self.ax1.set_xlim(left=xt_left * 1000, right=xt_right * 1000)
 
         # SPECTRAL -----------------------------------------------------------------------------------------------------
-        yf_peak = max(abs(yf))
-        self.spectral.set_data(xf / 1000, 20 * np.log10(np.abs(yf / yf_peak)))
+        if NORMALIZE_FFT:
+            yf_peak = max(abs(yf))
+            self.spectral.set_data(xf / 1000, 20 * np.log10(np.abs(yf / yf_peak)))
+            self.ax2.set_ylabel('MAGNITUDE (dB)')
+        else:
+            self.spectral.set_data(xf / 1000, np.abs(yf)/np.sqrt(2))
+            self.ax2.set_ylabel('Amplitude (Vrms)')
         try:
             self.ax2.relim()  # recompute the ax.dataLim
         except ValueError:

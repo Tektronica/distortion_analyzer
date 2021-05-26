@@ -115,7 +115,6 @@ def write_to_csv(path, fname, header, *args):
 
 
 def GetData(amplitude, f0, Fs, N, has_harmonics=True, has_noise=True):
-    print(f0)
     # TEMPORAL ---------------------------------------------------------------------------------------------------------
     ypeak = amplitude*np.sqrt(2)
     xt = np.arange(0, N, 1) / Fs

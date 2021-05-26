@@ -436,17 +436,6 @@ class DistortionAnalyzerTab(wx.Panel):
         self.figure.align_ylabels([self.ax1, self.ax2])
         self.figure.tight_layout()
 
-    def update_plot(self, x, y, std):
-        self.results_update([x, y, std])
-        # TODO: np.NaN is always index 0. Should this be fixed?
-        self.x = np.append(self.x, x)
-        self.y = np.append(self.y, y)
-        self.std = np.append(self.std, std)
-
-        yerr = self.std / np.sqrt(self.x.size)
-
-        self.plot(yerr)
-
     def plot(self, params):
         # TEMPORAL -----------------------------------------------------------------------------------------------------
         xt = params['xt']
