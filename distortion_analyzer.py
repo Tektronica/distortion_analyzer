@@ -430,8 +430,7 @@ class DistortionAnalyzer:
         # Find THD and THD+N -------------------------------------------------------------------------------------------
         try:
             thdn, f0_sampled, noise_rms = THDN_F(xf_rfft, yf_rfft, Fs, N, main_lobe_width, hpf, lpf)
-            # thd = THD(xf_rfft, yf_rfft, Fs)
-            thd = THD_alt(xf_rfft, yf_rfft, Fs, N, main_lobe_width)
+            thd = THD(xf_rfft, yf_rfft, Fs, N, main_lobe_width)
             data = {'xt': xt, 'yt': yt, 'xf': xf_rfft, 'yf': yf_rfft,
                     'N': N, 'runtime': runtime, 'Fs': Fs, 'f0': f0}
         except ValueError as e:

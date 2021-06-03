@@ -24,8 +24,17 @@ def getSamplingFrequency(f0, bw=100e3):
     :param bw: the maximum resolved frequency of the fft.
     :return: sampling rate, fs
     """
+
+    """
+    The 100kHz filter in the Fluke 8588A is presumably a 1-pole filter. Placing the Nyquist frequency also at 
+    100kHz cutoff could potentially lead to signals above the Nyquist aliasing back down with only 3dB to 6dB 
+    of attenuation. By pushing the Nyquist up, worse case aliasing will be attenuated 6dB to 9dB.
+    
+    Since a 1-pole filter attenuates 6 dB/octave, then Nyquist should be placed at 2BW or fs = 4BW to place the 
+    Nyquist 6dB down from the filter cutoff. 2BW is 1 octave from the BW
+    """
     # Ideal sampling frequency
-    _Fs = max(2 * bw, 100 * f0)
+    _Fs = max(2 * (2*bw), 100 * f0)
 
     # An integer number of samples averaged per measurement determines actual sampling frequency
     N = max(round(DIGITIZER_SAMPLING_FREQUENCY / _Fs), 1)
@@ -48,13 +57,12 @@ def getStuff(f0, LDF=100, BW=100e3, windfunc='rectangular'):
 
     res = LDF / K
     Navg = np.ceil(min(DIGITIZER_SAMPLING_FREQUENCY / (res * f0), DIGITIZER_SAMPLING_FREQUENCY / _Fs))
-    print(Navg)
     f0 = round(DIGITIZER_SAMPLING_FREQUENCY / (res * Navg), 2)
     Fs = DIGITIZER_SAMPLING_FREQUENCY / Navg
 
     N = int(np.ceil(Fs / res))
     ldf = round(K * (Fs / N), 3)
-    print(ldf)
+
     return f0, Fs, N
 
 

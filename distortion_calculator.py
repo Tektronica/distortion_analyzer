@@ -289,35 +289,7 @@ def THDN_R(xf, yf, fs, N, hpf=0, lpf=100e3):
 
 
 ########################################################################################################################
-def THD(xf, yf, Fs):
-    _yf = np.array(yf, copy=True)  # protects yf from mutation
-    _yf_data_peak = max(abs(yf))
-
-    # FIND FUNDAMENTAL (peak of frequency spectrum)
-    try:
-        f0_idx = np.argmax(np.abs(_yf))
-        f0 = xf[f0_idx]
-    except IndexError:
-        raise ValueError('Failed to find fundamental for computing the THD.\nMost likely related to a zero-size array.')
-
-    if f0_idx != 0:
-        n_harmonics = np.int(np.floor((Fs / 2) / f0))  # find maximum number of harmonics
-        amplitude = np.zeros(n_harmonics)
-        for h in range(n_harmonics):
-            local = int(f0_idx * (h + 1))
-            try:
-                amplitude[h] = np.max(np.abs(yf[local - 4:local + 4])) / _yf_data_peak
-            except ValueError:
-                raise ValueError('Failed to capture all peaks for calculating THD.\nMost likely zero-size array.')
-        thd = np.sqrt(np.sum(np.abs(amplitude[1:]) ** 2)) / np.abs(amplitude[0])
-    else:
-        print('Check the damn connection, you husk of an oat!')
-        thd = 1  # bad input usually. Check connection.
-
-    return thd
-
-
-def THD_alt(xf, yf, Fs, N, main_lobe_width):
+def THD(xf, yf, Fs, N, main_lobe_width):
     _yf = np.array(yf, copy=True)  # protects yf from mutation
     _yf_data_peak = max(abs(yf))
     # FIND FUNDAMENTAL (peak of frequency spectrum)
