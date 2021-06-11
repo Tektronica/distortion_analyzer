@@ -11,6 +11,7 @@ import wx
 import wx.adv
 import wx.html
 import webbrowser
+import warnings
 
 APP_VERSION = 'v2.3.1'
 APP_ICON = 'images/hornet.ico'
@@ -260,5 +261,7 @@ class MyApp(wx.App):
 
 # Run
 if __name__ == "__main__":
+    # https://stackoverflow.com/a/16237927
+    warnings.simplefilter('error', UserWarning)
     app = MyApp(0)
     app.MainLoop()

@@ -80,9 +80,8 @@ class MultimeterTab(wx.Panel):
         self.x, self.y, self.std = np.NaN, np.NaN, np.NaN
         self.errorbars = False
         self.ax1 = self.figure.add_subplot(111)
-        self.line, (self.err_top, self.err_btm), (self.bars,) = self.ax1.errorbar(np.NaN, np.NaN, yerr=np.NaN, fmt='o',
+        self.line, (self.err_top, self.err_btm), (self.bars,) = self.ax1.errorbar(np.zeros(1), np.zeros(1), yerr=np.zeros(1), fmt='o',
                                                                                   ecolor='red', capsize=4)
-
         # BINDINGS =====================================================================================================
         # Configure Instruments ----------------------------------------------------------------------------------------
         on_DMM_selection = lambda event: self._get_DMM_choice(event)
