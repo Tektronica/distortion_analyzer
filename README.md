@@ -6,7 +6,7 @@ The distortion analyzer computes the total harmonic distortion (THD) and
 total harmonic distortion and noise (THD+N) using time series data
 collected by the Fluke 8588A Digitizer.
 
-![](images/static/distortion_analyzer.png)
+![](html/static/distortion_analyzer.png)
 
 STEPS FOR CALCULATING DISTORTION:
 =================================
@@ -78,7 +78,7 @@ to compute the aperture provided the sampling frequency, Fs.
 1.  **aperture** = max(200e-9 \* (samples\_to\_average - 1), 0) =
     **4.8us**
 
-![](images/static/00_sampled_data.jpg)
+![](html/static/00_sampled_data.jpg)
 
 ## Windowing to reduce spectral leakage of non-integer periods
 
@@ -105,20 +105,20 @@ width of the main lobe. In other words, in situations where zero padding
 is not involved and M=N, the main lobe width is reduced by increasing
 the number of samples for a given sampling frequency.
 
-![](images/static/01_blackman_window.jpg)
+![](html/static/01_blackman_window.jpg)
 
 The time series data is then multiplied by the window (or convolved in
 the frequency domain). Tapering at the head and tail of the time series
 data is observed.
 
 
-![](images/static/02_windowed_data.jpg)
+![](html/static/02_windowed_data.jpg)
 
 ## The FFT
 
 The FFT of the time series data with windowing applied is presented below. The fundamental at 1kHz and two odd order harmonics are resolved by the FFT.
 
-![](images/static/03_fft_of_windowed_data.jpg)
+![](html/static/03_fft_of_windowed_data.jpg)
 
 **Sampling Theorem**
 
@@ -213,7 +213,7 @@ There are two approaches for rejecting the fundamental frequency. Once the local
         return left_min, right_min
 
 
-![](images/static/04_rejected_fundamental.jpg)
+![](html/static/04_rejected_fundamental.jpg)
 
 ### THDF
 
@@ -245,7 +245,7 @@ There are two approaches for rejecting the fundamental frequency. Once the local
 
 ## Characterizing an FFT
 
-![](images/static/FFTResolution.jpg)
+![](html/static/FFTResolution.jpg)
 
 ## More on Windowing
 

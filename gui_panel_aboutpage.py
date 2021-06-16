@@ -16,7 +16,7 @@ class AboutTab(wx.Panel):
         self.html = wx.html2.WebView.New(self)
         # self.html = wx.html2.WebView(self, -1, size=(1013, 533), style=wx.html2.HW_SCROLLBAR_AUTO | wx.TE_READONLY)
 
-        self.html.LoadURL("C:\\Users\\rholle\\Documents\\Python Projects\\distortion_analyzer\\about.html")
+        self.html.LoadURL("C:\\Users\\rholle\\Documents\\Python Projects\\distortion_analyzer\\html\\about.html")
 
         self.sizer.Add(self.html, 1, wx.EXPAND)
 

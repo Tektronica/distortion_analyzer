@@ -35,7 +35,7 @@
     <p>The distortion analyzer computes the total harmonic distortion (THD) and total harmonic distortion and noise
         (THD+N) using time series data collected by the Fluke 8588A Digitizer.</p>
     <div class="figure">
-        <img src="images/static/distortion_analyzer.png" class="figure"/>
+        <img src="static/distortion_analyzer.png" class="figure"/>
         <div class="figcaption">Fig 1. Distortion Analyzer GUI</div>
     </div>
     <h1 id="steps-for-calculating-distortion">Steps for Calculating Distortion:</h1>
@@ -90,7 +90,7 @@ M = 12000                   # number of samples</code></pre>
         <li><strong>aperture</strong> = max(200e-9 * (samples_to_average - 1), 0) = <strong>4.8us</strong></li>
     </ol>
     <div class="figure">
-        <img src="images/static/00_sampled_data.jpg" class="figure"/>
+        <img src="static/00_sampled_data.jpg" class="figure"/>
         <div class="figcaption">Fig 2. Sampled Time Series Data</div>
     </div>
     <h2 id="windowing-to-reduce-spectral-leakage-of-non-integer-periods">Windowing to reduce spectral leakage of
@@ -111,7 +111,7 @@ M = 12000                   # number of samples</code></pre>
         of samples for a given sampling frequency.</p>
 
     <div class="figure">
-        <img src="images/static/01_blackman_window.jpg" class="figure"/>
+        <img src="static/01_blackman_window.jpg" class="figure"/>
         <div class="figcaption">Fig 3. Blackman Window</div>
     </div>
 
@@ -119,7 +119,7 @@ M = 12000                   # number of samples</code></pre>
         head and tail of the time series data is observed.</p>
 
     <div class="figure">
-        <img src="images/static/02_windowed_data.jpg" class="figure"/>
+        <img src="static/02_windowed_data.jpg" class="figure"/>
         <div class="figcaption">Fig 4. Windowed Time Series Data</div>
     </div>
 
@@ -128,7 +128,7 @@ M = 12000                   # number of samples</code></pre>
         order harmonics are resolved by the FFT.</p>
 
     <div class="figure">
-        <img src="images/static/03_fft_of_windowed_data.jpg" class="figure"/>
+        <img src="static/03_fft_of_windowed_data.jpg" class="figure"/>
         <div class="figcaption">Fig 5. FFT of the Windowed Data</div>
     </div>
 
@@ -171,7 +171,7 @@ yf_rfft = yf_fft[:fft_length]</code></pre>
         transform, such that:</p>
 
     <div>
-        <img src="images/static/parseval.png" class="equation"/>
+        <img src="static/parseval.png" class="equation"/>
     </div>
 
     <p>Thus, the total RMS amplitude for the FFT is:</p>
@@ -200,17 +200,17 @@ def rms(y)
         <tr class="odd">
             <td align="left" class="formatted_table"><strong>THD</strong></td>
             <td align="left" class="formatted_table">harmonic peaks <strong>:</strong> fundamental peak</td>
-            <td align="left" class="formatted_table"><img src="images/static/thd_expression.png" class="equation"/></td>
+            <td align="left" class="formatted_table"><img src="static/thd_expression.png" class="equation"/></td>
         </tr>
         <tr class="even">
             <td align="left" class="formatted_table"><strong>THD_F</strong></td>
             <td align="left" class="formatted_table">harmonic content <strong>:</strong> fundamental lobe</td>
-            <td align="left" class="formatted_table"><img src="images/static/thdf_expression.png" class="equation"/></td>
+            <td align="left" class="formatted_table"><img src="static/thdf_expression.png" class="equation"/></td>
         </tr>
         <tr class="odd">
             <td align="left" class="formatted_table"><strong>THD_R</strong></td>
             <td align="left" class="formatted_table">harmonic content <strong>:</strong> entire RMS signal</td>
-            <td align="left" class="formatted_table"><img src="images/static/thdr_expression.png" class="equation"/></td>
+            <td align="left" class="formatted_table"><img src="static/thdr_expression.png" class="equation"/></td>
         </tr>
         </tbody>
     </table>
@@ -281,7 +281,7 @@ return left_min, right_min</code></pre>
         </li>
     </ol>
     <div class="figure">
-        <img src="images/static/04_rejected_fundamental.jpg" class="figure"/>
+        <img src="static/04_rejected_fundamental.jpg" class="figure"/>
         <div class="figcaption">Fig 6. Rejected Fundamental</div>
     </div>
     <h3 id="thdf">THDF</h3>
@@ -313,7 +313,7 @@ THDN = rms_noise / rms_total</code></pre>
 
     <h2 id="characterizing-an-fft">Characterizing an FFT</h2>
     <div>
-        <img src="images/static/FFTResolution.jpg"/>
+        <img src="static/FFTResolution.jpg"/>
     </div>
     <h2 id="more-on-windowing">More on Windowing</h2>
     <p> The two characteristics that define a window in the time domain are the window length and shape. The two most
