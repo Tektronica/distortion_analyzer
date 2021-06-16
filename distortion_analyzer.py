@@ -1,4 +1,5 @@
-import dut_f5560A as dut
+import dut_f5560A as dut1
+import dut_f5730A as dut2
 import dmm_f8588A as dmm
 
 try:
@@ -53,9 +54,10 @@ def write_to_csv(path, fname, header, *args):
 
 
 ########################################################################################################################
-class Instruments(dut.f5560A_instrument, dmm.f8588A_instrument):
+class Instruments(dut1.f5560A_instrument, dut2.f5730A_instrument, dmm.f8588A_instrument):
     def __init__(self, parent):
-        dut.f5560A_instrument.__init__(self)
+        dut1.f5560A_instrument.__init__(self)
+        dut2.f5730A_instrument.__init__(self)
         dmm.f8588A_instrument.__init__(self)
 
         self.analyzer = parent
@@ -64,23 +66,56 @@ class Instruments(dut.f5560A_instrument, dmm.f8588A_instrument):
 
     def connect(self, instruments):
         try:
+            DUT_choice = self.analyzer.DUT_choice
+            DMM_choice = self.analyzer.DMM_choice
+
             # ESTABLISH COMMUNICATION TO INSTRUMENTS -------------------------------------------------------------------
-            f5560A_id = instruments['f5560A']
-            f8588A_id = instruments['f8588A']
+            DUT_id = instruments[DUT_choice]
+            DMM_id = instruments[DMM_choice]
 
-            self.connect_to_f5560A(f5560A_id)
-            self.connect_to_f8588A(f8588A_id)
+            # Connect to the dut ---------------------------------------------------------------------------------------
+            if DUT_choice == 'f5730A':
+                self.connect_to_f5730A(DUT_id)
+                dut = self.f5730A
+                dut_idn = self.f5730A_IDN
 
-            if self.f5560A.healthy and self.f8588A.healthy:
+            elif DUT_choice == 'f5560A':
+                self.connect_to_f5560A(DUT_id)
+                dut = self.f5560A
+                dut_idn = self.f5560A_IDN
+
+            else:
+                raise ValueError("Invalid DUT choice selected!")
+
+            # Connect to the dmm ---------------------------------------------------------------------------------------
+            if DMM_choice == 'f8588A':
+                self.connect_to_f8588A(DMM_id)
+                dmm = self.f8588A
+                dmm_idn = self.f8588A_IDN
+            else:
+                dmm = self.f8588A
+                dmm_idn = self.f8588A_IDN
+
+            if dut.healthy and dmm.healthy:
                 self.connected = True
+
+                # Set *IDN? labels in text boxes of parent gui ---------------------------------------------------------
                 try:
-                    idn_dict = {'DUT': self.f5560A_IDN, 'DMM': self.f8588A_IDN}
+                    idn_dict = {'DUT': dut_idn, 'DMM': dmm_idn}
                     self.analyzer.panel.set_ident(idn_dict)
-                    self.setup_source()
+
+                    # Setup Source -------------------------------------------------------------------------------------
+                    if DUT_choice == 'f5560A':
+                        self.setup_f5560A_source()
+                    elif DUT_choice == 'f5730A':
+                        self.setup_f5730A_source()
+                    else:
+                        raise ValueError("Invalid DUT selection made!")
                 except ValueError:
                     raise
             else:
-                print('Unable to connect to all instruments.\n')
+                raise ValueError('Unable to connect to all instruments.\n')
+
         except ValueError:
             raise ValueError('Could not connect. Timeout error occurred.')
 
@@ -88,6 +123,7 @@ class Instruments(dut.f5560A_instrument, dmm.f8588A_instrument):
         time.sleep(1)
         self.close_f5560A()
         self.close_f8588A()
+        # TODO: VisaClient has not attribute INSTR when closing
         self.connected = False
 
 
@@ -101,6 +137,8 @@ class DistortionAnalyzer:
         self.amplitude_good = False  # Flag indicates user input for amplitude value is good (True)
         self.frequency_good = False  # Flag indicates user input for frequency value is good (True)
 
+        self.DUT_choice = ''
+        self.DMM_choice = ''
         self.params = {}
         self.results = {'Amplitude': [], 'freq_ideal': [], 'freq_sampled': [],
                         'yrms': [], 'THDN': [], 'THD': [], 'RMS NOISE': [], 'N': [], 'Fs': [], 'Aperture': []}
@@ -126,7 +164,8 @@ class DistortionAnalyzer:
     def start(self, user_input):
         self.params = user_input
         selected_test = self.params['selected_test']
-        source = self.params['source']
+        local = self.params['local']  # local if true
+
         try:
             amplitude, units, ft = self.get_string_value(user_input['amplitude'], user_input['frequency'])
 
@@ -142,7 +181,7 @@ class DistortionAnalyzer:
                     # TODO: Why did I do this?
                     if selected_test in (1, 3):
                         self.run_selected_function(selected_test)
-                    elif not source or (self.amplitude_good and self.frequency_good):
+                    elif local or (self.amplitude_good and self.frequency_good):
                         self.run_selected_function(selected_test)
                     else:
                         self.panel.error_dialog('\nCheck amplitude and frequency values.')
@@ -205,13 +244,22 @@ class DistortionAnalyzer:
 
     # ------------------------------------------------------------------------------------------------------------------
     def run_single(self, func):
+        DUT_choice = self.DUT_choice
+
         print('Running Single Measurement.')
         self.panel.toggle_controls()
         self.panel.flag_complete = False
+
         try:
             func(setup=True)
             if not self.DUMMY_DATA:
-                self.M.standby()
+                if DUT_choice == 'f5560A':
+                    self.M.standby_f5560A()
+                elif DUT_choice == 'f5730A':
+                    self.M.standby_f5730A()
+                else:
+                    raise ValueError("Invalid DUT selection made!")
+
         except ValueError:
             self.panel.toggle_controls()
             raise
@@ -220,6 +268,8 @@ class DistortionAnalyzer:
         self.panel.flag_complete = True
 
     def run_sweep(self, df, func):
+        DUT_choice = self.DUT_choice
+
         print('Running Sweep.')
         self.panel.flag_complete = False
         headers = ['amplitude', 'freq_ideal', 'freq_sampled',
@@ -244,7 +294,14 @@ class DistortionAnalyzer:
 
                     try:
                         results[idx] = func(setup=True)
-                        self.M.standby()
+
+                        if DUT_choice == 'f5560A':
+                            self.M.standby_f5560A()
+                        elif DUT_choice == 'f5730A':
+                            self.M.standby_f5730A()
+                        else:
+                            raise ValueError("Invalid DUT selection made!")
+
                     except ValueError:
                         raise
                 else:
@@ -262,6 +319,8 @@ class DistortionAnalyzer:
         self.panel.flag_complete = True
 
     def run_continuous(self, func):
+        DUT_choice = self.DUT_choice
+
         print('Running a continuous run!')
         self.panel.flag_complete = False
         t = threading.currentThread()
@@ -275,11 +334,18 @@ class DistortionAnalyzer:
                 raise
 
         if not self.DUMMY_DATA:
-            self.M.standby()
+            if DUT_choice == 'f5560A':
+                self.M.standby_f5560A()
+            elif DUT_choice == 'f5730A':
+                self.M.standby_f5730A()
+            else:
+                raise ValueError("Invalid DUT selection made!")
         print('Ending continuous run_source process.')
 
     # TEST FUNCTIONS ###################################################################################################
     def test(self, setup):
+        DUT_choice = self.DUT_choice
+
         # SOURCE -------------------------------------------------------------------------------------------------------
         amplitude = self.params['amplitude']
         coupling = self.params['coupling']
@@ -342,14 +408,27 @@ class DistortionAnalyzer:
             if setup:
                 self.M.setup_digitizer(units=units, ideal_range_val=amplitude, coupling=coupling,
                                        filter_val=filter_val, N=N, aperture=aperture)
-            if self.params['source']:
+            if not self.params['local']:
                 try:
-                    self.M.run_source(units, amplitude, f0)
+                    # Run DUT ------------------------------------------------------------------------------------------
+                    if DUT_choice == 'f5560A':
+                        self.M.run_f5560A_source(units, amplitude, f0)
+                    elif DUT_choice == 'f5730A':
+                        self.M.run_f5730A_source(units, amplitude, f0)
+                    else:
+                        raise ValueError("Invalid DUT selection made!")
+
+                    # Retrieve DMM -------------------------------------------------------------------------------------
                     try:
                         yt = self.M.retrieve_digitize()
                     except ValueError:
                         print('error occurred while connecting to DMM. Placing 5560 in Standby.')
-                        self.M.standby()
+                        if DUT_choice == 'f5560A':
+                            self.M.standby_f5560A()
+                        elif DUT_choice == 'f5730A':
+                            self.M.standby_f5730A()
+                        else:
+                            raise ValueError("Invalid DUT selection made!")
                         raise
                 except ValueError:
                     print('error occurred while connecting to DUT. Exiting current measurement.')
@@ -367,6 +446,8 @@ class DistortionAnalyzer:
 
     # ------------------------------------------------------------------------------------------------------------------
     def test_analyze_shunt_voltage(self, setup):
+        DUT_choice = self.DUT_choice
+
         amplitude = self.params['amplitude']
         coupling = self.params['coupling']
         f0 = self.params['frequency']
@@ -376,7 +457,12 @@ class DistortionAnalyzer:
             print('Provided amplitude converted to RMS.')
 
         source_units = self.params['units']
-        self.M.run_source(source_units, amplitude, f0)
+        if DUT_choice == 'f5560A':
+            self.M.run_f5560A_source(source_units, amplitude, f0)
+        elif DUT_choice == 'f5730A':
+            self.M.run_f5730A_source(source_units, amplitude, f0)
+        else:
+            raise ValueError("Invalid DUT selection made!")
         time.sleep(1)
 
         # METER

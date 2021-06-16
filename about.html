@@ -1,199 +1,430 @@
-<h1>STEPS FOR CALCULATING DISTORTION:</h1>
-<h2>A. Time Series Data</h2>
-<p>
-Time series data is retrieved by the Fluke 8588A digitizer. The digitizer has a fixed sampling frequency of <b>5MHz</b>, which depending on the frequency of interest, could be considered excessive and drive up the number of samples required to appropriately window the time series data. Consequently, specifying an aperture length is a way of setting an equivalent sampling frequency lower than 5MHz. The aperture is the duration after each trigger where samples at a rate of 5 MHz are averaged together.
-<br>
-<br> Calculating the appropriate sample length, sampling frequency, and the aperture length requires some understanding of windowing that will be discussed in <b>Sections B and E</b> in greater detail.
-<br>
-<br>First the sampling frequency, Fs, is computed by selecting a frequency 100x larger than the fundamental (or frequency of interest). Note, an Fs of at least 10x larger than the frequency of interest tends to be a general rule of thumb. If the computed Fs is not equal to or larger than twice the specificed bandwidth for the given measurement, then twice the measurement bandwidth is chosen by default. However, this value of Fs may not be its final value since we still need to have an integer number of samples averaged per measurement by the digitizer to resolve this sampling frequency. Consequently, the sampling frequency is calculated twice: once more after calculating an integer number of samples to average by the digitizer.
-<ol>
-  <li><b>_Fs</b> = max( (2 * bw), (100 * F0) )</li>
-  <li><b>samples_to_average</b> = int( 5MHz / _Fs ) = <b>25</b></li>
-  <li><b>Fs</b> = 5MHz / samples_to_average = <b>200kHz</b></li>
-</ol>
-<br>
-<br>Next, the sample length, <b>N</b>, is computed by finding the window length of the measurement. An error is expressed since the main lobe width is directly proportional to the number of cycles captured. The minimum value of <b>N</b> correlates to the lowest detectable frequency by the windowing function. For instance, blackman requires a minimum of 6 period cycles of the frequency of interest in order to express content of that lobe in the DFT. Sampling frequency does not play a role in the width of the lobe, only the resolution of the lobe.
-<br>
-<br>In this example, an error of 10% is specified. For a 1kHz fundamental, the main lobe width will maximally be 100Hz, the lowest detectable frequency, <b>ldf</b>.
-<ol>
-  <li><b>error</b> = 10%</li>
-  <li><b>ldf</b> = f0 * error = <b>100Hz</b></li>
-  <li><b>N</b> = int(6 * (fs / ldf)) = <b>12,000 samples</b></li>
-</ol>
-<br>
-<br>Finally, the aperture is calculated. For this discussion, however, this won't be covered. Please review <b>Section F</b> to better understand how to compute the aperture provided the sampling frequency, Fs.
-<ol>
-  <li><b>aperture</b> = max(200e-9 * (samples_to_average - 1), 0) = <b>4.8us</b></li>
-</ol>
-<br>
-<br>
-</p>
-<img src="images/static/00_sampled_data.jpg">
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="style.css">
+</head>
 
-<h2>B. Windowing to reduce spectral leakage of non-integer periods</h2>
-<p>
-The FFT of discrete time series data (DFT) requires an integer number of cycles, otherwise, spectral leakage occurs in the form of additional artificial spectral content. Since an FFT assumes an infinite data series capable of looping back on itself, a non integer number of cycles (periods) creates a discontinuity between the first and last sample and so false harmonics are observed.
-<br>
-<br>A windowing function aims to mitigate the spectral error associated with data discontinuity by tapering the head and tail of the data series to attenuate the effect of the disconinuity. In this example, a blackman window was selected since it has greater side lobe attenuation at the cost of wider main lobe width. However, the main lobe width is equal to 6/N. That is, at least 6 cycles of the frequency of interest is required to resolve at least the frequency of interest and nothing lower. By increasing the sample length, additional cycles are captured, which help reduce the main lobe error width. Additional information on windowing can be found in section E further down on this page.
-<br>
-<br>Increasing the length of M for a given sampling frequency reduces the width of the main lobe. In other 
-words, in situations where zero padding is not involved and M=N, the main lobe width is reduced by 
-increasing the number of samples for a given sampling frequency.
-<br>
-<br>
-</p>
-<img src="images/static/01_window.jpg">
+<body>
+<div id="centerContainer">
+    <h1 id="the-distortion-analyzer">The Distortion Analyzer:</h1>
 
-<p>
-The time series data is then multiplied by the window (or convolved in the frequency domain). Tapering at the head and tail of the time series data is observed.
-<br>
-<br>
-</p>
-<img src="images/static/02_windowed_data.jpg">
+    <div id="toc" class="toc" role="navigation">
+        <div class="toc-header">Contents</div>
+        <ol>
+            <li class="toc-level-1"><a href="#introduction">Introduction</a></li>
+            <li class="toc-level-1"><a href="#time-series-data">Time Series Data</a></li>
+            <li class="toc-level-1"><a href="#windowing-to-reduce-spectral-leakage-of-non-integer-periods">Windowing</a></li>
+            <li class="toc-level-1"><a href="#the-fft">The FFT</a></li>
 
-<h2>C. The FFT</h2>
-<p>
-The FFT of the time series data with windowing applied is presented below. The fundamental at 1kHz and two odd order harmonics are resolved by the FFT. Note the maximum frequency of the FFT is half the sampling frequency of 200kHz as per Nyquist's sampling theorem. While the FFT resolves spectral content greater than 100kHz, the values are simply the complex conjugate of the postive spectral components. Consequently, this data is truncated from the plot; otherwise, the complex conjugate pairs are identical along the real axis besides mirrored across 100kHz.
-<br>
-<br>A total rms measurement is computed from the FFT data to later be used computing the THD+N.
-<br>
-<br>As per Parseval's theorem:
-<br>
-<br><b>total_rms</b> = np.sqrt(np.sum(np.abs(yf / N) ** 2))
-<br>
-<br>
-</p>
-<img src="images/static/03_fft_of_windowed_data.jpg">
+            <li class="toc-level-1">
+                <a href="#computing-the-total-harmonic-distortion">Total Harmonic Distortion</a>
+            <ol>
+                <li class="toc-level-2"><a href="#overview">Overview</a></li>
+                <li class="toc-level-2"><a href="#search-and-destroy-the-fundamental-frequency">The Fundamental</a></li>
+                <li class="toc-level-2"><a href="#thdf">THDF</a></li>
+                <li class="toc-level-2"><a href="#thdr">THDR</a></li>
+            </ol>
+            </li>
+            <li class="toc-level-1"><a href="#characterizing-an-fft">FFT Characterization</a></li>
+            <li class="toc-level-1"><a href="#more-on-windowing">Windowing (continued)</a></li>
+            <li class="toc-level-1"><a href="#fluke-8588a-aperture-parameters">Fluke 8588A Aperture</a></li>
+        </ol>
+    </div>
 
-<p>
-To reject the fundamental frequency, the local minimas centered about the fundamental frequency are lcoated and values within these bounds are thrown out. This is more or less a crude attempt at notch rejection. A more appropriate method would be to calculate the main lobe width and reject within this bandwidth.
-<br>
-<br>A noise rms measurement is computed from the FFT data to later be used computing the THD+N.
-<br>
-<br>Again, as per Parseval's theorem:
-<br><b>noise_rms</b> = np.sqrt(np.sum(np.abs(_yf / N) ** 2))
-<br>
-<br> <b>THDN</b> = noise_rms / total_rms
-<br>
-<br>
-</p>
-<img src="images/static/04_rejected_fundamental.jpg">
+    <h2 id="introduction">Introduction</h2>
+    <p>The distortion analyzer computes the total harmonic distortion (THD) and total harmonic distortion and noise
+        (THD+N) using time series data collected by the Fluke 8588A Digitizer.</p>
+    <div class="figure">
+        <img src="images/static/distortion_analyzer.png" class="figure"/>
+        <div class="figcaption">Fig 1. Distortion Analyzer GUI</div>
+    </div>
+    <h1 id="steps-for-calculating-distortion">Steps for Calculating Distortion:</h1>
+    <h2 id="time-series-data">Time Series Data</h2>
+    <p>Time series data is retrieved by the Fluke 8588A digitizer. The digitizer has a fixed sampling frequency of
+        <strong>5MHz</strong>, which depending on the frequency of interest, could be considered excessive and drive up
+        the number of samples required to appropriately window the time series data. Consequently, specifying an
+        aperture length is a way of setting an equivalent sampling frequency lower than 5MHz. The aperture is the
+        duration after each trigger where samples at a rate of 5 MHz are averaged together.</p>
+    <p>Calculating the appropriate sample length, sampling frequency, and the aperture length requires some
+        understanding of windowing that will be discussed in <strong>Sections B and E</strong> in greater detail.</p>
+    <p>First the sampling frequency, Fs, is computed by selecting a frequency 100x larger than the fundamental (or
+        frequency of interest). Note, an Fs of at least 10x larger than the frequency of interest tends to be a general
+        rule of thumb. If the computed Fs is not equal to or larger than twice the specificed bandwidth for the given
+        measurement, then twice the measurement bandwidth is chosen by default. However, this value of Fs may not be its
+        final value since we still need to have an integer number of samples averaged per measurement by the digitizer
+        to resolve this sampling frequency. Consequently, the sampling frequency is calculated twice: once more after
+        calculating an integer number of samples to average by the digitizer.</p>
 
-<h2>D. Characterizing an FFT</h2>
-<img src="images/static/FFTResolution.jpg">
+    <pre><code># The digitizer&#39;s sampling frequency
+DIGITIZER_SAMPLING_FREQUENCY = 5e6
 
-<h2>E. More on Windowing</h2>
-<p>
-The two characteristics that define a window in the time domain are the window length and shape. The two most relevant window characteristics in the frequency domain are the mainlobe width and the sidelobe height. The relationships between window length, mainlobe width, and sidelobe height are summarized in the following table for a number of commonly used window shapes. 
-<br>
-<br>M is the number of samples captured for a measurement of time series data. M refers to the length of the windowing filter applied to the. M≤N where N samples refers to the length of the FFT. When N is greater than M, zero padding is employed, which does not introduce new data to the FFT, but only increases the resolution of the FFT.
-<br>
-<br>The effective data length of captured period cycles are equal within this table. This means that a minimum of 6 cycles must be obtained to adequately use the blackman window to have the equivalent data length of a Hanning or Hamming window where only 4 cycles must be obtained.
-<br>
-<br>
-</p>
-<ul>
-	<li>A longer window results in a narrower main lobe.</li>
-	<li>A longer window improves the frequency resolution.</li>
-</ul>
-<p>
-</p>
-<table align="left" style="border-collapse: collapse;">
-	<thead>
-	<tr>
-		<th>Window Shape</th>
-		<th>Relative Peak Side Lobe Magnitude</th>
-		<th>Approx. Main Lobe Width (Hz)</th>
-	</tr>
-	</thead>
-	<tbody>
-	<tr style="border-bottom: 1px solid black;">
-		<td>Rectangular/boxcar</td>
-		<td>-13 dB</td>
-		<td>2/M</td>
-	</tr>
-	<tr>
-		<td>Bartlett (triangle)</td>
-		<td>-26 dB</td>
-		<td>4/M</td>
-	</tr>
-	<tr>
-		<td>Hanning (raised cosine)</td>
-		<td>-31 dB</td>
-		<td>4/M</td>
-	</tr>
-	<tr>
-		<td>Hamming (raised cosine on pedestal)</td>
-		<td>-42 dB</td>
-		<td>4/M</td>
-	</tr>
-	<tr>
-		<td>Blackman</td>
-		<td>-58 dB</td>
-		<td>6/M</td>
-	</tr>
-	</tbody>
-</table>
+# Ideal sampling frequency
+_Fs = max(2 * bw, 100 * f0)
 
-<h2>F: Fluke 8588A Aperture Parameters</h2>
-<p>
-The aperture is the duration after each trigger where samples at a rate of 5 MHz are averaged together. 
-<br>
-<br>The aperture can be set from 0 ns to 3 ms in 200 ns increments up to 1 ms, and 100 μs increments from 
-1 ms to 3 ms.
-<br>
-<br>Since the minimum duration to trigger one sample is 200ns, an aperture length greater than 0 ns allows 
-more than one sample to be captured and averaged by the digitizer. In a sense, increasing the aperture 
-lowers the sampling frequency of the digitizer."
-<br>
-<br>The entire process for one reading is 200 ns, which gives a maximum trigger rate of 5 MHz. The aperture 
-can be set from 0 ns to 3 ms in 200 ns increments up to 1 ms, and 100 μs increments from 1 ms to 3 ms. 
-Greater aperture length decreases sample rate.
-<br>
-<br>
-</p>
+# An integer number of samples averaged per measurement determines actual sampling frequency
+samples_to_average = max(round(DIGITIZER_SAMPLING_FREQUENCY / _Fs), 1)
+Fs = DIGITIZER_SAMPLING_FREQUENCY / samples_to_average
 
-<table align="left">
-	<tr>
-		<th>Aperture</th>
-		<th>Time</th>
-		<th>Samples Averaged (#)</th>
-		<th>Fs</th>
-	</tr>
-	<tr>
-		<td>0ns</td>
-		<td>200ns</td>
-		<td>1</td>
-		<td>5 MHz</td>
-	</tr>
-	<tr>
-		<td>200ns</td>
-		<td>200ns + 200ns</td>
-		<td>2</td>
-		<td>2.5 MHz</td>
-	</tr>
-	<tr>
-		<td>400ns</td>
-		<td>400ns + 200ns</td>
-		<td>3</td>
-		<td>1.6667 MHz</td>
-	</tr>
-	<tr>
-		<td>600ns</td> 
-		<td>600ns + 200ns</td>
-		<td>4</td>
-		<td>1.25 MHz</td>
-	</tr>
-	<tr>
-		<td>800ns</td> 
-		<td>800ns + 200ns</td>
-		<td>5</td>
-		<td>833.33 kHz</td>
-	</tr>
-	<tr>
-		<td>1us</td> 
-		<td>1us + 0.2us</td>
-		<td>6</td>
-		<td>833.33 kHz</td>
-	</tr>
-</table>
+samples_to_average = 25 # number of samples collected at digitizing frequency before being averaged
+Fs = 200000             # sampling frequency</code></pre>
+
+    <p>Next, the sample length, <strong>N</strong>, is computed by finding the window length of the measurement. An
+        error is expressed since the main lobe width is directly proportional to the number of cycles captured. The
+        minimum value of <strong>N</strong> correlates to the lowest detectable frequency by the windowing function. For
+        instance, blackman requires a minimum of 6 period cycles of the frequency of interest in order to express
+        content of that lobe in the DFT. Sampling frequency does not play a role in the width of the lobe, only the
+        resolution of the lobe.</p>
+    <p>In this example, an error of 10% is specified. For a 1kHz fundamental, the main lobe width will maximally be
+        100Hz, the lowest detectable frequency, <strong>ldf</strong>.</p>
+
+    <pre><code>error = 0.1                 # 10%
+ldf = f0 * error            # lowest detectable frequency by FFT
+M = int(6 * (fs / ldf))     # samples required for window
+
+ldf = 100                   # Hz
+M = 12000                   # number of samples</code></pre>
+
+    <p>Finally, the aperture is calculated. For this discussion, however, this won't be covered. Please review <strong>Section
+        F</strong> to better understand how to compute the aperture provided the sampling frequency, Fs.</p>
+    <ol style="list-style-type: decimal">
+        <li><strong>aperture</strong> = max(200e-9 * (samples_to_average - 1), 0) = <strong>4.8us</strong></li>
+    </ol>
+    <div class="figure">
+        <img src="images/static/00_sampled_data.jpg" class="figure"/>
+        <div class="figcaption">Fig 2. Sampled Time Series Data</div>
+    </div>
+    <h2 id="windowing-to-reduce-spectral-leakage-of-non-integer-periods">Windowing to reduce spectral leakage of
+        non-integer periods</h2>
+    <p>The FFT of discrete time series data (DFT) requires an integer number of cycles, otherwise, spectral leakage
+        occurs in the form of additional artificial spectral content. Since an FFT assumes an infinite data series
+        capable of looping back on itself, a non integer number of cycles (periods) creates a discontinuity between the
+        first and last sample and so false harmonics are observed.</p>
+    <p>A windowing function aims to mitigate the spectral error associated with data discontinuity by tapering the head
+        and tail of the data series to attenuate the effect of the discontinuity. In this example, a blackman window was
+        selected since it has greater side lobe attenuation at the cost of wider main lobe width. However, the main lobe
+        width is equal to 6/N. That is, at least 6 cycles of the frequency of interest is required to resolve at least
+        the frequency of interest and nothing lower. By increasing the sample length, additional cycles are captured,
+        which help reduce the main lobe error width. Additional information on windowing can be found in section E
+        further down on this page.</p>
+    <p>Increasing the length of M for a given sampling frequency reduces the width of the main lobe. In other words, in
+        situations where zero padding is not involved and M=N, the main lobe width is reduced by increasing the number
+        of samples for a given sampling frequency.</p>
+
+    <div class="figure">
+        <img src="images/static/01_blackman_window.jpg" class="figure"/>
+        <div class="figcaption">Fig 3. Blackman Window</div>
+    </div>
+
+    <p>The time series data is then multiplied by the window (or convolved in the frequency domain). Tapering at the
+        head and tail of the time series data is observed.</p>
+
+    <div class="figure">
+        <img src="images/static/02_windowed_data.jpg" class="figure"/>
+        <div class="figcaption">Fig 4. Windowed Time Series Data</div>
+    </div>
+
+    <h2 id="the-fft">The FFT</h2>
+    <p>The FFT of the time series data with windowing applied is presented below. The fundamental at 1kHz and two odd
+        order harmonics are resolved by the FFT.</p>
+
+    <div class="figure">
+        <img src="images/static/03_fft_of_windowed_data.jpg" class="figure"/>
+        <div class="figcaption">Fig 5. FFT of the Windowed Data</div>
+    </div>
+
+    <p><strong>Sampling Theorem</strong></p>
+    <p>While the FFT returns spectral content with equal length N to the time series data, the content is composed of
+        complex conjugate pairs. Consequently, the FFT only resolves unique-valued spectral content up to only
+        approximately half the length of N. As per Nyquist's sampling theorem, the FFT can only resolve spectral content
+        up to half the sampling frequency.</p>
+    <p><strong>Amplitude Correction</strong></p>
+    <p>Since each point of the FFT transform is the result of a sum over a certain time interval of the time-series
+        data, the FFT must also be divided by the length of the FFT to appropriately recover the amplitude. In addition,
+        since we applied a windowing function to the original data, the amplitude of the the time series data must be
+        recovered from the FFT by applying an amplitude correction factor to compensate for the weighting.</p>
+    <pre><code>import numpy as np
+
+Fs = 200000 # sampling frequency
+N = 12000   # samples collected in measurement
+
+w = np.blackman(N)
+amplitude_correction_factor = 1/mean(w)
+main_lobe_width = 6 * (Fs / N)
+
+# The one-dimensional discrete Fourier Transform
+ytw = yt * w
+yf_fft = (np.fft.fft(ytw)) * amplitude_correction_factor
+
+# Calculate length of FFT
+if (N % 2) == 0:
+    # for even values of N: FFT length is (N / 2) + 1
+    fft_length = int(N / 2) + 1
+else:
+    # for odd values of N: FFT length is (N + 1) / 2
+    fft_length = int((N + 2) / 2)
+
+# The one-dimensional discrete Fourier Transform for real input.
+yf_rfft = yf_fft[:fft_length]</code></pre>
+
+    <p><strong>Parseval's theorem</strong></p>
+    <p>Parseval's Theorem states for discretized signals the total energy of a signal is preserved under the Fourier
+        transform, such that:</p>
+
+    <div>
+        <img src="images/static/parseval.png" class="equation"/>
+    </div>
+
+    <p>Thus, the total RMS amplitude for the FFT is:</p>
+
+    <pre><code>import numpy as np
+import math
+
+def rms(y)
+    sqr = np.absolute(y) ** 2
+    mean = math.fsum(sqr) / len(sqr)  # computed from partial sums
+    rms = np.sqrt(mean)
+    return rms</code></pre>
+
+    <h2 id="computing-the-total-harmonic-distortion">Computing the Total Harmonic Distortion</h2>
+    <h3 id="overview">Overview</h3>
+    <p>There are three methods for computing Total Harmonic Distortion we will discuss:</p>
+    <table class="formatted_table centerTable">
+        <thead>
+        <tr class="header">
+            <th align="left" class="formatted_table">Method</th>
+            <th align="left" class="formatted_table">Short Description (Compares...)</th>
+            <th align="left" class="formatted_table">Expression</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr class="odd">
+            <td align="left" class="formatted_table"><strong>THD</strong></td>
+            <td align="left" class="formatted_table">harmonic peaks <strong>:</strong> fundamental peak</td>
+            <td align="left" class="formatted_table"><img src="images/static/thd_expression.png" class="equation"/></td>
+        </tr>
+        <tr class="even">
+            <td align="left" class="formatted_table"><strong>THD_F</strong></td>
+            <td align="left" class="formatted_table">harmonic content <strong>:</strong> fundamental lobe</td>
+            <td align="left" class="formatted_table"><img src="images/static/thdf_expression.png" class="equation"/></td>
+        </tr>
+        <tr class="odd">
+            <td align="left" class="formatted_table"><strong>THD_R</strong></td>
+            <td align="left" class="formatted_table">harmonic content <strong>:</strong> entire RMS signal</td>
+            <td align="left" class="formatted_table"><img src="images/static/thdr_expression.png" class="equation"/></td>
+        </tr>
+        </tbody>
+    </table>
+    <table class="text_tabled">
+        <tr class="odd text_tabled">
+            <td class="text_tabled"><strong>THD:</strong></td>
+            <td class="text_tabled">the most basic concept for computing total harmonic distortion. Here only the peaks are
+            compared. Noise (except where superimposed onto the peaks) is rejected. It's an imprecise calculation where
+            typically the amplitude of each of the harmonic frequencies is recorded.</td>
+        </tr>
+        <tr class="even text_tabled">
+            <td class="text_tabled"><strong>THD_F:</strong></td>
+            <td class="text_tabled">compares the harmonic content of a waveform to its fundamental and is a much better
+            measure of harmonics content than THDR. Thus, the usage of THDF is advocated.</td>
+        </tr>
+        <tr class="odd text_tabled">
+            <td class="text_tabled"><strong>THD_R:</strong></td>
+            <td class="text_tabled">compares the harmonic content of a waveform to the waveform's entire RMS signal. This
+            method was inherited from the area of audio amplifiers, where the THD serves as a measure of the systems
+            linearity where its numerical value is always much less than 1 (practically it ranges from 0.1% - 0.3% in Hi-Fi
+            systems up to a few percent in conventional audio systems). Thus, for this range of THD values, the error caused
+            by mixing up the two definitions of THD was acceptable. However, THDF is a much better measure of harmonics
+            content. Employment of THDR in measurements may yield high errors in significant quantities such as power-factor
+            and distortion-factor, derived from THD measurement. Refer to the table below for window specific calculations.
+            </td>
+        </tr>
+    </table>
+    <h3 id="search-and-destroy-the-fundamental-frequency">Search and Destroy (the Fundamental Frequency)</h3>
+    <p>In either instance for calculating <strong>THDF</strong> or <strong>THDR</strong>, main lobe region of the
+        fundamental frequency must be identified. In the case of THDF, the RMS amplitude of this region is found and the
+        region then rejected to compute the RMS amplitude of the harmonic content. In the case of THDR, the region is
+        rejected after a total RMS amplitude is computed.</p>
+    <p>There are two approaches for rejecting the fundamental frequency. Once the local minimas centered about the
+        fundamental frequency are located, the values within these bounds are thrown out.</p>
+    <ol style="list-style-type: decimal">
+        <li><p><strong>main lobe bandwidth</strong> the preferable and more accurate approach is to calculate the main
+            lobe width centered around the fundamental. The main lobe width is defined as the smallest frequency
+            recoverable by the FFT and is specific to each windowing function. Note, it's important to distinguish that
+            this quantity is not equal to the resolution of the FFT.</p>
+            <pre><code>main_lobe_width = 6 * (Fs / N)
+left_of_lobe = int((fundamental - main_lobe_width / 2) * (N / fs))
+right_of_lobe = int((fundamental + main_lobe_width / 2) * (N / fs))
+
+rms_fundamental = np.sqrt(math.fsum(np.abs(yf[left_of_lobe:right_of_lobe]) ** 2))  # Parseval&#39;s</code></pre>
+        </li>
+        <li><p><strong>Local Minimas:</strong> When the main lobe width cannot be calculated, a decently reliable method
+            is to identify the local minimas on either side of the fundamental. The idea here is to start at the index
+            of the fundamental peak and index down the sides of the lobe and stop once the data begins to rise again.
+        </p>
+
+            <pre><code>left_min = 0
+right_min = 0
+
+# right side
+for i in np.arange(x + 1, len(f)):
+        if f[i + 1] &gt;= f[i]:
+            right_min = i
+            break
+
+  # left side
+    for i in np.arange(x - 1, 0, -1):
+        if f[i] &lt;= f[i - 1]:
+            left_min = i + 1
+            break
+
+return left_min, right_min</code></pre>
+
+        </li>
+    </ol>
+    <div class="figure">
+        <img src="images/static/04_rejected_fundamental.jpg" class="figure"/>
+        <div class="figcaption">Fig 6. Rejected Fundamental</div>
+    </div>
+    <h3 id="thdf">THDF</h3>
+    <pre><code>rms_fundamental = np.sqrt(np.sum(np.abs(yf[left_min:right_min]) ** 2))  # Parseval&#39;s Theorem
+
+# REJECT FUNDAMENTAL FOR NOISE RMS
+# Throws out values within the region of the main lobe fundamental frequency
+yf[left_of_lobe:right_of_lobe] = 1e-10
+
+# COMPUTE RMS NOISE
+rms_noise = np.sqrt(math.fsum(np.abs(yf) ** 2))
+
+# THDN CALCULATION
+# https://www.thierry-lequeu.fr/data/PESL-00101-2003-R2.pdf
+THDN = rms_noise / rms_fundamental</code></pre>
+
+    <h3 id="thdr">THDR</h3>
+    <pre><code># RMS TOTAL
+rms_total = rms(yf)  # Parseval'sTheorem
+
+# NOTCH REJECT FUNDAMENTAL AND MEASURE NOISE
+yf[left_of_lobe:right_of_lobe] = 1e-10
+
+# COMPUTE RMS NOISE
+rms_noise = rms(yf)  # Parseval's Theorem
+
+# THDN CALCULATION
+THDN = rms_noise / rms_total</code></pre>
+
+    <h2 id="characterizing-an-fft">Characterizing an FFT</h2>
+    <div>
+        <img src="images/static/FFTResolution.jpg"/>
+    </div>
+    <h2 id="more-on-windowing">More on Windowing</h2>
+    <p> The two characteristics that define a window in the time domain are the window length and shape. The two most
+        relevant window characteristics in the frequency domain are the mainlobe width and the sidelobe height. The
+        relationships between window length, mainlobe width, and sidelobe height are summarized in the following table
+        for a number of commonly used window shapes.</p>
+    <p>M is the number of samples captured for a measurement of time series data. M refers to the length of the
+        windowing filter applied to the. M ≤ N where N samples refers to the length of the FFT. When N is greater than M,
+        zero padding is employed, which does not introduce new data to the FFT, but only increases the resolution of the
+        FFT.</p>
+    <p>The effective data length of captured period cycles are equal within this table. This means that a minimum of 6
+        cycles must be obtained to adequately use the blackman window to have the equivalent data length of a Hanning or
+        Hamming window where only 4 cycles must be obtained.</p>
+    <ul>
+        <li>A longer window results in a narrower main lobe.</li>
+        <li>A longer window improves the frequency resolution.</li>
+    </ul>
+    <table class="formatted_table centerTable">
+        <thead>
+        <tr class="header">
+            <th class="formatted_table">Window Shape</th>
+            <th class="formatted_table">Relative Peak Side Lobe Magnitude</th>
+            <th class="formatted_table">Approx. Main Lobe Width (Hz)</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr class="odd">
+            <td class="formatted_table">Rectangular/boxcar</td>
+            <td class="formatted_table">-13 dB</td>
+            <td class="formatted_table">2/M</td>
+        </tr>
+        <tr class="even">
+            <td class="formatted_table">Bartlett (triangle)</td>
+            <td class="formatted_table">-26 dB</td>
+            <td class="formatted_table">4/M</td>
+        </tr>
+        <tr class="odd">
+            <td class="formatted_table">Hanning (raised cosine)</td>
+            <td class="formatted_table">-31 dB</td>
+            <td class="formatted_table">4/M</td>
+        </tr>
+        <tr class="even">
+            <td class="formatted_table">Hamming (raised cosine on pedestal)</td>
+            <td class="formatted_table">-42 dB</td>
+            <td class="formatted_table">4/M</td>
+        </tr>
+        <tr class="odd">
+            <td class="formatted_table">Blackman</td>
+            <td class="formatted_table">-58 dB</td>
+            <td class="formatted_table">6/M</td>
+        </tr>
+        </tbody>
+    </table>
+    <h2 id="fluke-8588a-aperture-parameters">Fluke 8588A Aperture Parameters</h2>
+    <p>The aperture is the duration after each trigger where samples at a rate of 5 MHz are averaged together.</p>
+    <p>The aperture can be set from 0 ns to 3 ms in 200 ns increments up to 1 ms, and 100 μs increments from 1 ms to 3
+        ms.</p>
+    <p>Since the minimum duration to trigger one sample is 200ns, an aperture length greater than 0 ns allows more than
+        one sample to be captured and averaged by the digitizer. In a sense, increasing the aperture lowers the sampling
+        frequency of the digitizer.&quot;</p>
+    <p>The entire process for one reading is 200 ns, which gives a maximum trigger rate of 5 MHz. The aperture can be
+        set from 0 ns to 3 ms in 200 ns increments up to 1 ms, and 100 μs increments from 1 ms to 3 ms. Greater aperture
+        length decreases sample rate.</p>
+    <table class="formatted_table centerTable">
+        <thead>
+        <tr class="header">
+            <th class="formatted_table">Aperture</th>
+            <th class="formatted_table">Time</th>
+            <th class="formatted_table">Samples Averaged (#)</th>
+            <th class="formatted_table">Fs</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr class="odd">
+            <td class="formatted_table">0ns</td>
+            <td class="formatted_table">200ns</td>
+            <td class="formatted_table">1</td>
+            <td class="formatted_table">5 MHz</td>
+        </tr>
+        <tr class="even">
+            <td class="formatted_table">200ns</td>
+            <td class="formatted_table">200ns + 200ns</td>
+            <td class="formatted_table">2</td>
+            <td class="formatted_table">2.5 MHz</td>
+        </tr>
+        <tr class="odd">
+            <td class="formatted_table">400ns</td>
+            <td class="formatted_table">400ns + 200ns</td>
+            <td class="formatted_table">3</td>
+            <td class="formatted_table">1.6667 MHz</td>
+        </tr>
+        <tr class="even">
+            <td class="formatted_table">600ns</td>
+            <td class="formatted_table">600ns + 200ns</td>
+            <td class="formatted_table">4</td>
+            <td class="formatted_table">1.25 MHz</td>
+        </tr>
+        <tr class="odd">
+            <td class="formatted_table">800ns</td>
+            <td class="formatted_table">800ns + 200ns</td>
+            <td class="formatted_table">5</td>
+            <td class="formatted_table">833.33 kHz</td>
+        </tr>
+        <tr class="even">
+            <td class="formatted_table">1us</td>
+            <td class="formatted_table">1us + 0.2us</td>
+            <td class="formatted_table">6</td>
+            <td class="formatted_table">833.33 kHz</td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+</body>
+</html>

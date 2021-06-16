@@ -25,21 +25,59 @@ pylab_params = {'legend.fontsize': 'medium',
                 'ytick.labelsize': 'medium'}
 pylab.rcParams.update(pylab_params)
 
+def open_breakpoints():
+    import subprocess, os, platform
+    wkdir = os.getcwd()
+    filename = "distortion_breakpoints.csv"
+    path_to_file = wkdir + '\\' + filename
+
+    print(f'opening breakpoints file at: {path_to_file}')
+
+    if platform.system() == 'Darwin':       # macOS
+        subprocess.call(('open', path_to_file))
+
+    elif platform.system() == 'Windows':    # Windows
+        print(os.path.normcase(path_to_file))
+        os.startfile(filename)
+
+    else:                                   # linux variants
+        subprocess.call(('xdg-open', path_to_file))
+
 
 class MultimeterTab(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent, wx.ID_ANY)
+
+        # instance variables -------------------------------------------------------------------------------------------
+        self.DUT_choice = 'f5560A'
+        self.DMM_choice = 'f8588A'
+        self.dmm = dmm(self)
+
+        self.t = threading.Thread()
+        self.flag_complete = True  # Flag indicates any active threads (False) or thread completed (True)
+        self.user_input = {'autorange': True,
+                           'always_voltage': True,
+                           'mode': 0,
+                           'amplitude': '',
+                           'rms': 0,
+                           'frequency': '',
+                           }
 
         self.frame = parent
         self.left_panel = wx.Panel(self, wx.ID_ANY)
         self.plot_panel = wx.Panel(self, wx.ID_ANY, style=wx.SIMPLE_BORDER)
 
         # LEFT Panel ---------------------------------------------------------------------------------------------------
-        self.text_DUT_report = wx.TextCtrl(self.left_panel, wx.ID_ANY, "", style=wx.TE_READONLY)
+        self.combo_DUT_choice = wx.ComboBox(self.left_panel, wx.ID_ANY,
+                                            choices=["Fluke 5560A", "Fluke 5730A"],
+                                            style=wx.CB_DROPDOWN | wx.CB_READONLY)
         self.combo_DMM_choice = wx.ComboBox(self.left_panel, wx.ID_ANY,
                                             choices=["Fluke 884xA", "Fluke 8588A"],
                                             style=wx.CB_DROPDOWN | wx.CB_READONLY)
+        self.text_DUT_report = wx.TextCtrl(self.left_panel, wx.ID_ANY, "", style=wx.TE_READONLY)
         self.text_DMM_report = wx.TextCtrl(self.left_panel, wx.ID_ANY, "", style=wx.TE_READONLY)
+        self.label_source = wx.StaticText(self.left_panel, wx.ID_ANY, "Fluke 5560A")
+
         self.btn_connect = wx.Button(self.left_panel, wx.ID_ANY, "Connect")
         self.btn_config = wx.Button(self.left_panel, wx.ID_ANY, "Config")
         self.checkbox_autorange = wx.CheckBox(self.left_panel, wx.ID_ANY, "Auto Range")
@@ -57,25 +95,13 @@ class MultimeterTab(wx.Panel):
 
         self.btn_start = wx.Button(self.left_panel, wx.ID_ANY, "RUN")
         self.combo_mode = wx.ComboBox(self.left_panel, wx.ID_ANY, choices=["Single", "Sweep"], style=wx.CB_DROPDOWN)
+        self.btn_breakpoints = wx.Button(self.left_panel, wx.ID_ANY, "Breakpoints")
 
         # PLOT Panel ---------------------------------------------------------------------------------------------------
         self.figure = plt.figure(figsize=(1, 1))  # look into Figure((5, 4), 75)
         self.canvas = FigureCanvas(self.plot_panel, -1, self.figure)
         self.toolbar = NavigationToolbar(self.canvas)
         self.toolbar.Realize()
-
-        # instance variables -------------------------------------------------------------------------------------------
-        self.DMM_choice = 'f8588A'
-        self.dmm = dmm(self)
-        self.t = threading.Thread()
-        self.flag_complete = True  # Flag indicates any active threads (False) or thread completed (True)
-        self.user_input = {'autorange': True,
-                           'always_voltage': True,
-                           'mode': 0,
-                           'amplitude': '',
-                           'rms': 0,
-                           'frequency': '',
-                           }
 
         self.x, self.y, self.std = np.NaN, np.NaN, np.NaN
         self.errorbars = False
@@ -84,8 +110,12 @@ class MultimeterTab(wx.Panel):
                                                                                   ecolor='red', capsize=4)
         # BINDINGS =====================================================================================================
         # Configure Instruments ----------------------------------------------------------------------------------------
+        on_DUT_selection = lambda event: self._get_DUT_choice(event)
+        self.Bind(wx.EVT_COMBOBOX_CLOSEUP, on_DUT_selection, self.combo_DUT_choice)
+
         on_DMM_selection = lambda event: self._get_DMM_choice(event)
         self.Bind(wx.EVT_COMBOBOX_CLOSEUP, on_DMM_selection, self.combo_DMM_choice)
+
         on_connect = lambda event: self.on_connect_instr(event)
         self.Bind(wx.EVT_BUTTON, on_connect, self.btn_connect)
 
@@ -108,6 +138,9 @@ class MultimeterTab(wx.Panel):
         on_run_event = lambda event: self.on_run(event)
         self.Bind(wx.EVT_BUTTON, on_run_event, self.btn_start)
 
+        on_open_breakpoints = lambda event: open_breakpoints()
+        self.Bind(wx.EVT_BUTTON, on_open_breakpoints, self.btn_breakpoints)
+
         on_combo_select = lambda event: self.lock_controls(event)
         self.Bind(wx.EVT_COMBOBOX_CLOSEUP, on_combo_select, self.combo_mode)
 
@@ -115,6 +148,7 @@ class MultimeterTab(wx.Panel):
         self.__do_layout()
         self.__do_plot_layout()
         self.__do_table_header()
+        self.cleardata(wx.Event)
 
     def __set_properties(self):
         self.SetBackgroundColour(wx.Colour(255, 255, 255))
@@ -127,8 +161,14 @@ class MultimeterTab(wx.Panel):
         self.text_DMM_report.SetMinSize((200, 23))
         self.checkbox_autorange.SetValue(1)
 
+        self.combo_DUT_choice.SetSelection(0)
+        self.combo_DUT_choice.SetMinSize((87, 23))
         self.combo_DMM_choice.SetSelection(1)
         self.combo_DMM_choice.SetMinSize((87, 23))
+        self.btn_connect.SetMinSize((87, 23))
+        self.btn_start.SetMinSize((87, 23))
+        self.btn_breakpoints.SetMinSize((87, 23))
+
         self.combo_rms_or_peak.SetSelection(0)
         self.combo_mode.SetSelection(0)
         self.checkbox_always_voltage.SetValue(1)
@@ -139,7 +179,7 @@ class MultimeterTab(wx.Panel):
         self.spreadsheet.SetColLabelValue(0, 'Frequency')
         self.spreadsheet.SetColLabelValue(1, 'Value')
         self.spreadsheet.SetColLabelValue(2, 'STD')
-        self.spreadsheet.SetMinSize((300, 212))
+        self.spreadsheet.SetMinSize((300, 215))
 
         self.combo_mode.SetMinSize((110, 23))
 
@@ -152,70 +192,84 @@ class MultimeterTab(wx.Panel):
 
         # LEFT PANEL ===================================================================================================
         # TITLE --------------------------------------------------------------------------------------------------------
+        row = 0
         label_1 = wx.StaticText(self.left_panel, wx.ID_ANY, "MULTIMETER")
         label_1.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_left_panel.Add(label_1, (0, 0), (1, 2), 0, 0)
+        grid_sizer_left_panel.Add(label_1, (row, 0), (1, 2), 0, 0)
 
+        row += 1
         static_line_1 = wx.StaticLine(self.left_panel, wx.ID_ANY)
         static_line_1.SetMinSize((300, 2))
-        grid_sizer_left_panel.Add(static_line_1, (1, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
+        grid_sizer_left_panel.Add(static_line_1, (row, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
         # INSTRUMENT INFO  ---------------------------------------------------------------------------------------------
-        label_DUT = wx.StaticText(self.left_panel, wx.ID_ANY, "DUT")
-        label_DUT.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_left_panel.Add(label_DUT, (2, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
-        grid_sizer_left_panel.Add(self.text_DUT_report, (2, 1), (1, 2), wx.BOTTOM | wx.LEFT, 5)
+        row += 1
+        grid_sizer_left_panel.Add(self.combo_DUT_choice, (row, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
+        grid_sizer_left_panel.Add(self.text_DUT_report, (row, 1), (1, 2), wx.BOTTOM | wx.LEFT, 5)
 
-        grid_sizer_left_panel.Add(self.combo_DMM_choice, (3, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
-        grid_sizer_left_panel.Add(self.text_DMM_report, (3, 1), (1, 2), wx.BOTTOM | wx.LEFT, 5)
+        row += 1
+        grid_sizer_left_panel.Add(self.combo_DMM_choice, (row, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
+        grid_sizer_left_panel.Add(self.text_DMM_report, (row, 1), (1, 2), wx.BOTTOM | wx.LEFT, 5)
 
-        grid_sizer_left_panel.Add(self.btn_connect, (4, 0), (1, 1), wx.BOTTOM, 5)
-        grid_sizer_left_panel.Add(self.btn_config, (4, 1), (1, 1), wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
-        grid_sizer_left_panel.Add(self.checkbox_autorange, (4, 2), (1, 1), wx.ALIGN_CENTRE_VERTICAL | wx.BOTTOM, 5)
+        row += 1
+        grid_sizer_left_panel.Add(self.btn_connect, (row, 0), (1, 1), wx.BOTTOM, 5)
+        grid_sizer_left_panel.Add(self.btn_config, (row, 1), (1, 1), wx.BOTTOM | wx.LEFT | wx.RIGHT, 5)
+        grid_sizer_left_panel.Add(self.checkbox_autorange, (row, 2), (1, 1), wx.ALIGN_CENTRE_VERTICAL | wx.BOTTOM, 5)
 
         # f5560A SETUP -------------------------------------------------------------------------------------------------
-        label_source = wx.StaticText(self.left_panel, wx.ID_ANY, "5560A")
-        label_source.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_left_panel.Add(label_source, (5, 0), (1, 1), wx.TOP, 10)
+        row += 1
+        self.label_source.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
+        grid_sizer_left_panel.Add(self.label_source, (row, 0), (1, 2), wx.TOP, 10)
 
+        row += 1
         static_line_2 = wx.StaticLine(self.left_panel, wx.ID_ANY)
         static_line_2.SetMinSize((300, 2))
-        grid_sizer_left_panel.Add(static_line_2, (6, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
+        grid_sizer_left_panel.Add(static_line_2, (row, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
+        row += 1
         label_amplitude = wx.StaticText(self.left_panel, wx.ID_ANY, "Amplitude:")
-        grid_sizer_left_panel.Add(label_amplitude, (7, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
-        grid_sizer_left_panel.Add(self.text_amplitude, (7, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
-        grid_sizer_left_panel.Add(self.combo_rms_or_peak, (7, 2), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(label_amplitude, (row, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
+        grid_sizer_left_panel.Add(self.text_amplitude, (row, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(self.combo_rms_or_peak, (row, 2), (1, 1), wx.BOTTOM | wx.LEFT, 5)
 
+        row += 1
         label_frequency = wx.StaticText(self.left_panel, wx.ID_ANY, "Frequency (Ft):")
-        grid_sizer_left_panel.Add(label_frequency, (8, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
-        grid_sizer_left_panel.Add(self.text_frequency, (8, 1), (1, 1), wx.LEFT, 5)
+        grid_sizer_left_panel.Add(label_frequency, (row, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
+        grid_sizer_left_panel.Add(self.text_frequency, (row, 1), (1, 1), wx.LEFT, 5)
         label_Hz = wx.StaticText(self.left_panel, wx.ID_ANY, "(Hz)")
-        grid_sizer_left_panel.Add(label_Hz, (8, 2), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(label_Hz, (row, 2), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
 
+        row += 1
         label_measure = wx.StaticText(self.left_panel, wx.ID_ANY, "Measure")
         label_measure.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_left_panel.Add(label_measure, (9, 0), (1, 1), wx.TOP, 10)
-        grid_sizer_left_panel.Add(self.checkbox_always_voltage, (9, 1), (1, 3), wx.ALIGN_BOTTOM | wx.LEFT, 10)
+        grid_sizer_left_panel.Add(label_measure, (row, 0), (1, 1), wx.TOP, 10)
+        grid_sizer_left_panel.Add(self.checkbox_always_voltage, (row, 1), (1, 3), wx.ALIGN_BOTTOM | wx.LEFT, 10)
 
         # RESULTS ------------------------------------------------------------------------------------------------------
+        row += 1
         static_line_3 = wx.StaticLine(self.left_panel, wx.ID_ANY)
         static_line_3.SetMinSize((300, 2))
-        grid_sizer_left_panel.Add(static_line_3, (10, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
+        grid_sizer_left_panel.Add(static_line_3, (row, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
-        grid_sizer_left_panel.Add(self.spreadsheet, (11, 0), (1, 3), wx.ALIGN_LEFT | wx.RIGHT | wx.EXPAND, 5)
-        grid_sizer_left_panel.Add(self.btn_cleardata, (12, 0), (1, 1), wx.LEFT | wx.TOP, 5)
-        grid_sizer_left_panel.Add(self.checkbox_errorbar, (12, 1), (1, 1), wx.LEFT | wx.TOP, 5)
+        row += 1
+        grid_sizer_left_panel.Add(self.spreadsheet, (row, 0), (1, 3), wx.ALIGN_LEFT | wx.RIGHT | wx.EXPAND, 5)
+
+        row += 1
+        grid_sizer_left_panel.Add(self.btn_cleardata, (row, 0), (1, 1), wx.LEFT | wx.TOP, 5)
+        grid_sizer_left_panel.Add(self.checkbox_errorbar, (row, 1), (1, 1), wx.LEFT | wx.TOP, 5)
         grid_sizer_left_panel.AddGrowableRow(11)
 
         # BUTTONS ------------------------------------------------------------------------------------------------------
+        row += 1
         static_line_4 = wx.StaticLine(self.left_panel, wx.ID_ANY)
         static_line_4.SetMinSize((300, 2))
-        grid_sizer_left_panel.Add(static_line_4, (13, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
+        grid_sizer_left_panel.Add(static_line_4, (row, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
-        grid_sizer_left_sub_btn_row.Add(self.btn_start, (0, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
+        row += 1
+        grid_sizer_left_sub_btn_row.Add(self.btn_start, (0, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL)
         grid_sizer_left_sub_btn_row.Add(self.combo_mode, (0, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
-        grid_sizer_left_panel.Add(grid_sizer_left_sub_btn_row, (14, 0), (1, 3), wx.ALIGN_TOP | wx.BOTTOM, 13)
+        grid_sizer_left_sub_btn_row.Add(self.btn_breakpoints, (0, 2), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(grid_sizer_left_sub_btn_row, (row, 0), (1, 3), wx.ALIGN_TOP | wx.BOTTOM, 13)
 
         self.left_panel.SetSizer(grid_sizer_left_panel)
 
@@ -237,51 +291,75 @@ class MultimeterTab(wx.Panel):
         self.SetSizer(sizer_2)
         self.Layout()
 
-    # ------------------------------------------------------------------------------------------------------------------
-    def _get_DMM_choice(self, evt):
-        selection = self.combo_DMM_choice.GetValue()
+    # GET SELECTED INSTRUMENTS =========================================================================================
+    def _get_instr_choice(self, type, selection, text_ctrl):
+        # Get [NEW] instr choice ---------------------------------------------------------------------------------------
         print(f"The {selection} has been selected.")
-        self.DMM_choice = 'f' + selection.strip('Fluke ')
+        new_choice = 'f' + selection.strip('Fluke ')
 
+        # Get [PREVIOUS] instr choice ----------------------------------------------------------------------------------
+        if type.lower() == 'dut':
+            current_choice = self.dmm.DUT_choice
+        elif type.lower() == 'dmm':
+            current_choice = self.dmm.DMM_choice
+        else:
+            raise ValueError("invalid instrument type. Please specify whether 'dut' or 'dmm'.")
+
+        # Conditionally refresh GUI ------------------------------------------------------------------------------------
         if not self.dmm.M.connected:
             # if instruments are not connected, then user is free to change the DMM choice
             pass
 
-        elif self.DMM_choice != self.dmm.DMM_choice and self.dmm.M.connected:
-            # if the selected instrument does not currently match the remote instrument connected, there's a problem.
-            self.dmm.M.connected = False
-            print(f"[WARNING] the {selection} is NOT the current remote instrument connected!")
-            # set text box color to red (chantilly: #EAB9C1)
-            self.text_DMM_report.SetBackgroundColour(wx.Colour(234, 185, 193))
-            self.left_panel.Refresh()
-
-        elif self.DMM_choice == self.dmm.DMM_choice:
-            # if the selected instrument does match the remote instrument connected, reset the color if necessary
-            self.dmm.M.connected = True
-            # Reset color (white smoke: #F0F0F0)
-            self.text_DMM_report.SetBackgroundColour(wx.Colour(240, 240, 240))
-            self.left_panel.Refresh()
         elif self.dmm.DUMMY_DATA:
             # if using dummy data, then we only need to set DMM choice to True before running
             self.dmm.DMM_choice = self.DMM_choice
 
+        elif new_choice != current_choice and self.dmm.M.connected:
+            # if the selected instrument does not currently match the remote instrument connected, there's a problem.
+            self.dmm.M.connected = False
+            print(f"[WARNING] the {selection} is NOT the current remote instrument connected!")
+            # set text box color to red (chantilly: #EAB9C1)
+            text_ctrl.SetBackgroundColour(wx.Colour(234, 185, 193))
+            self.left_panel.Refresh()
+
+        elif new_choice == self.dmm.DMM_choice:
+            # if the selected instrument does match the remote instrument connected, reset the color if necessary
+            self.dmm.M.connected = True
+            # Reset color (white smoke: #F0F0F0)
+            text_ctrl.SetBackgroundColour(wx.Colour(240, 240, 240))
+            self.left_panel.Refresh()
+
+        return new_choice
+
+    def _get_DUT_choice(self, evt):
+        selection = self.combo_DUT_choice.GetValue()
+        self.DUT_choice = self._get_instr_choice(type='dut', selection=selection, text_ctrl=self.text_DUT_report)
+        self.label_source.SetLabelText(str(selection))
+
+        return self.DUT_choice
+
+    def _get_DMM_choice(self, evt):
+        selection = self.combo_DMM_choice.GetValue()
+        self.DMM_choice = self._get_instr_choice(type='dmm', selection=selection, text_ctrl=self.text_DMM_report)
+
         return self.DMM_choice
 
+    # CONFIGURE INSTR FOR MEASUREMENT ==================================================================================
     def config(self, evt):
-        dlg = InstrumentDialog(self, ['f5560A', self.DMM_choice], None, wx.ID_ANY, )
+        dlg = InstrumentDialog(self, [self.DUT_choice, self.DMM_choice], None, wx.ID_ANY, )
         dlg.ShowModal()
         dlg.Destroy()
 
     def get_instruments(self):
         config_dict = ReadConfig()
 
-        f5560A = config_dict['f5560A']
-        f884xA = config_dict[self.DMM_choice]
+        dut = config_dict[self.DUT_choice]
+        dmm = config_dict[self.DMM_choice]
 
-        instruments = {'f5560A': {'address': f5560A['address'], 'port': f5560A['port'],
-                                  'gpib': f5560A['gpib'], 'mode': f5560A['mode']},
-                       self.DMM_choice: {'address': f884xA['address'], 'port': f884xA['port'],
-                                         'gpib': f884xA['gpib'], 'mode': f884xA['mode']}}
+        instruments = {self.DUT_choice: {'address': dut['address'], 'port': dut['port'],
+                                         'gpib': dut['gpib'], 'mode': dut['mode']},
+                       self.DMM_choice: {'address': dmm['address'], 'port': dmm['port'],
+                                         'gpib': dmm['gpib'], 'mode': dmm['mode']}}
 
         return instruments
 
@@ -297,6 +375,7 @@ class MultimeterTab(wx.Panel):
         print('\nResetting connection. Closing communication with any connected instruments')
         self.text_DUT_report.Clear()
         self.text_DMM_report.Clear()
+        self.dmm.DUT_choice = self.DUT_choice
         self.dmm.DMM_choice = self.DMM_choice
         # self.thread_this(self.dmm.connect, (self.get_instruments(),))
         self.dmm.connect(self.get_instruments(),)
@@ -317,7 +396,7 @@ class MultimeterTab(wx.Panel):
             self.text_frequency.Enable()
 
     def toggle_controls(self):
-        if self.text_amplitude.Enabled:
+        if self.text_amplitude.IsEnabled():
             self.text_amplitude.Disable()
             self.combo_rms_or_peak.Disable()
             self.text_frequency.Disable()
@@ -333,10 +412,12 @@ class MultimeterTab(wx.Panel):
             print("[Update] Auto Ranging turned OFF for Fluke 884xA.")
 
     def toggle_always_voltage(self, evt):
+        DMM_choice = {self.DMM_choice}
+
         if self.checkbox_always_voltage.IsChecked():
-            print("[Update] Fluke 884xA will always measure voltage (across FLuke 5560A load).")
+            print(f"[Update] {DMM_choice} will always measure voltage. Use external shunt if sourcing current.")
         else:
-            print("[Update] Fluke 884xA will perform direct measurement of the Fluke 5560A.")
+            print(f"[Update] {DMM_choice} will perform direct measurement of the DUT.")
 
     # ------------------------------------------------------------------------------------------------------------------
     def get_values(self):

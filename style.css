@@ -1,0 +1,135 @@
+body {
+    background-color: #f6f6f6;
+    font-family: sans-serif;
+}
+
+#centerContainer {
+    padding: 10px;
+    width: 900px;
+    text-align: left;
+    margin: 0px auto;
+    background: white;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+.toc {
+    display: table;
+    table-layout: auto;
+    padding: 7px;
+    border: 1px solid #a2a9b1;
+    background-color: #f8f9fa;
+    padding: 5px;
+    font-size: 95%;
+}
+
+.toc-header {
+    font-size: 100%;
+    text-align: center;
+    display: inline;
+    font-weight: bold;
+}
+
+.toc-level-1 {
+    margin-bottom: 0.1em;
+    line-height: 1.6;
+    font-size: 95%;
+    color: #202122;
+}
+
+.toc-level-2 {
+    margin-bottom: 0.1em;
+    line-height: 1.6;
+    font-size: 95%;
+    color: #202122;
+}
+
+h1 {
+    margin-top: 1em;
+    font-family: 'Linux Libertine','Georgia','Times',serif;
+    font-size: 1.8em;
+    border-bottom: 1px solid #a2a9b1
+}
+
+h2 {
+    margin-top: 1em;
+    font-family: 'Linux Libertine','Georgia','Times',serif;
+    font-size: 1.5em;
+    border-bottom: 1px solid #a2a9b1;
+}
+
+h3 {
+    font-family: sans-serif;
+    margin-top: 1em;
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+p {
+    width: 100%;
+    text-align: justify;
+    color: #202122;
+    font-size: calc(1em * 0.875);
+    line-height: 1.6;
+}
+
+.figure{
+    width: 100%;
+    height: auto;
+    max-width:1000px;
+}
+
+.figcaption{
+    background: #f4f4f4;
+    color: black;
+    font-style: italic;
+    padding: 2px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+pre {
+    background: #f4f4f4;
+    border: 1px solid #ddd;
+    border-left: 3px solid #f36d33;
+    color: #666;
+    page-break-inside: avoid;
+    font-family: monospace;
+    font-size: 15px;
+    line-height: 1.6;
+    margin-bottom: 1.6em;
+    max-width: 100%;
+    overflow: auto;
+    padding: 1em 1.5em;
+    display: block;
+    word-wrap: break-word;
+}
+
+.formatted_table tbody tr:hover {
+  background: yellow;
+}
+
+th.formatted_table , td.formatted_table  {
+  padding-left: 15px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+th.text_tabled, td.text_tabled {
+  vertical-align: top;
+  text-align: left;
+  padding-bottom: 10px;
+}
+
+.centerTable {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.equation {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}

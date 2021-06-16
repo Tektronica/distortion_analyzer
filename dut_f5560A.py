@@ -26,7 +26,7 @@ class f5560A_instrument:
                   '\nconnected properly or not being used by another remote session. Consider power cycling the '
                   '\nsuspected instrument\n')
 
-    def setup_source(self):
+    def setup_f5560A_source(self):
         self.f5560A.write('*RST')
         time.sleep(1)
         self.f5560A.write('wizard elbereth; ponwiz on')
@@ -37,21 +37,20 @@ class f5560A_instrument:
         self.f5560A.write('MONITOR OFF')
         print(f"\nmonitor: {self.f5560A.query('MONITOR?')}")
 
-    def run_source(self, mode, rms, Ft):
+    def run_f5560A_source(self, mode, rms, Ft):
         try:
             if mode in ("a", "A"):
                 self.f5560A.write(f'\nout {rms}A, {Ft}Hz')
                 time.sleep(2)
-                print(f'\nout: {rms}A, {Ft}Hz')
-                # self.f5560A.write('write P7P7, #hDC')  # TODO: this turns COMP3 ON - 22uF (distortion amp)
-                # self.f5560A.write('write P7P7, #hEC')  # TODO: this turns COMP2 ON - 22nF (distortion amp)
-                # self.f5560A.write('Mod P7P1SEL, #h40, 0')  # TODO: this turns idac fly cap inverter off in AC
-            # ("v", "V")
-            else:
+                print(f'[5560A command] out: {rms}A, {Ft}Hz')
+
+            elif mode in ("v", "V"):
                 self.f5560A.write(f'\nout {rms}V, {Ft}Hz')
                 time.sleep(2)
                 print(f'\nout: {rms}V, {Ft}Hz')
-                # self.f5560A.write('Mod P7P1SEL, #h40, 0')  # TODO: this turns idac fly cap inverter off in AC
+
+            else:
+                raise ValueError("Invalid mode selected. Specify units 'V' or 'A'.")
             time.sleep(1)
 
             self.f5560A.write('oper')
@@ -59,7 +58,7 @@ class f5560A_instrument:
         except ValueError:
             raise
 
-    def standby(self):
+    def standby_f5560A(self):
         time.sleep(1)
         self.f5560A.write('STBY')
         self.f5560A.write('*WAI')
@@ -79,8 +78,8 @@ if __name__ == "__main__":
 
     instr = f5560A_instrument()
     instr.connect_to_f5560A(instruments)
-    instr.setup_source()
+    instr.setup_f5560A_source()
 
-    instr.run_source(mode, rms, Ft)
+    instr.run_f5560A_source(mode, rms, Ft)
     time.sleep(5)
     instr.close_f5560A()

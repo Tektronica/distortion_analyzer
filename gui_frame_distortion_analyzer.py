@@ -169,7 +169,7 @@ class TestFrame(wx.Frame):
         self.SetSize((1055, 640))
 
     def popup_dialog(self, error_message):
-        print(error_message)
+        print(error_message + '\n')
         dial = wx.MessageDialog(None, str(error_message), 'Error', wx.OK | wx.ICON_ERROR)
         dial.ShowModal()
 
@@ -184,11 +184,20 @@ class TestFrame(wx.Frame):
         msg = "Closing all remote connections to instruments"
         busyDlg = wx.BusyInfo(msg, parent=self)
 
-        print("Closing all possible remote connections to instruments:")
-        self.tab_analyzer.da.close_instruments()
-        print("\tremote connection to instruments used in distortion analyzer are closed.")
-        self.tab_multimeter.dmm.close_instruments()
-        print("\tremote connection to instruments used in multimeter are closed.")
+        try:
+            print("Closing all possible remote connections to instruments:")
+            self.tab_analyzer.da.close_instruments()
+            print("\tremote connection to instruments used in distortion analyzer are closed.")
+            self.tab_multimeter.dmm.close_instruments()
+            print("\tremote connection to instruments used in multimeter are closed.")
+        except ValueError as e:
+            error = str(e)
+            print(error)
+            if error.split()[0] == "VI_ERROR_CONN_LOST":
+                print("[ERROR] Connection was lost before closing remote connection.")
+                pass
+            else:
+                raise
 
         busyDlg = None
         del wait

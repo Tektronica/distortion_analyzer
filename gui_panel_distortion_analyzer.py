@@ -28,9 +28,37 @@ pylab_params = {'legend.fontsize': 'medium',
 pylab.rcParams.update(pylab_params)
 
 
+def open_breakpoints():
+    import subprocess, os, platform
+    wkdir = os.getcwd()
+    filename = "distortion_breakpoints.csv"
+    path_to_file = wkdir + '\\' + filename
+
+    print(f'opening breakpoints file at: {path_to_file}')
+
+    if platform.system() == 'Darwin':       # macOS
+        subprocess.call(('open', path_to_file))
+
+    elif platform.system() == 'Windows':    # Windows
+        print(os.path.normcase(path_to_file))
+        os.startfile(filename)
+
+    else:                                   # linux variants
+        subprocess.call(('xdg-open', path_to_file))
+
+
 class DistortionAnalyzerTab(wx.Panel):
     def __init__(self, parent, frame):
         wx.Panel.__init__(self, parent, wx.ID_ANY)
+
+        # instance variables -------------------------------------------------------------------------------------------
+        self.flag_complete = True  # Flag indicates any active threads (False) or thread completed (True)
+        self.t = threading.Thread()
+        self.da = da(self)
+        self.user_input = {}
+
+        self.DUT_choice = 'f5560A'
+        self.DMM_choice = 'f8588A'
 
         self.parent = parent
         self.frame = frame
@@ -41,12 +69,17 @@ class DistortionAnalyzerTab(wx.Panel):
 
         # PANELS =======================================================================================================
         # LEFT Panel ---------------------------------------------------------------------------------------------------
+        self.combo_DUT_choice = wx.ComboBox(self.left_panel, wx.ID_ANY,
+                                            choices=["Fluke 5560A", "Fluke 5730A"],
+                                            style=wx.CB_DROPDOWN | wx.CB_READONLY)
         self.text_DUT_report = wx.TextCtrl(self.left_panel, wx.ID_ANY, "", style=wx.TE_READONLY)
         self.text_DMM_report = wx.TextCtrl(self.left_panel, wx.ID_ANY, "", style=wx.TE_READONLY)
+        self.label_source = wx.StaticText(self.left_panel, wx.ID_ANY, "Fluke 5560A")
+
         self.btn_connect = wx.Button(self.left_panel, wx.ID_ANY, "Connect")
         self.btn_config = wx.Button(self.left_panel, wx.ID_ANY, "Config")
 
-        self.checkbox_1 = wx.CheckBox(self.left_panel, wx.ID_ANY, "Control Source")
+        self.checkbox_1 = wx.CheckBox(self.left_panel, wx.ID_ANY, "Local")
         self.text_amplitude = wx.TextCtrl(self.left_sub_panel, wx.ID_ANY, "10uA")
         self.combo_rms_or_peak = wx.ComboBox(self.left_sub_panel, wx.ID_ANY,
                                              choices=["RMS", "Peak"],
@@ -82,18 +115,13 @@ class DistortionAnalyzerTab(wx.Panel):
                                                         "Single w/ shunt", "Sweep w/ shunt",
                                                         "Continuous"],
                                                style=wx.CB_DROPDOWN)
+        self.btn_breakpoints = wx.Button(self.left_panel, wx.ID_ANY, "Breakpoints")
 
         # PLOT Panel ---------------------------------------------------------------------------------------------------
         self.figure = plt.figure(figsize=(1, 1))  # look into Figure((5, 4), 75)
         self.canvas = FigureCanvas(self.plot_panel, -1, self.figure)
         self.toolbar = NavigationToolbar(self.canvas)
         self.toolbar.Realize()
-
-        # instance variables -------------------------------------------------------------------------------------------
-        self.flag_complete = True  # Flag indicates any active threads (False) or thread completed (True)
-        self.t = threading.Thread()
-        self.da = da(self)
-        self.user_input = {}
 
         self.ax1 = self.figure.add_subplot(211)
         self.ax2 = self.figure.add_subplot(212)
@@ -103,6 +131,9 @@ class DistortionAnalyzerTab(wx.Panel):
 
         # BINDINGS =====================================================================================================
         # Configure Instruments ----------------------------------------------------------------------------------------
+        on_DUT_selection = lambda event: self._get_DUT_choice(event)
+        self.Bind(wx.EVT_COMBOBOX_CLOSEUP, on_DUT_selection, self.combo_DUT_choice)
+
         on_connect = lambda event: self.on_connect_instr(event)
         self.Bind(wx.EVT_BUTTON, on_connect, self.btn_connect)
 
@@ -115,6 +146,9 @@ class DistortionAnalyzerTab(wx.Panel):
         # Run Measurement (start subprocess) ---------------------------------------------------------------------------
         on_run_event = lambda event: self.on_run(event)
         self.Bind(wx.EVT_BUTTON, on_run_event, self.btn_start)
+
+        on_open_breakpoints = lambda event: open_breakpoints()
+        self.Bind(wx.EVT_BUTTON, on_open_breakpoints, self.btn_breakpoints)
 
         on_toggle = lambda event: self.toggle_panel(event)
         self.Bind(wx.EVT_CHECKBOX, on_toggle, self.checkbox_1)
@@ -137,15 +171,21 @@ class DistortionAnalyzerTab(wx.Panel):
         # self.left_sub_panel.SetBackgroundColour(wx.Colour(255, 0, 255))
         self.plot_panel.SetMinSize((700, 502))
 
+        self.combo_DUT_choice.SetSelection(0)
+        self.combo_DUT_choice.SetMinSize((87, 23))
+        self.btn_connect.SetMinSize((87, 23))
+        self.btn_start.SetMinSize((87, 23))
+        self.btn_breakpoints.SetMinSize((87, 23))
+
         self.text_DUT_report.SetMinSize((200, 23))
         self.text_DMM_report.SetMinSize((200, 23))
         self.canvas.SetMinSize((700, 490))
 
-        self.checkbox_1.SetValue(1)
+        self.checkbox_1.SetValue(0)
         self.combo_rms_or_peak.SetSelection(0)
 
         self.combo_mainlobe.SetSelection(1)
-        self.combo_mainlobe.SetMinSize((96, 23))
+        self.combo_mainlobe.SetMinSize((87, 23))
 
         self.combo_filter.SetSelection(1)
         self.combo_filter.SetMinSize((110, 23))
@@ -165,41 +205,46 @@ class DistortionAnalyzerTab(wx.Panel):
 
         # LEFT PANEL ===================================================================================================
         # TITLE --------------------------------------------------------------------------------------------------------
+        row = 0
         label_1 = wx.StaticText(self.left_panel, wx.ID_ANY, "DISTORTION ANALYZER")
         label_1.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_left_panel.Add(label_1, (0, 0), (1, 3), 0, 0)
+        grid_sizer_left_panel.Add(label_1, (row, 0), (1, 3), 0, 0)
 
+        row += 1
         static_line_1 = wx.StaticLine(self.left_panel, wx.ID_ANY)
         static_line_1.SetMinSize((300, 2))
-        grid_sizer_left_panel.Add(static_line_1, (1, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
+        grid_sizer_left_panel.Add(static_line_1, (row, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
         # INSTRUMENT INFO  ---------------------------------------------------------------------------------------------
-        label_DUT = wx.StaticText(self.left_panel, wx.ID_ANY, "Fluke 5560A")
-        label_DUT.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_left_panel.Add(label_DUT, (2, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
-        grid_sizer_left_panel.Add(self.text_DUT_report, (2, 1), (1, 2), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
+        row += 1
+        grid_sizer_left_panel.Add(self.combo_DUT_choice, (row, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
+        grid_sizer_left_panel.Add(self.text_DUT_report, (row, 1), (1, 2), wx.BOTTOM | wx.LEFT, 5)
 
+        row += 1
         label_DMM = wx.StaticText(self.left_panel, wx.ID_ANY, "Fluke 8588A")
         label_DMM.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_left_panel.Add(label_DMM, (3, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
-        grid_sizer_left_panel.Add(self.text_DMM_report, (3, 1), (1, 2), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(label_DMM, (row, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
+        grid_sizer_left_panel.Add(self.text_DMM_report, (row, 1), (1, 2), wx.BOTTOM | wx.LEFT, 5)
 
-        grid_sizer_left_panel.Add(self.btn_connect, (4, 0), (1, 1), wx.BOTTOM, 5)
-        grid_sizer_left_panel.Add(self.btn_config, (4, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        row += 1
+        grid_sizer_left_panel.Add(self.btn_connect, (row, 0), (1, 1), wx.BOTTOM, 5)
+        grid_sizer_left_panel.Add(self.btn_config, (row, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(self.checkbox_1, (row, 2), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
 
         # f5560A SETUP -------------------------------------------------------------------------------------------------
-        label_source = wx.StaticText(self.left_panel, wx.ID_ANY, "5560A")
-        label_source.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_left_panel.Add(label_source, (5, 0), (1, 1), wx.TOP, 10)
-        grid_sizer_left_panel.Add(self.checkbox_1, (5, 1), (1, 1), wx.ALIGN_BOTTOM | wx.LEFT | wx.TOP, 5)
+        row += 1
+        self.label_source.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
+        grid_sizer_left_panel.Add(self.label_source, (row, 0), (1, 2), wx.TOP, 10)
 
+        row += 1
         static_line_2 = wx.StaticLine(self.left_panel, wx.ID_ANY)
         static_line_2.SetMinSize((300, 2))
-        grid_sizer_left_panel.Add(static_line_2, (6, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
+        grid_sizer_left_panel.Add(static_line_2, (row, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
         # SUB PANEL  ---------------------------------------------------------------------------------------------------
+        row += 1
         label_amplitude = wx.StaticText(self.left_sub_panel, wx.ID_ANY, "Amplitude:")
-        label_amplitude.SetMinSize((93, 16))
+        label_amplitude.SetMinSize((87, 16))
         grid_sizer_left_sub_panel.Add(label_amplitude, (0, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
         grid_sizer_left_sub_panel.Add(self.text_amplitude, (0, 1), (1, 1),
                                       wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
@@ -207,74 +252,87 @@ class DistortionAnalyzerTab(wx.Panel):
                                       wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
 
         label_frequency = wx.StaticText(self.left_sub_panel, wx.ID_ANY, "Frequency (Ft):")
-        label_frequency.SetMinSize((93, 16))
+        label_frequency.SetMinSize((87, 16))
         grid_sizer_left_sub_panel.Add(label_frequency, (1, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM, 5)
         grid_sizer_left_sub_panel.Add(self.text_frequency, (1, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
         label_Hz = wx.StaticText(self.left_sub_panel, wx.ID_ANY, "(Hz)")
         grid_sizer_left_sub_panel.Add(label_Hz, (1, 2), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
 
         self.left_sub_panel.SetSizer(grid_sizer_left_sub_panel)
-        grid_sizer_left_panel.Add(self.left_sub_panel, (7, 0), (1, 3), wx.LEFT, 0)
+        grid_sizer_left_panel.Add(self.left_sub_panel, (row, 0), (1, 3), wx.LEFT, 0)
 
         # Measurement --------------------------------------------------------------------------------------------------
+        row += 1
         label_measure = wx.StaticText(self.left_panel, wx.ID_ANY, "Measurement")
         label_measure.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
-        grid_sizer_left_panel.Add(label_measure, (8, 0), (1, 3), wx.TOP, 10)
+        grid_sizer_left_panel.Add(label_measure, (row, 0), (1, 3), wx.TOP, 10)
 
+        row += 1
         static_line_3 = wx.StaticLine(self.left_panel, wx.ID_ANY)
         static_line_3.SetMinSize((300, 2))
-        grid_sizer_left_panel.Add(static_line_3, (9, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
+        grid_sizer_left_panel.Add(static_line_3, (row, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
-        # label_error = wx.StaticText(self.left_panel, wx.ID_ANY, "Lobe Error:")
-        # grid_sizer_left_panel.Add(label_error, (10, 0), (1, 1), 0, 0)
-        grid_sizer_left_panel.Add(self.combo_mainlobe, (10, 0), (1, 1), 0, 0)
-        grid_sizer_left_panel.Add(self.text_mainlobe, (10, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
-        grid_sizer_left_panel.Add(self.label_mainlobe, (10, 2), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
+        row += 1
+        grid_sizer_left_panel.Add(self.combo_mainlobe, (row, 0), (1, 1), 0, 0)
+        grid_sizer_left_panel.Add(self.text_mainlobe, (row, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(self.label_mainlobe, (row, 2), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
 
+        row += 1
         label_filter = wx.StaticText(self.left_panel, wx.ID_ANY, "Filter:")
-        grid_sizer_left_panel.Add(label_filter, (11, 0), (1, 1), 0, 0)
-        grid_sizer_left_panel.Add(self.combo_filter, (11, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(label_filter, (row, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(self.combo_filter, (row, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
 
+        row += 1
         label_coupling = wx.StaticText(self.left_panel, wx.ID_ANY, "Coupling:")
-        grid_sizer_left_panel.Add(label_coupling, (12, 0), (1, 1), 0, 0)
-        grid_sizer_left_panel.Add(self.combo_coupling, (12, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(label_coupling, (row, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(self.combo_coupling, (row, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
 
+        row += 1
         label_fs = wx.StaticText(self.left_panel, wx.ID_ANY, "Fs:")
-        grid_sizer_left_panel.Add(label_fs, (13, 0), (1, 1), 0, 0)
-        grid_sizer_left_panel.Add(self.label_fs_report, (13, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(label_fs, (row, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(self.label_fs_report, (row, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
 
+        row += 1
         label_samples = wx.StaticText(self.left_panel, wx.ID_ANY, "Samples:")
-        grid_sizer_left_panel.Add(label_samples, (14, 0), (1, 1), 0, 0)
-        grid_sizer_left_panel.Add(self.label_samples_report, (14, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(label_samples, (row, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(self.label_samples_report, (row, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
 
+        row += 1
         label_aperture = wx.StaticText(self.left_panel, wx.ID_ANY, "Aperture:")
-        grid_sizer_left_panel.Add(label_aperture, (15, 0), (1, 1), 0, 0)
-        grid_sizer_left_panel.Add(self.label_aperture_report, (15, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(label_aperture, (row, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(self.label_aperture_report, (row, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT, 5)
 
         # REPORT -------------------------------------------------------------------------------------------------------
+        row += 1
         static_line_4 = wx.StaticLine(self.left_panel, wx.ID_ANY)
         static_line_4.SetMinSize((300, 2))
-        grid_sizer_left_panel.Add(static_line_4, (16, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
+        grid_sizer_left_panel.Add(static_line_4, (row, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
+        row += 1
         label_rms = wx.StaticText(self.left_panel, wx.ID_ANY, "RMS:")
-        grid_sizer_left_panel.Add(label_rms, (17, 0), (1, 1), 0, 0)
-        grid_sizer_left_panel.Add(self.text_rms_report, (17, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(label_rms, (row, 0), (1, 1), 0, 0)
+        grid_sizer_left_panel.Add(self.text_rms_report, (row, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
 
+        row += 1
         label_thdn = wx.StaticText(self.left_panel, wx.ID_ANY, "THD+N:")
-        grid_sizer_left_panel.Add(label_thdn, (18, 0), (1, 1), 0, 0)
-        grid_sizer_left_panel.Add(self.text_thdn_report, (18, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(label_thdn, (row, 0), (1, 1), 0, 0)
+        grid_sizer_left_panel.Add(self.text_thdn_report, (row, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
 
+        row += 1
         label_thd = wx.StaticText(self.left_panel, wx.ID_ANY, "THD:")
-        grid_sizer_left_panel.Add(label_thd, (19, 0), (1, 1), 0, 0)
-        grid_sizer_left_panel.Add(self.text_thd_report, (19, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(label_thd, (row, 0), (1, 1), 0, 0)
+        grid_sizer_left_panel.Add(self.text_thd_report, (row, 1), (1, 1), wx.BOTTOM | wx.LEFT, 5)
 
         # BUTTONS ------------------------------------------------------------------------------------------------------
+        row += 1
         static_line_9 = wx.StaticLine(self.left_panel, wx.ID_ANY)
         static_line_9.SetMinSize((300, 2))
-        grid_sizer_left_panel.Add(static_line_9, (20, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
+        grid_sizer_left_panel.Add(static_line_9, (row, 0), (1, 3), wx.BOTTOM | wx.RIGHT | wx.TOP, 5)
 
-        grid_sizer_left_panel.Add(self.btn_start, (21, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
-        grid_sizer_left_panel.Add(self.combo_selected_test, (21, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
+        row += 1
+        grid_sizer_left_panel.Add(self.btn_start, (row, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL)
+        grid_sizer_left_panel.Add(self.combo_selected_test, (row, 1), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
+        grid_sizer_left_panel.Add(self.btn_breakpoints, (row, 2), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
 
         self.left_panel.SetSizer(grid_sizer_left_panel)
 
@@ -296,22 +354,69 @@ class DistortionAnalyzerTab(wx.Panel):
         self.SetSizer(sizer_2)
         self.Layout()
 
+    # GET SELECTED INSTRUMENTS =========================================================================================
+    def _get_instr_choice(self, type, selection, text_ctrl):
+        # Get [NEW] instr choice ---------------------------------------------------------------------------------------
+        print(f"The {selection} has been selected.")
+        new_choice = 'f' + selection.strip('Fluke ')
+
+        # Get [PREVIOUS] instr choice ----------------------------------------------------------------------------------
+        if type.lower() == 'dut':
+            current_choice = self.da.DUT_choice
+        elif type.lower() == 'dmm':
+            current_choice = self.da.DMM_choice
+        else:
+            raise ValueError("invalid instrument type. Please specify whether 'dut' or 'dmm'.")
+
+        # Conditionally refresh GUI ------------------------------------------------------------------------------------
+        if not self.da.M.connected:
+            # if instruments are not connected, then user is free to change the DMM choice
+            pass
+
+        elif self.da.DUMMY_DATA:
+            # if using dummy data, then we only need to set DMM choice to True before running
+            self.da.DMM_choice = self.DMM_choice
+
+        elif new_choice != current_choice and self.da.M.connected:
+            # if the selected instrument does not currently match the remote instrument connected, there's a problem.
+            self.da.M.connected = False
+            print(f"[WARNING] the {selection} is NOT the current remote instrument connected!")
+            # set text box color to red (chantilly: #EAB9C1)
+            text_ctrl.SetBackgroundColour(wx.Colour(234, 185, 193))
+            self.left_panel.Refresh()
+
+        elif new_choice == self.da.DMM_choice:
+            # if the selected instrument does match the remote instrument connected, reset the color if necessary
+            self.da.M.connected = True
+            # Reset color (white smoke: #F0F0F0)
+            text_ctrl.SetBackgroundColour(wx.Colour(240, 240, 240))
+            self.left_panel.Refresh()
+
+        return new_choice
+
+    def _get_DUT_choice(self, evt):
+        selection = self.combo_DUT_choice.GetValue()
+        self.DUT_choice = self._get_instr_choice(type='dut', selection=selection, text_ctrl=self.text_DUT_report)
+        self.label_source.SetLabelText(str(selection))
+
+        return self.DUT_choice
+
     # ------------------------------------------------------------------------------------------------------------------
     def config(self, evt):
-        dlg = InstrumentDialog(self, ['f5560A', 'f8588A'], None, wx.ID_ANY, )
+        dlg = InstrumentDialog(self, [self.DUT_choice, self.DMM_choice], None, wx.ID_ANY, )
         dlg.ShowModal()
         dlg.Destroy()
 
     def get_instruments(self):
         config_dict = ReadConfig()
 
-        f5560A = config_dict['f5560A']
-        f8588A = config_dict['f8588A']
+        dut = config_dict[self.DUT_choice]
+        dmm = config_dict[self.DMM_choice]
 
-        instruments = {'f5560A': {'address': f5560A['address'], 'port': f5560A['port'],
-                                  'gpib': f5560A['gpib'], 'mode': f5560A['mode']},
-                       'f8588A': {'address': f8588A['address'], 'port': f8588A['port'],
-                                  'gpib': f8588A['gpib'], 'mode': f8588A['mode']}}
+        instruments = {self.DUT_choice: {'address': dut['address'], 'port': dut['port'],
+                                         'gpib': dut['gpib'], 'mode': dut['mode']},
+                       'f8588A': {'address': dmm['address'], 'port': dmm['port'],
+                                  'gpib': dmm['gpib'], 'mode': dmm['mode']}}
 
         return instruments
 
@@ -327,6 +432,8 @@ class DistortionAnalyzerTab(wx.Panel):
         print('\nResetting connection. Closing communication with any connected instruments')
         self.text_DUT_report.Clear()
         self.text_DMM_report.Clear()
+        self.da.DUT_choice = self.DUT_choice
+        self.da.DMM_choice = self.DMM_choice
         # self.thread_this(self.da.connect, (self.get_instruments(),))
         self.da.connect(self.get_instruments(),)
 
@@ -335,17 +442,21 @@ class DistortionAnalyzerTab(wx.Panel):
 
     # ------------------------------------------------------------------------------------------------------------------
     def toggle_panel(self, evt):
-        if self.checkbox_1.GetValue():
+        local = self.checkbox_1.GetValue()
+        if not local:
             if not self.left_sub_panel.IsShown():
                 self.left_sub_panel.Show()
+                print(f"{self.DUT_choice} is in REMOTE and will be controlled by software")
         else:
             self.left_sub_panel.Hide()
+            print(f"{self.DUT_choice} is in LOCAL and will not be controlled by software")
 
     def lock_controls(self, evt):
+        local = self.checkbox_1.GetValue()
         choice = self.combo_selected_test.GetSelection()
         if choice in (1, 3):
-            if self.checkbox_1.GetValue() == 0:
-                self.checkbox_1.SetValue(1)
+            if local:
+                self.checkbox_1.SetValue(0)
                 self.toggle_panel(evt)
             self.checkbox_1.Disable()
             self.text_amplitude.Disable()
@@ -358,7 +469,7 @@ class DistortionAnalyzerTab(wx.Panel):
             self.text_frequency.Enable()
 
     def toggle_controls(self):
-        if self.text_amplitude.Enabled:
+        if self.text_amplitude.IsEnabled():
             self.checkbox_1.Disable()
             self.text_amplitude.Disable()
             self.combo_rms_or_peak.Disable()
@@ -383,7 +494,7 @@ class DistortionAnalyzerTab(wx.Panel):
     # ------------------------------------------------------------------------------------------------------------------
     def get_values(self):
         selected_test = self.combo_selected_test.GetSelection()
-        source = self.checkbox_1.GetValue()
+        local = self.checkbox_1.GetValue()  # local if True (1)
         mainlobe_type = self.combo_mainlobe.GetValue().lower()
         mainlobe_value = float(self.text_mainlobe.GetValue())
         rms = self.combo_rms_or_peak.GetSelection()
@@ -395,7 +506,7 @@ class DistortionAnalyzerTab(wx.Panel):
         freq_string = self.text_frequency.GetValue()
 
         self.user_input = {'selected_test': selected_test,
-                           'source': source,
+                           'local': local,
                            'amplitude': amp_string,
                            'frequency': freq_string,
                            'rms': rms,
