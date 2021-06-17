@@ -171,7 +171,7 @@ class MultimeterTab(wx.Panel):
 
         self.combo_rms_or_peak.SetSelection(0)
         self.combo_mode.SetSelection(0)
-        self.checkbox_always_voltage.SetValue(1)
+        self.checkbox_always_voltage.SetValue(0)
         self.checkbox_errorbar.SetValue(0)
 
         self.spreadsheet.CreateGrid(60, 3)
