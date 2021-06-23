@@ -1,5 +1,22 @@
 # The Distortion Analyzer:
 
+# Table of Contents
+1. [Introduction](#introduction)
+    1. [Inheritance Tree](#the-inheritance-tree)
+    2. [Multimeter GUI](#multimeter-gui-panel)
+    3. [Configuring Remote Connections](#configuring-remote-connections)
+2. [Time Series Data](#time-series-data)
+3. [Windowing](#windowing-to-reduce-spectral-leakage-of-non-integer-periods)
+4. [The FFT](#search-and-destroy-the-fundamental-frequency)
+5. [Total Harmonic Distortion](#computing-the-total-harmonic-distortion)
+    1. [Introduction](#introduction)
+    2. [Introduction](#introduction)
+    3. [Introduction](#introduction)
+    4. [Introduction](#introduction)
+6. [FFT Characterization](#characterizing-an-fft)
+7. [Windowing (continued)](#more-on-windowing)
+8. [Fluke 8588A Aperture](#f-fluke-8588a-aperture-parameters)
+
 ## Introduction
 
 The distortion analyzer computes the total harmonic distortion (THD) and
@@ -20,6 +37,8 @@ in C++.
 
 ![](html/static/distortion_analyzer.png)
 
+### The Inheritance Tree
+
 At a top level, pyVISA creates the remote connection
 + Each instrument has its own python file. These are command-specific routines inherent to the instrument. This setup makes plug-and-play super simple and highly scalable in the future.
 + Each instrument is configurable for a different remote connection. Not all connections require to be over Socket and not all over GPIB
@@ -29,6 +48,8 @@ At a top level, pyVISA creates the remote connection
     <img src="html/static/blockdiagram.jpg"/>
 </p>
 
+### Multimeter GUI Panel
+
 Both the distortion analyzer and multimeter are capable of single or swept measurements using a breakpoint list.
 + In the following image, 7 different amplitudes were swept across frequency from 45 Hz to 30 kHz
 + Error bars can be toggled on and off, which display son the plot the overall spread of the 15 samples averaged per measurement.
@@ -36,6 +57,8 @@ Both the distortion analyzer and multimeter are capable of single or swept measu
 + **Note:** Possible future work will go into generating HTML reports based on a specific template
 
 ![](html/static/multimeter.png)
+
+### Configuring Remote Connections
 
 Depending on the instruments selected from the dropdown in the main interface, opening the instrument configuration
 window will provide the current remote configuration for the available instruments selected. Here the 5560A and the
