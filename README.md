@@ -39,8 +39,9 @@ Depending on the instruments selected from the dropdown in the main interface, o
 window will provide the current remote configuration for the available instruments selected. Here the 5560A and the
 8588A were selected and we can edit their connection over Socket (ethernet), GPIB, or RS-232.
 
-![](html/static/configure_instrument.png)
-
+<p align="center" width="100%">
+    <img src="html/static/configure_instrument.png"/>
+</p>
 
 STEPS FOR CALCULATING DISTORTION:
 =================================
