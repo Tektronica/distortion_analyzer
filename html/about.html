@@ -170,7 +170,7 @@ M = 12000                   # number of samples</code></pre>
     </ol>
     <div class="figure">
         <img src="static/00_sampled_data.jpg" class="figure"/>
-        <div class="figcaption">Fig 2. Sampled Time Series Data</div>
+        <div class="figcaption">Fig 5. Sampled Time Series Data</div>
     </div>
     <h2 id="windowing-to-reduce-spectral-leakage-of-non-integer-periods">Windowing to reduce spectral leakage of
         non-integer periods</h2>
@@ -191,7 +191,7 @@ M = 12000                   # number of samples</code></pre>
 
     <div class="figure">
         <img src="static/01_blackman_window.jpg" class="figure"/>
-        <div class="figcaption">Fig 3. Blackman Window</div>
+        <div class="figcaption">Fig 6. Blackman Window</div>
     </div>
 
     <p>The time series data is then multiplied by the window (or convolved in the frequency domain). Tapering at the
@@ -199,7 +199,7 @@ M = 12000                   # number of samples</code></pre>
 
     <div class="figure">
         <img src="static/02_windowed_data.jpg" class="figure"/>
-        <div class="figcaption">Fig 4. Windowed Time Series Data</div>
+        <div class="figcaption">Fig 7. Windowed Time Series Data</div>
     </div>
 
     <h2 id="the-fft">The FFT</h2>
@@ -208,7 +208,7 @@ M = 12000                   # number of samples</code></pre>
 
     <div class="figure">
         <img src="static/03_fft_of_windowed_data.jpg" class="figure"/>
-        <div class="figcaption">Fig 5. FFT of the Windowed Data</div>
+        <div class="figcaption">Fig 8. FFT of the Windowed Data</div>
     </div>
 
     <p><strong>Sampling Theorem</strong></p>
@@ -361,7 +361,7 @@ return left_min, right_min</code></pre>
     </ol>
     <div class="figure">
         <img src="static/04_rejected_fundamental.jpg" class="figure"/>
-        <div class="figcaption">Fig 6. Rejected Fundamental</div>
+        <div class="figcaption">Fig 9. Rejected Fundamental</div>
     </div>
     <h3 id="thdf">THDF</h3>
     <pre><code>rms_fundamental = np.sqrt(np.sum(np.abs(yf[left_min:right_min]) ** 2))  # Parseval&#39;s Theorem
