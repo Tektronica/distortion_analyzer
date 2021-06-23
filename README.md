@@ -25,7 +25,9 @@ At a top level, pyVISA creates the remote connection
 + Each instrument is configurable for a different remote connection. Not all connections require to be over Socket and not all over GPIB
 + Each instrument file points to the remote connection python file, VisaClient. All commands pass in and out of this module.
 
-![](html/static/blockdiagram.jpg)
+<p align="center" width="100%">
+    <img src="html/static/blockdiagram.jpg"/>
+</p>
 
 Both the distortion analyzer and multimeter are capable of single or swept measurements using a breakpoint list.
 + In the following image, 7 different amplitudes were swept across frequency from 45 Hz to 30 kHz
