@@ -6,7 +6,41 @@ The distortion analyzer computes the total harmonic distortion (THD) and
 total harmonic distortion and noise (THD+N) using time series data
 collected by the Fluke 8588A Digitizer.
 
+The Fluke 8588A digitizer is used to capture the raw data and an FFT is computed and the results of the truncated
+spectrum plotted. Unlike in most analyzer where you specify the number of samples or the sampling frequency, the
+Distortion Analyzer GUI can specify either a relative or absolute mainlobe width.
+
+In the image below, an absolute 100 Hz mainlobe width was chosen, which means each peak main-lobe will have a frequency
+resolution of 100 Hz. On the other hand, a relative mainlobe width ensures the mainlobe width scales with the fundamental
+freuqency. So if you specify a relative MLW of 0.1 (units of MLW/Hz), the width operating at 1 kHz is 100Hz. At 5 kHz
+it's 500Hz. Relative MLW is best for computing a consistent (and comparable) total harmonic distortion value. However, an absolute MLW is best for RMS measurements.
+
+The interface was written in Python and the GUI developed with wxPython, which is a derivative of the wxWidgets library
+in C++.
+
 ![](html/static/distortion_analyzer.png)
+
+At a top level, pyVISA creates the remote connection
++ Each instrument has its own python file. These are command-specific routines inherent to the instrument. This setup makes plug-and-play super simple and highly scalable in the future.
++ Each instrument is configurable for a different remote connection. Not all connections require to be over Socket and not all over GPIB
++ Each instrument file points to the remote connection python file, VisaClient. All commands pass in and out of this module.
+
+![](html/static/blockdiagram.jpg)
+
+Both the distortion analyzer and multimeter are capable of single or swept measurements using a breakpoint list.
++ In the following image, 7 different amplitudes were swept across frequency from 45 Hz to 30 kHz
++ Error bars can be toggled on and off, which display son the plot the overall spread of the 15 samples averaged per measurement.
++ If the remote interface is ever interrupted before the test completes, a spreadsheet of all data collected prior to the interruption is always available through all interfaces.
++ **Note:** Possible future work will go into generating HTML reports based on a specific template
+
+![](html/static/multimeter.jpg)
+
+Depending on the instruments selected from the dropdown in the main interface, opening the instrument configuration
+window will provide the current remote configuration for the available instruments selected. Here the 5560A and the
+8588A were selected and we can edit their connection over Socket (ethernet), GPIB, or RS-232.
+
+![](html/static/configure_instrument.png)
+
 
 STEPS FOR CALCULATING DISTORTION:
 =================================
@@ -161,7 +195,13 @@ Parseval's Theorem states for discretized signals the total energy of a signal i
 Thus, the total RMS amplitude for the FFT is:
 
     import numpy as np
-    rms_total = np.sqrt(np.mean(np.abs(yf)**2))
+    import math
+
+    def rms(y)
+        sqr = np.absolute(y) ** 2
+        mean = math.fsum(sqr) / len(sqr)  # computed from partial sums
+        rms = np.sqrt(mean)
+        return rms
 
 ## Computing the Total Harmonic Distortion
 
@@ -188,10 +228,10 @@ There are two approaches for rejecting the fundamental frequency. Once the local
  1. **main lobe bandwidth** the preferable and more accurate approach is to calculate the main lobe width centered around the fundamental. The main lobe width is defined as the smallest frequency recoverable by the FFT and is specific to each windowing function. Note, it's important to distinguish that this quantity is not equal to the resolution of the FFT.
 
         main_lobe_width = 6 * (Fs / N)
-        left_min = int((fundamental - main_lobe_width / 2) * (N/fs)) + 1
-        right_min = int((fundamental + main_lobe_width / 2) * (N/fs)) + 2
+        left_of_lobe = int((fundamental - main_lobe_width / 2) * (N / fs))
+        right_of_lobe = int((fundamental + main_lobe_width / 2) * (N / fs))
 
-        rms_fundamental = np.sqrt(np.sum(np.abs(_yf[left_of_lobe:right_of_lobe]) ** 2))  # Parseval's
+        rms_fundamental = np.sqrt(math.fsum(np.abs(yf[left_of_lobe:right_of_lobe]) ** 2))  # Parseval's
 
  2. **Local Minimas:** When the main lobe width cannot be calculated, a decently reliable method is to identify the local minimas on either side of the fundamental. The idea here is to start at the index of the fundamental peak and index down the sides of the lobe and stop once the data begins to rise again.
 
@@ -217,29 +257,30 @@ There are two approaches for rejecting the fundamental frequency. Once the local
 
 ### THDF
 
-    rms_fundamental = np.sqrt(np.sum(np.abs(_yf[left_min:right_min]) ** 2))  # Parseval's Theorem
-
+    rms_fundamental = np.sqrt(np.sum(np.abs(yf[left_min:right_min]) ** 2))  # Parseval's Theorem
+    
     # REJECT FUNDAMENTAL FOR NOISE RMS
     # Throws out values within the region of the main lobe fundamental frequency
-    yf[left_min:right_min] = 1e-10
-
-    # RMS NOISE
-    rms_noise = np.sqrt(np.sum(np.abs(yf) ** 2))  # Parseval's Theorem
-
+    yf[left_of_lobe:right_of_lobe] = 1e-10
+    
+    # COMPUTE RMS NOISE
+    rms_noise = np.sqrt(math.fsum(np.abs(yf) ** 2))
+    
     # THDN CALCULATION
+    # https://www.thierry-lequeu.fr/data/PESL-00101-2003-R2.pdf
     THDN = rms_noise / rms_fundamental
 
 ### THDR
 
     # RMS TOTAL
-    rms_total = np.sqrt(np.sum(np.abs(yf) ** 2))  # Parseval'amp_string Theorem
-
-    # REJECT FUNDAMENTAL FOR NOISE RMS
-    yf[left_min:right_min] = 1e-10
-
-    # RMS NOISE
-    rms_noise = np.sqrt(np.sum(np.abs(yf) ** 2))  # Parseval'amp_string Theorem
-
+    rms_total = rms(yf)  # Parseval'sTheorem
+    
+    # NOTCH REJECT FUNDAMENTAL AND MEASURE NOISE
+    yf[left_of_lobe:right_of_lobe] = 1e-10
+    
+    # COMPUTE RMS NOISE
+    rms_noise = rms(yf)  # Parseval's Theorem
+    
     # THDN CALCULATION
     THDN = rms_noise / rms_total
 

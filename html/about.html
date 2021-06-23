@@ -11,19 +11,26 @@
     <div id="toc" class="toc" role="navigation">
         <div class="toc-header">Contents</div>
         <ol>
-            <li class="toc-level-1"><a href="#introduction">Introduction</a></li>
+            <li class="toc-level-1">
+                <a href="#introduction">Introduction</a>
+                <ol>
+                    <li class="toc-level-2"><a href="#inheritance_tree">Inheritance Tree</a></li>
+                    <li class="toc-level-2"><a href="#multimeter_panel">Multimeter GUI Panel</a></li>
+                    <li class="toc-level-2"><a href="#configuring_remote">Configuring Remote Connections</a></li>
+                </ol>
+            </li>
             <li class="toc-level-1"><a href="#time-series-data">Time Series Data</a></li>
             <li class="toc-level-1"><a href="#windowing-to-reduce-spectral-leakage-of-non-integer-periods">Windowing</a></li>
             <li class="toc-level-1"><a href="#the-fft">The FFT</a></li>
 
             <li class="toc-level-1">
                 <a href="#computing-the-total-harmonic-distortion">Total Harmonic Distortion</a>
-            <ol>
-                <li class="toc-level-2"><a href="#overview">Overview</a></li>
-                <li class="toc-level-2"><a href="#search-and-destroy-the-fundamental-frequency">The Fundamental</a></li>
-                <li class="toc-level-2"><a href="#thdf">THDF</a></li>
-                <li class="toc-level-2"><a href="#thdr">THDR</a></li>
-            </ol>
+                <ol>
+                    <li class="toc-level-2"><a href="#overview">Overview</a></li>
+                    <li class="toc-level-2"><a href="#search-and-destroy-the-fundamental-frequency">The Fundamental</a></li>
+                    <li class="toc-level-2"><a href="#thdf">THDF</a></li>
+                    <li class="toc-level-2"><a href="#thdr">THDR</a></li>
+                </ol>
             </li>
             <li class="toc-level-1"><a href="#characterizing-an-fft">FFT Characterization</a></li>
             <li class="toc-level-1"><a href="#more-on-windowing">Windowing (continued)</a></li>
@@ -34,10 +41,82 @@
     <h2 id="introduction">Introduction</h2>
     <p>The distortion analyzer computes the total harmonic distortion (THD) and total harmonic distortion and noise
         (THD+N) using time series data collected by the Fluke 8588A Digitizer.</p>
+    <p>
+        The Fluke 8588A digitizer is used to capture the raw data and an FFT is computed and the results of the truncated
+        spectrum plotted. Unlike in most analyzer where you specify the number of samples or the sampling frequency,
+        the Distortion Analyzer GUI can specify either a relative or absolute mainlobe width.
+    </p>
+    <p>
+       In the image below, an absolute 100 Hz mainlobe width was chosen, which means each peak main-lobe will have a frequency
+       resolution of 100 Hz. On the other hand, a relative mainlobe width ensures the mainlobe width scales with the fundamental
+       freuqency. So if you specify a relative MLW of 0.1 (units of MLW/Hz), the width operating at 1 kHz is 100Hz. At 5 kHz
+       it's 500Hz. Relative MLW is best for computing a consistent (and comparable) total harmonic distortion value.
+        However, an absolute MLW is best for RMS measurements.
+    </p>
+    <p>
+    The interface was written in Python and the GUI developed with wxPython, which is a derivative of the wxWidgets library
+    in C++.
+    </p>
+
     <div class="figure">
         <img src="static/distortion_analyzer.png" class="figure"/>
         <div class="figcaption">Fig 1. Distortion Analyzer GUI</div>
     </div>
+
+    <h3 id="inheritance_tree">The Inheritance Tree</h3>
+    <p>At a top level, pyVISA creates the remote connection</p>
+
+    <ul>
+        <li>
+            Each instrument has its own python file. These are command-specific routines inherent to the instrument. This setup makes plug-and-play super simple and highly scalable in the future.
+        </li>
+        <li>
+            Each instrument is configurable for a different remote connection. Not all connections require to be over Socket and not all over GPIB
+        </li>
+        <li>
+            Each instrument file points to the remote connection python file, VisaClient. All commands pass in and out of this module.
+        </li>
+    </ul>
+    <div class="figure">
+        <img src="static/blockdiagram.jpg" class="figure"/>
+        <div class="figcaption">Fig 2. Block Diagram</div>
+    </div>
+
+    <h3 id="multimeter_panel">Multimeter GUI Panel</h3>
+    <p>
+        Both the distortion analyzer and multimeter are capable of single or swept measurements using a breakpoint list.
+    </p>
+    <ul>
+    <li>
+        In the following image, 7 different amplitudes were swept across frequency from 45 Hz to 30 kHz
+    </li>
+    <li>
+        Error bars can be toggled on and off, which display son the plot the overall spread of the 15 samples averaged per measurement.
+    </li>
+    <li>
+        If the remote interface is ever interrupted before the test completes, a spreadsheet of all data collected prior to the interruption is always available through all interfaces.
+    </li>
+    <li>
+        <b>Note:</b> Possible future work will go into generating HTML reports based on a specific template
+    </li>
+    </ul>
+
+    <div class="figure">
+        <img src="static/multimeter.png" class="figure"/>
+        <div class="figcaption">Fig 3. Multimeter GUI</div>
+    </div>
+
+    <h3 id="configuring_remote">Configuring Remote Connections</h3>
+    <p>
+    Depending on the instruments selected from the dropdown in the main interface, opening the instrument configuration
+    window will provide the current remote configuration for the available instruments selected. Here the 5560A and the
+    8588A were selected and we can edit their connection over Socket (ethernet), GPIB, or RS-232.
+    </p>
+    <div class="figure">
+        <img src="static/configure_instrument.png" class="figure"/>
+        <div class="figcaption">Fig 4. Configuring Instruments GUI</div>
+    </div>
+
     <h1 id="steps-for-calculating-distortion">Steps for Calculating Distortion:</h1>
     <h2 id="time-series-data">Time Series Data</h2>
     <p>Time series data is retrieved by the Fluke 8588A digitizer. The digitizer has a fixed sampling frequency of
