@@ -33,7 +33,7 @@ Both the distortion analyzer and multimeter are capable of single or swept measu
 + If the remote interface is ever interrupted before the test completes, a spreadsheet of all data collected prior to the interruption is always available through all interfaces.
 + **Note:** Possible future work will go into generating HTML reports based on a specific template
 
-![](html/static/multimeter.jpg)
+![](html/static/multimeter.png)
 
 Depending on the instruments selected from the dropdown in the main interface, opening the instrument configuration
 window will provide the current remote configuration for the available instruments selected. Here the 5560A and the
