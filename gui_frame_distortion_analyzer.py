@@ -7,13 +7,15 @@ from gui_panel_aboutpage import AboutTab
 from gui_dialog_instruments import *
 from instruments_RWConfig import *
 
+from gui_dialog_specwizard import *
+
 import wx
 import wx.adv
 import wx.html
 import webbrowser
 import warnings
 
-APP_VERSION = 'v2.3.1'
+APP_VERSION = 'v2.5'
 APP_ICON = 'images/hornet.ico'
 
 
@@ -31,20 +33,22 @@ class TestFrame(wx.Frame):
         # Sets minimum window dimensions
         # self.SetSizeHints(1055, 640, -1, -1)
 
-        # FILE menu tab ------------------------------------------------------------------------------------------------
+        # TOP MENU BAR =================================================================================================
         self.frame_menubar = wx.MenuBar()
-        menu_tree = wx.Menu()
-        self.menu_results = menu_tree.Append(wx.ID_ANY, "Open Results", "")
-        self.menu_history = menu_tree.Append(wx.ID_ANY, "Open History", "")
-        menu_tree.AppendSeparator()
-        self.menu_export = menu_tree.Append(wx.ID_ANY, "Export Data", "")
-        self.frame_menubar.Append(menu_tree, "File")
+
+        # FILE menu tab ------------------------------------------------------------------------------------------------
+        menu_tree_file_tab = wx.Menu()
+        self.menu_results = menu_tree_file_tab.Append(wx.ID_ANY, "Open Results", "")
+        self.menu_history = menu_tree_file_tab.Append(wx.ID_ANY, "Open History", "")
+        menu_tree_file_tab.AppendSeparator()
+        self.menu_export = menu_tree_file_tab.Append(wx.ID_ANY, "Export Data", "")
+        self.frame_menubar.Append(menu_tree_file_tab, "File")
 
         # SETTINGS menu tab --------------------------------------------------------------------------------------------
-        menu_tree = wx.Menu()
-        self.menu_config = menu_tree.Append(wx.ID_ANY, "Configure Instruments", "")
-        self.menu_close_instruments = menu_tree.Append(wx.ID_ANY, "Close Instruments", "")
-        menu_tree.AppendSeparator()
+        menu_tree_settings_tab = wx.Menu()
+        self.menu_config = menu_tree_settings_tab.Append(wx.ID_ANY, "Configure Instruments", "")
+        self.menu_close_instruments = menu_tree_settings_tab.Append(wx.ID_ANY, "Close Instruments", "")
+        menu_tree_settings_tab.AppendSeparator()
 
         self.radio_menu_windowing = wx.Menu()  # submenu
         self.menu_windowing_rect = self.radio_menu_windowing.AppendRadioItem(wx.ID_ANY, 'Rectangular', '1')
@@ -52,20 +56,27 @@ class TestFrame(wx.Frame):
         self.menu_windowing_hann = self.radio_menu_windowing.AppendRadioItem(wx.ID_ANY, 'Hanning', '3')
         self.menu_windowing_hann = self.radio_menu_windowing.AppendRadioItem(wx.ID_ANY, 'Hamming', '3')
         self.menu_windowing_blac = self.radio_menu_windowing.AppendRadioItem(wx.ID_ANY, 'Blackman', '4')
-        menu_tree.AppendSubMenu(self.radio_menu_windowing, 'W&indowing')
-        menu_tree.AppendSeparator()
+        menu_tree_settings_tab.AppendSubMenu(self.radio_menu_windowing, 'W&indowing')
+        menu_tree_settings_tab.AppendSeparator()
 
-        self.menu_DUMMY = menu_tree.AppendCheckItem(wx.ID_ANY, "Use DUMMY Data?")
+        self.menu_DUMMY = menu_tree_settings_tab.AppendCheckItem(wx.ID_ANY, "Use DUMMY Data?")
         # self.menu_brkpts = wxglade_tmp_menu.Append(wx.ID_ANY, "Open Breakpoints", "")
-        self.frame_menubar.Append(menu_tree, "Settings")
+        self.frame_menubar.Append(menu_tree_settings_tab, "Settings")
 
         # VIEW menu tab ------------------------------------------------------------------------------------------------
-        menu_tree = wx.Menu()
-        self.menu_reset_view = menu_tree.Append(wx.ID_ANY, "Reset Window Size", "")
-        menu_tree.AppendSeparator()
-        self.menu_about = menu_tree.Append(wx.ID_ANY, '&About')
+        menu_tree_view_tab = wx.Menu()
+        self.menu_reset_view = menu_tree_view_tab.Append(wx.ID_ANY, "Reset Window Size", "")
+        menu_tree_view_tab.AppendSeparator()
+        self.menu_about = menu_tree_view_tab.Append(wx.ID_ANY, '&About')
         # self.menu_brkpts = wxglade_tmp_menu.Append(wx.ID_ANY, "Open Breakpoints", "")
-        self.frame_menubar.Append(menu_tree, "View")
+        self.frame_menubar.Append(menu_tree_view_tab, "View")
+
+        # UTILITIES menu tab -------------------------------------------------------------------------------------------
+        menu_tree_utilities_tab = wx.Menu()
+        self.menu_spec_wizard = menu_tree_utilities_tab.Append(wx.ID_ANY, "Specification Wizard", "")
+        self.frame_menubar.Append(menu_tree_utilities_tab, "Utilities")
+
+        # Add tabs to bar ----------------------------------------------------------------------------------------------
         self.SetMenuBar(self.frame_menubar)
 
         # NOTEBOOK =====================================================================================================
@@ -103,6 +114,7 @@ class TestFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.OnDummyChecked, self.menu_DUMMY)
         # self.Bind(wx.EVT_MENU, self.open_breakpoints, self.menu_brkpts)
         self.Bind(wx.EVT_MENU, self.reset_view, self.menu_reset_view)
+        self.Bind(wx.EVT_MENU, self.open_spec_wizard, self.menu_spec_wizard)
         self.Bind(wx.EVT_MENU, self.OnAbout, self.menu_about)
         self.Bind(wx.EVT_CLOSE, self.OnCloseWindow)
 
@@ -166,12 +178,16 @@ class TestFrame(wx.Frame):
 
     # ------------------------------------------------------------------------------------------------------------------
     def reset_view(self, evt):
-        self.SetSize((1055, 640))
+        self.SetSize((1055, 663))
 
     def popup_dialog(self, error_message):
-        print(error_message + '\n')
+        print(str(error_message) + '\n')
         dial = wx.MessageDialog(None, str(error_message), 'Error', wx.OK | wx.ICON_ERROR)
         dial.ShowModal()
+
+    def open_spec_wizard(self, evt):
+        dlg = SpecWizardDialog(self, None, wx.ID_ANY, )
+        dlg.Show()  # ShowModal() method displays dialog frame in the modal manner, while Show() makes it modeless.
 
     # ------------------------------------------------------------------------------------------------------------------
     def config_all_instruments(self, evt):
@@ -187,9 +203,8 @@ class TestFrame(wx.Frame):
         try:
             print("Closing all possible remote connections to instruments:")
             self.tab_analyzer.da.close_instruments()
-            print("\tremote connection to instruments used in distortion analyzer are closed.")
             self.tab_multimeter.dmm.close_instruments()
-            print("\tremote connection to instruments used in multimeter are closed.")
+
         except ValueError as e:
             error = str(e)
             print(error)

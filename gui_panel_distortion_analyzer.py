@@ -52,6 +52,7 @@ class DistortionAnalyzerTab(wx.Panel):
         wx.Panel.__init__(self, parent, wx.ID_ANY)
 
         # instance variables -------------------------------------------------------------------------------------------
+        self.online = False  # indicates whether instruments are connected
         self.flag_complete = True  # Flag indicates any active threads (False) or thread completed (True)
         self.t = threading.Thread()
         self.da = da(self)
@@ -60,8 +61,8 @@ class DistortionAnalyzerTab(wx.Panel):
         self.DUT_choice = 'f5560A'
         self.DMM_choice = 'f8588A'
 
-        self.parent = parent
-        self.frame = frame
+        self.parent = parent  # instance of the panel (or container)
+        self.frame = frame  # the frame the parent resides in
 
         self.left_panel = wx.Panel(self, wx.ID_ANY)
         self.left_sub_panel = wx.Panel(self.left_panel, wx.ID_ANY)  # amplitude/frequency panel
@@ -435,10 +436,16 @@ class DistortionAnalyzerTab(wx.Panel):
         self.da.DUT_choice = self.DUT_choice
         self.da.DMM_choice = self.DMM_choice
         # self.thread_this(self.da.connect, (self.get_instruments(),))
-        self.da.connect(self.get_instruments(),)
+        status = self.da.connect(self.get_instruments(),)
 
         busyDlg = None
         del wait
+
+        if status is True:
+            self.online = True
+        else:
+            self.online = False
+            self.frame.popup_dialog(status)
 
     # ------------------------------------------------------------------------------------------------------------------
     def toggle_panel(self, evt):
@@ -600,7 +607,16 @@ class DistortionAnalyzerTab(wx.Panel):
         self.canvas.draw()
         self.canvas.flush_events()
 
+    def measurement_config_update(self, fs, N, aperture):
+        print('\tupdating measurement configuration')
+
+        self.label_fs_report.SetLabelText(f'{round(fs / 1000, 2)} kHz')
+        self.label_samples_report.SetLabelText(str(N))
+        self.label_aperture_report.SetLabelText(f'{round(aperture * 1e6, 4)}us')
+
     def results_update(self, results):
+        print('\tupdating results panel')
+
         amplitude = results['Amplitude']
         freq_ideal = results['freq_ideal']
         freq_sampled = results['freq_sampled']
@@ -614,9 +630,6 @@ class DistortionAnalyzerTab(wx.Panel):
         thd = results['THD']
         rms_noise = results['RMS NOISE']
 
-        self.label_fs_report.SetLabelText(str(fs))
-        self.label_samples_report.SetLabelText(str(N))
-        self.label_aperture_report.SetLabelText(str(aperture))
         self.text_rms_report.SetValue(f"{'{:0.3e}'.format(yrms)} {units}")
         self.text_thdn_report.SetValue(f"{round(thdn * 100, 3)}% or {round(np.log10(thdn), 1)}dB")
         self.text_thd_report.SetValue(f"{round(thd * 100, 3)}% or {round(np.log10(thd), 1)}dB")
@@ -638,7 +651,7 @@ class MyDistortionAnalyzerFrame(wx.Frame):
         self.SetSize((1055, 1000))
 
         self.splitter = wx.SplitterWindow(self)
-        self.panel = DistortionAnalyzerTab(self.splitter, self)
+        self.panel = DistortionAnalyzerTab(self.splitter, self)  # parent, frame
         self.spreadsheet = MyGrid(self.splitter)
 
         self.splitter.SplitHorizontally(window1=self.panel, window2=self.spreadsheet, sashPosition=0)
@@ -650,7 +663,7 @@ class MyDistortionAnalyzerFrame(wx.Frame):
     def __set_properties(self):
         self.SetTitle("Distortion Analyzer")
         self.panel.da.DUMMY_DATA = True
-        self.panel.SetMinSize((1055, 525))
+        self.panel.SetMinSize((1055, 540))
         self.spreadsheet.CreateGrid(100, 60)
 
     def __do_layout(self):
@@ -662,6 +675,7 @@ class MyDistortionAnalyzerFrame(wx.Frame):
     # ------------------------------------------------------------------------------------------------------------------
     def OnCloseWindow(self, evt):
         self.panel.da.close_instruments()
+        print("\tremote connection to instruments used in distortion analyzer are closed.")
         self.Destroy()
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -671,6 +685,11 @@ class MyDistortionAnalyzerFrame(wx.Frame):
 
     def append_row(self, row):
         self.spreadsheet.append_rows(row)
+
+    def popup_dialog(self, error_message):
+        print(str(error_message) + '\n')
+        dial = wx.MessageDialog(None, str(error_message), 'Error', wx.OK | wx.ICON_ERROR)
+        dial.ShowModal()
 
 
 class MyApp(wx.App):

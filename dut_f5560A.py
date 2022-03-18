@@ -22,7 +22,7 @@ class f5560A_instrument:
             self.f5560_connected = True
             self.f5560A_IDN = self.f5560A.query('*IDN?')
         else:
-            print('[*] Unable to connect to the Fluke 5560A. Check software configuration, ensure instrument is'
+            print('[X] Unable to connect to the Fluke 5560A. Check software configuration, ensure instrument is'
                   '\nconnected properly or not being used by another remote session. Consider power cycling the '
                   '\nsuspected instrument\n')
 

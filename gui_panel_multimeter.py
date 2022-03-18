@@ -49,6 +49,7 @@ class MultimeterTab(wx.Panel):
         wx.Panel.__init__(self, parent, wx.ID_ANY)
 
         # instance variables -------------------------------------------------------------------------------------------
+        self.online = False  # indicates whether instruments are connected
         self.DUT_choice = 'f5560A'
         self.DMM_choice = 'f8588A'
         self.dmm = dmm(self)
@@ -378,10 +379,16 @@ class MultimeterTab(wx.Panel):
         self.dmm.DUT_choice = self.DUT_choice
         self.dmm.DMM_choice = self.DMM_choice
         # self.thread_this(self.dmm.connect, (self.get_instruments(),))
-        self.dmm.connect(self.get_instruments(),)
+        status = self.dmm.connect(self.get_instruments(),)
 
         busyDlg = None
         del wait
+
+        if status is True:
+            self.online = True
+        else:
+            self.online = False
+            self.frame.popup_dialog(status)
 
     # ------------------------------------------------------------------------------------------------------------------
     def lock_controls(self, evt):
@@ -565,7 +572,7 @@ class MyMultimeterFrame(wx.Frame):
     def __init__(self, *args, **kwds):
         kwds["style"] = kwds.get("style", 0) | wx.DEFAULT_FRAME_STYLE
         wx.Frame.__init__(self, *args, **kwds)
-        self.SetSize((1055, 564))
+        self.SetSize((1055, 585))
         self.panel = MultimeterTab(self)
 
         self.__set_properties()
@@ -583,8 +590,15 @@ class MyMultimeterFrame(wx.Frame):
 
     # ------------------------------------------------------------------------------------------------------------------
     def OnCloseWindow(self, evt):
-        self.panel.dmm.close_instruments()
-        self.Destroy()
+        if self.status:
+            self.panel.dmm.close_instruments()
+            print("\tremote connection to instruments used in multimeter are closed.")
+            self.Destroy()
+
+    def popup_dialog(self, error_message):
+        print(str(error_message) + '\n')
+        dial = wx.MessageDialog(None, str(error_message), 'Error', wx.OK | wx.ICON_ERROR)
+        dial.ShowModal()
 
 
 class MyApp(wx.App):

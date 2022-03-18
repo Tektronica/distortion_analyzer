@@ -136,7 +136,7 @@ class f8588A_instrument:
             except ValueError:
                 raise
         else:
-            print('[*]Unable to connect to the Fluke 8588A. Check software configuration, ensure instrument is'
+            print('[X] Unable to connect to the Fluke 8588A. Check software configuration, ensure instrument is'
                   '\nconnected properly or not being used by another remote session. Consider power cycling the '
                   '\nsuspected instrument\n')
 
@@ -152,6 +152,7 @@ class f8588A_instrument:
         :param kwds: dictionary containing at least two of the following: 'output_type', 'mode', 'units', 'frequency'
         :return: True if completion successful
         """
+        print('\tsetting up 8588A')
 
         self.output_type, self.mode = self._get_function_params(**kwds)  # Example: ('VOLT', 'AC')
 
@@ -306,6 +307,8 @@ class f8588A_instrument:
         :param kwds: dictionary containing at least two of the following: 'output_type', 'mode', 'units', 'frequency'
         :return: True iff range is set successfully
         """
+        print('\tsetting f8588A range')
+
         # Get function parameters for Fluke 8588A ----------------------------------------------------------------------
         self.output_type, self.mode = self._get_function_params(**kwds)  # ('VOLT', 'AC')
 
@@ -371,6 +374,8 @@ class f8588A_instrument:
 
     # DIGITIZER ########################################################################################################
     def setup_digitizer(self, units, ideal_range_val, coupling, filter_val, N, aperture):
+        print('\tsetting up digitizer')
+
         # determine the appropriate digitzer mode from output_type. Setting the mode here doesn't matter
         self.output_type, self.mode = self._get_function_params(units=units, mode='AC')
 
@@ -413,6 +418,8 @@ class f8588A_instrument:
                              '\nCheck connection and configuration to instrument.')
 
     def retrieve_digitize(self):
+        print('\tretrieving digitizer data')
+
         self.f8588A.write('INIT:IMM')
         time.sleep(5)
         read = self.f8588A.query('FETCH?')

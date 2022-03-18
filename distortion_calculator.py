@@ -45,6 +45,7 @@ def find_range(f, x):
     """
     Find range between nearest local minima from peak at index x
     """
+    print('\tfinding range between nearest local minima from peak at index x')
     lowermin = 0
     uppermin = 0
     for i in np.arange(x + 1, len(f)):
@@ -72,6 +73,8 @@ def getWindowLength(f0=10e3, fs=2.5e6, windfunc='blackman', error=0.1, mainlobe_
     :param error: 100% error suggests the lowest detectable frequency is the fundamental
     :return: window length of integer value (number of time series samples collected)
     """
+    print('\tcomputing window length')
+
     # lowest detectable frequency by window
     # aka - the main lobe width
     if mainlobe_type == 'relative':
@@ -109,6 +112,7 @@ def windowed_fft(yt, Fs, N, windfunc='blackman'):
     yf_rfft : One sided power spectrum.
     main_lobe_width : The bandwidth (Hz) of the main lobe of the frequency domain window function.
     """
+    print('\tperforming windowed FFT')
 
     # remove DC offset
     yt -= np.mean(yt)
@@ -181,6 +185,8 @@ def THDN_F(xf, _yf, fs, N, main_lobe_width=None, hpf=0, lpf=100e3):
 
     :returns: THD and fundamental frequency
     """
+    print('\tcomputing THDN_F figure')
+
     yf = np.array(_yf, copy=True)  # protects yf from mutation
     # freqs = np.fft.rfftfreq(len(_yf))
 
@@ -247,6 +253,8 @@ def THDN_R(xf, yf, fs, N, hpf=0, lpf=100e3):
 
     :returns: THD and fundamental frequency
     """
+    print('\tcomputing THDN_R figure')
+
     _yf = np.array(yf, copy=True)  # protects yf from mutation
     freqs = np.fft.rfftfreq(len(_yf))
 
@@ -259,7 +267,7 @@ def THDN_R(xf, yf, fs, N, hpf=0, lpf=100e3):
 
     # APPLY HIGH PASS FILTERING ----------------------------------------------------------------------------------------
     if not (hpf == 0) and (hpf < lpf):
-        print('>>applying high pass filter<<')
+        print('\t>>applying high pass filter<<')
         fc = int(hpf * N / fs)
         _yf[:fc] = 1e-10
 
@@ -290,6 +298,7 @@ def THDN_R(xf, yf, fs, N, hpf=0, lpf=100e3):
 
 ########################################################################################################################
 def THD(xf, yf, Fs, N, main_lobe_width):
+    print('\tcomputing THD value')
     _yf = np.array(yf, copy=True)  # protects yf from mutation
     _yf_data_peak = max(abs(yf))
     # FIND FUNDAMENTAL (peak of frequency spectrum)

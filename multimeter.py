@@ -153,7 +153,9 @@ class DMM_Measurement:
         try:
             self.M.connect(instruments)
         except ValueError as e:
-            self.panel.error_dialog(e)
+            return e
+
+        return True
 
     def close_instruments(self):
         dut_connected = hasattr(self.M, 'f5560A') or hasattr(self.M, 'f5730A')

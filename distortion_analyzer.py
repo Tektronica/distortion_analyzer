@@ -152,7 +152,9 @@ class DistortionAnalyzer:
         try:
             self.M.connect(instruments)
         except ValueError as e:
-            self.panel.error_dialog(e)
+            return e
+
+        return True
 
     def close_instruments(self):
         if hasattr(self.M, 'f5560A') and hasattr(self.M, 'f8588A'):
@@ -162,6 +164,7 @@ class DistortionAnalyzer:
 
     # ##################################################################################################################
     def start(self, user_input):
+        print('\t[1] preparing test')
         self.params = user_input
         selected_test = self.params['selected_test']
         local = self.params['local']  # local if true
@@ -246,7 +249,7 @@ class DistortionAnalyzer:
     def run_single(self, func):
         DUT_choice = self.DUT_choice
 
-        print('Running Single Measurement.')
+        print('RUNNING SINGLE MEASUREMENT.')
         self.panel.toggle_controls()
         self.panel.flag_complete = False
 
@@ -270,7 +273,7 @@ class DistortionAnalyzer:
     def run_sweep(self, df, func):
         DUT_choice = self.DUT_choice
 
-        print('Running Sweep.')
+        print('RUNNING MEASUREMENT SWEEP')
         self.panel.flag_complete = False
         headers = ['amplitude', 'freq_ideal', 'freq_sampled',
                    'yrms', 'THDN', 'THD', 'uARMS Noise', 'Fs', 'N', 'aperture']
@@ -344,6 +347,8 @@ class DistortionAnalyzer:
 
     # TEST FUNCTIONS ###################################################################################################
     def test(self, setup):
+        print('\tmeasurement has started')
+
         DUT_choice = self.DUT_choice
 
         # SOURCE -------------------------------------------------------------------------------------------------------
@@ -400,8 +405,12 @@ class DistortionAnalyzer:
                                                               mainlobe_width=mainlobe_value,
                                                               window=self.WINDOW_SELECTION)
 
+        # update measurement configuration -----------------------------------------------------------------------------
+        self.panel.measurement_config_update(Fs, N, aperture)
+
         # START DATA COLLECTION ----------------------------------------------------------------------------------------
-        # TODO
+        print('\tbeginning data collection process')
+
         # This is for internal debugging only. Not user facing.
         if not self.DUMMY_DATA:
             # TODO: shouldn't we always want to setup digitizer for new range??
@@ -496,7 +505,12 @@ class DistortionAnalyzer:
                                                               mainlobe_width=mainlobe_width,
                                                               window=self.WINDOW_SELECTION)
 
+        # update measurement configuration -----------------------------------------------------------------------------
+        self.panel.measurement_config_update(Fs, N, aperture)
+
         # START DATA COLLECTION ----------------------------------------------------------------------------------------
+        print('\tbeginning data collection process')
+
         if setup:
             self.M.setup_digitizer(units=meter_units, ideal_range_val=meter_range, coupling=coupling,
                                    filter_val=filter_val, N=N, aperture=aperture)
@@ -544,6 +558,8 @@ class DistortionAnalyzer:
 
     # PLOT #############################################################################################################
     def plot(self, data):
+        print('\tplotting data\n')
+
         f0 = data['f0']
         runtime = data['runtime']
 
@@ -585,6 +601,8 @@ class DistortionAnalyzer:
 
     # MISCELLANEOUS ####################################################################################################
     def get_string_value(self, amp_string, freq_string):
+        print('retrieving string values from GUI')
+
         # https://stackoverflow.com/a/35610194
         amplitude = 0.0
         frequency = 0.0
