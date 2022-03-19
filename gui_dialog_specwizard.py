@@ -90,16 +90,17 @@ class SpecParser(object):
         spec_type, spec_val = op[0], op[1]
         spec = list(filter(None, re.split(r'(-?\d*\.?\d+)', spec_val)))
         s = 0
-        # (X of value + Y of range + Z)
-        if spec_type == 'X':
-            s = self.find_multiplier(spec_val) * self.find_multiplier(self.text_reading)
-        elif spec_type == 'Y':
-            s = self.find_multiplier(spec_val) * self.find_multiplier(self.text_range)
-        elif spec_type == 'Z':
-            s = self.find_multiplier(spec_val)
-        else:
-            print('ERROR: something went wrong. Review how spec items are identified (X of value + Y of range + Z)')
 
+        if spec[1] == '%' or spec[1] in ['PPM', 'ppm']:
+            # (X of value + Y of range + Z)
+            if spec_type == 'X':
+                s = self.find_multiplier(spec_val) * self.find_multiplier(self.text_reading)
+            elif spec_type == 'Y':
+                s = self.find_multiplier(spec_val) * self.find_multiplier(self.text_range)
+            else:
+                print('ERROR: something went wrong. Review how spec items are identified (X of value + Y of range + Z)')
+        else:
+            s = self.find_multiplier(spec_val)
         return s
 
     def buildStack(self, spec):
