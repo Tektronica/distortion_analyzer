@@ -90,22 +90,24 @@ class SpecParser(object):
         spec_type, spec_val = op[0], op[1]
         spec = list(filter(None, re.split(r'(-?\d*\.?\d+)', spec_val)))
         s = 0
-        if spec[1] == '%' or spec[1] in ['PPM', 'ppm']:
-            # (X of input + Y of range + Z)
-            if spec_type == 'X':
-                s = self.find_multiplier(spec_val) * self.find_multiplier(self.text_reading)
-            elif spec_type == 'Y':
-                s = self.find_multiplier(spec_val) * self.find_multiplier(self.text_range)
-            else:
-                print('ERROR: something went wrong. Review how spec items are identified (X of input + Y of range + Z)')
-        else:
+        # (X of value + Y of range + Z)
+        if spec_type == 'X':
+            s = self.find_multiplier(spec_val) * self.find_multiplier(self.text_reading)
+        elif spec_type == 'Y':
+            s = self.find_multiplier(spec_val) * self.find_multiplier(self.text_range)
+        elif spec_type == 'Z':
             s = self.find_multiplier(spec_val)
+        else:
+            print('ERROR: something went wrong. Review how spec items are identified (X of value + Y of range + Z)')
+
         return s
 
     def buildStack(self, spec):
         """
         https://stackoverflow.com/a/4998688/3382269
         https://stackoverflow.com/a/2136580/3382269
+
+        stack = [['X', '20ppm'], ['Y', '10ppm'], ['Z', '10uV']]
         """
         ops = ['\+']
         s = [item.strip() for item in re.split(f'({"|".join(ops)})', spec)]
@@ -117,6 +119,8 @@ class SpecParser(object):
                 opStack.append(item)
             else:
                 stack.append([spec_item[idx], item])
+
+        print(stack)
         return stack + opStack[::-1]  # merges opStack in reverse order with stack
 
     def evaluateStack(self, s):
@@ -139,7 +143,7 @@ class SpecWizardDialog(wx.Dialog):
         wx.Dialog.__init__(self, *args, **kwds)
 
         # self.panel = wx.Panel(self, wx.ID_ANY)
-        self.SetSize((360, 258))
+        self.SetSize((375, 258))
 
         self.parser = SpecParser()
 
@@ -166,7 +170,6 @@ class SpecWizardDialog(wx.Dialog):
         self.__do_layout()
 
     def __set_properties(self):
-        # begin wxGlade: MyFrame.__set_properties
         self.SetTitle("Uncertainty Calculator")
         self.SetFocus()
         self.text_range.SetMinSize((70, 23))
@@ -177,21 +180,18 @@ class SpecWizardDialog(wx.Dialog):
         self.text_spec.SetFont(wx.Font(9, wx.FONTFAMILY_MODERN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, 0, ""))
         self.radio_box_1.SetSelection(0)
 
-        # self.text_range.SetValue('12mA')
-        # self.text_input.SetValue('1.2mA')
-        # self.text_spec.SetValue('0.15% + 3uA')
         self.text_range.SetValue('0.1V')
         self.text_input.SetValue('25mV')
-        self.text_spec.SetValue('20ppm + 10ppm + 10uA')
+        self.text_spec.SetValue('20ppm + 10ppm + 10uV')
+        self.calc(0)
 
     def __do_layout(self):
-        # begin wxGlade: MyFrame.__do_layout
         sizer_1 = wx.BoxSizer(wx.VERTICAL)
         sizer_2 = wx.BoxSizer(wx.VERTICAL)
         grid_sizer_1 = wx.GridBagSizer(0, 0)
         grid_sizer_3 = wx.GridBagSizer(0, 0)
         grid_sizer_2 = wx.GridBagSizer(0, 0)
-        label_1 = wx.StaticText(self.panel_5, wx.ID_ANY, "Uncertainty Calculator")
+        label_1 = wx.StaticText(self.panel_5, wx.ID_ANY, "Absolute Accuracy")
         label_1.SetFont(wx.Font(20, wx.FONTFAMILY_DECORATIVE, wx.FONTSTYLE_ITALIC, wx.FONTWEIGHT_BOLD, 0, ""))
         grid_sizer_1.Add(label_1, (0, 0), (1, 3), 0, 0)
         static_line_1 = wx.StaticLine(self.panel_5, wx.ID_ANY)
@@ -199,7 +199,7 @@ class SpecWizardDialog(wx.Dialog):
         grid_sizer_1.Add(static_line_1, (1, 0), (1, 3), wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.TOP, 10)
         label_2 = wx.StaticText(self.panel_5, wx.ID_ANY, "Range:")
         grid_sizer_1.Add(label_2, (2, 0), (1, 1), 0, 0)
-        label_3 = wx.StaticText(self.panel_5, wx.ID_ANY, "Input")
+        label_3 = wx.StaticText(self.panel_5, wx.ID_ANY, "Value")
         grid_sizer_1.Add(label_3, (2, 1), (1, 1), 0, 0)
         label_4 = wx.StaticText(self.panel_5, wx.ID_ANY, "Absolute Accuracy:")
         grid_sizer_1.Add(label_4, (2, 2), (1, 1), 0, 0)
@@ -209,7 +209,7 @@ class SpecWizardDialog(wx.Dialog):
         label_5.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
         grid_sizer_2.Add(label_5, (0, 0), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
         grid_sizer_2.Add(self.text_spec, (0, 1), (1, 1), 0, 0)
-        label_6 = wx.StaticText(self.panel_6, wx.ID_ANY, ")")
+        label_6 = wx.StaticText(self.panel_6, wx.ID_ANY, u")")
         label_6.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 0, ""))
         grid_sizer_2.Add(label_6, (0, 2), (1, 1), wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
         self.panel_6.SetSizer(grid_sizer_2)
