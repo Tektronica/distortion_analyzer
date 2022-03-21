@@ -415,8 +415,8 @@ class DistortionAnalyzer:
         if not self.DUMMY_DATA:
             # TODO: shouldn't we always want to setup digitizer for new range??
             if setup:
-                self.M.setup_digitizer(units=units, ideal_range_val=amplitude, coupling=coupling,
-                                       filter_val=filter_val, N=N, aperture=aperture)
+                self.M.setup_digitize_aperture(units=units, ideal_range_val=amplitude, coupling=coupling,
+                                               filter_val=filter_val, N=N, aperture=aperture)
             if not self.params['local']:
                 try:
                     # Run DUT ------------------------------------------------------------------------------------------
@@ -512,8 +512,8 @@ class DistortionAnalyzer:
         print('\tbeginning data collection process')
 
         if setup:
-            self.M.setup_digitizer(units=meter_units, ideal_range_val=meter_range, coupling=coupling,
-                                   filter_val=filter_val, N=N, aperture=aperture)
+            self.M.setup_digitize_aperture(units=meter_units, ideal_range_val=meter_range, coupling=coupling,
+                                           filter_val=filter_val, N=N, aperture=aperture)
         y = self.M.retrieve_digitize()
 
         pd.DataFrame(data=y, columns=['ydata']).to_csv('results/y_data.csv')

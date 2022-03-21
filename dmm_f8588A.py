@@ -373,7 +373,14 @@ class f8588A_instrument:
         return mean, freqval, std
 
     # DIGITIZER ########################################################################################################
-    def setup_digitizer(self, units, ideal_range_val, coupling, filter_val, N, aperture):
+    def setup_digitize_aperture(self, units, ideal_range_val, coupling, filter_val, N, aperture):
+        """
+        setup_digitizer_aperture method sets the aperture length of 8588A, which is adjusts the moving average buffer
+        size to achieve a reduced sampling rate with respect to the internal 5MHz sampling rate.
+
+        method is called before retrieve_digitize method
+        """
+
         print('\tsetting up digitizer')
 
         # determine the appropriate digitzer mode from output_type. Setting the mode here doesn't matter
@@ -389,7 +396,7 @@ class f8588A_instrument:
             self.f8588A.write(f':DIGitize:{self.output_type}:RANGe {range_val}')
             print(f"Successfully set range of Fluke 8588A to {range_string}")
 
-            # :FILTer OFF|100Khz|3MHZ
+            # :FILTer OFF|100Khz|3MHZ ----------------------------------------------------------------------------------
             if filter_val not in ('None', '2MHz', '2.4MHz'):
                 self.f8588A.write(f':DIGitize:FILTer {filter_val}')
             else:
@@ -402,6 +409,7 @@ class f8588A_instrument:
             # DCAuto = DC Coupling, maximum avialable input impedance
             self.f8588A.write(f':DIGitize:VOLTage:COUPling:SIGNal {coupling}')
 
+            # setup digitizer with aperture length ---------------------------------------------------------------------
             # f8588A has a 5MHz sampled rate clock. adjusting aperture time,
             # averages more points, which adjusts sample rate
             self.f8588A.write(f':DIGitize:APERture {aperture}')
@@ -410,6 +418,52 @@ class f8588A_instrument:
             self.f8588A.write('TRIGger:DELay:AUTO OFF')
             self.f8588A.write('TRIGGER:DELay 0')
             return True  # returns true if digitizer setup completes succesfully
+
+        except Exception as e:
+            print('setup_digitizer for the Fluke 8588A failed. What error was thrown here?')
+            print(e)
+            raise ValueError('Setting up digitizer for Fluke 8588A failed.'
+                             '\nCheck connection and configuration to instrument.')
+
+    def setup_digitize_timer(self, units, ideal_range_val, coupling, filter_val, N, interval):
+        """
+        setup_digitize_timer method is an alternative sampling method where a trigger timer delays the next reading as
+        a way to reduce the internal sampling rate of 5MHz down to a specific sampling rate equal to the reciprocal of
+        the sampling interval. In this mode, SENSE:DIG:APERTURE 0.000.
+
+        method is called before retrieve_digitize method
+        """
+        print('\tsetting up digitizer trigger interval method')
+
+        # determine the appropriate digitzer mode from output_type. Setting the mode here doesn't matter
+        self.output_type, self.mode = self._get_function_params(units=units, mode='AC')
+
+        # Calculate the closest range for measurement ------------------------------------------------------------------
+        range_val, range_string = self.determine_f8588A_range(ideal_range_val, self.output_type)  # (0.1, '0.1A')
+
+        self.f8588A.write('*RST')
+
+        try:
+            self.f8588A.write(f':FUNC "DIGitize:{self.output_type}" ')
+            self.f8588A.write(f':DIGitize:{self.output_type}:RANGe {range_val}')
+            print(f"Successfully set range of Fluke 8588A to {range_string}")
+
+            # :FILTer OFF|100Khz|3MHZ ----------------------------------------------------------------------------------
+            if filter_val not in ('None', '2MHz', '2.4MHz'):
+                self.f8588A.write(f':DIGitize:FILTer {filter_val}')
+            else:
+                self.f8588A.write(f':DIGitize:FILTer OFF')
+
+            self.f8588A.write(f':DIGitize:VOLTage:COUPling:SIGNal {coupling}')
+
+            # setup digitizer with trigger timer -----------------------------------------------------------------------
+            self.f8588A.write("SENSE:DIG:APERTURE 0.000")
+            self.f8588A.write("TRIGger:RESet")
+            self.f8588A.write("TRIGger:SOURce TIMer")
+            self.f8588A.write(f"TRIGger:TIMer {interval}")
+            self.f8588A.write(f'TRIGGER:COUNT {N}')
+            self.f8588A.write("TRIGger:DELay:AUTO OFF")
+            self.f8588A.write("TRIGger:DELay 0")
 
         except Exception as e:
             print('setup_digitizer for the Fluke 8588A failed. What error was thrown here?')
@@ -458,7 +512,7 @@ if __name__ == "__main__":
         print(output_type, mode)
 
         try:
-            instr.setup_digitizer(units='A', ideal_range_val=1,
-                                  filter_val='100kHz', N=20000, aperture=0)
+            instr.setup_digitize_aperture(units='A', ideal_range_val=1,
+                                          filter_val='100kHz', N=20000, aperture=0)
         except AttributeError:
             print("AttributeError was raised. The instrument isn't currently connected.")
