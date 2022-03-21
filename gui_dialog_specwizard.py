@@ -145,6 +145,7 @@ class SpecWizardDialog(wx.Dialog):
 
         # self.panel = wx.Panel(self, wx.ID_ANY)
         self.SetSize((375, 258))
+        self.Center()
 
         self.parser = SpecParser()
 

@@ -11,6 +11,7 @@ class InstrumentDialog(wx.Dialog):
         kwds["style"] = kwds.get("style", 0) | wx.DEFAULT_DIALOG_STYLE
         super(InstrumentDialog, self).__init__(parent, title='Configure Instruments')
         wx.Dialog.__init__(self, *args, **kwds)
+        self.Center()
 
         self.panel = wx.Panel(self, wx.ID_ANY)
 

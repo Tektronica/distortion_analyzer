@@ -29,6 +29,7 @@ class TestFrame(wx.Frame):
         wx.Frame.__init__(self, *args, **kwds)
 
         self.SetSize((1055, 663))
+        self.Center()
         # https://stackoverflow.com/a/24704039/3382269
         # Sets minimum window dimensions
         # self.SetSizeHints(1055, 640, -1, -1)
@@ -193,15 +194,22 @@ class TestFrame(wx.Frame):
         dial.ShowModal()
 
     def open_spec_wizard(self, evt):
+        # https://docs.wxpython.org/wx.Dialog.html#phoenix-title-modal-and-modeless
         dlg = SpecWizardDialog(self, None, wx.ID_ANY, )
         dlg.ShowModal()  # ShowModal() method displays dialog frame in the modal manner, while Show() makes it modeless.
         dlg.Destroy()
 
     # ------------------------------------------------------------------------------------------------------------------
     def config_all_instruments(self, evt):
-        dlg = InstrumentDialog(self, ['f5560A', 'f8588A', 'f884xA'], None, wx.ID_ANY, )
-        dlg.ShowModal()
-        dlg.Destroy()
+        # dlg = InstrumentDialog(self, ['f5560A', 'f8588A', 'f884xA'], None, wx.ID_ANY, )
+        # dlg.ShowModal()
+        # dlg.Destroy()
+        with InstrumentDialog(self, ['f5560A', 'f8588A', 'f884xA'], None, wx.ID_ANY, ) as dlg:
+            if dlg.ShowModal() == wx.ID_OK:
+                # do something here
+                print('Hello')
+            else:
+                pass
 
     def close_all_instruments(self):
         wait = wx.BusyCursor()
