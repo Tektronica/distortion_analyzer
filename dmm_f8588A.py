@@ -434,12 +434,14 @@ class f8588A_instrument:
         To manually trigger a batch of 50 readings with 10-second intervals:
             TRIGger:RESet
             TRIGger:SOURce TIMer
-            TRIGger:TIMer 10
-            TRIGger:COUNt 50
+            TRIGger:TIMer 10        # set timer to 10 seconds
+            TRIGger:COUNt 50        # take 50 readings before reverting to the idle state
             TRIGger:DELay:AUTO OFF
             TRIGGER:DELay 0
 
-        method is called before retrieve_digitize method
+        ---> the sample rate is equal to 1/Timer
+        ---> only active if "Source = timer". Default 2E-8 (20 ns)
+        ---> method is called before retrieve_digitize method
         """
         print('\tsetting up digitizer trigger interval method')
 

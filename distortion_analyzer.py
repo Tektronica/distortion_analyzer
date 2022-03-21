@@ -133,6 +133,7 @@ class DistortionAnalyzer:
         self.panel = parent
         self.DUMMY_DATA = False  # can be toggled by the gui
         self.WINDOW_SELECTION = "blackman"  # selected windowing
+        self.USE_APERTURE = True  # when true, the aperture achieves reduced sampling frequency
 
         self.amplitude_good = False  # Flag indicates user input for amplitude value is good (True)
         self.frequency_good = False  # Flag indicates user input for frequency value is good (True)
@@ -164,10 +165,11 @@ class DistortionAnalyzer:
 
     # ##################################################################################################################
     def start(self, user_input):
-        print('\t[1] preparing test')
+        print('\tpreparing test')
         self.params = user_input
         selected_test = self.params['selected_test']
         local = self.params['local']  # local if true
+        self.USE_APERTURE = self.params['local']  # sets whether aperture or trigger is used
 
         try:
             amplitude, units, ft = self.get_string_value(user_input['amplitude'], user_input['frequency'])
@@ -415,8 +417,14 @@ class DistortionAnalyzer:
         if not self.DUMMY_DATA:
             # TODO: shouldn't we always want to setup digitizer for new range??
             if setup:
-                self.M.setup_digitize_aperture(units=units, ideal_range_val=amplitude, coupling=coupling,
-                                               filter_val=filter_val, N=N, aperture=aperture)
+                if self.USE_APERTURE:
+                    print('\tusing aperture to set sampling rate.')
+                    self.M.setup_digitize_aperture(units=units, ideal_range_val=amplitude, coupling=coupling,
+                                                   filter_val=filter_val, N=N, aperture=aperture)
+                else:
+                    print('\tusing timer to set sampling rate.')
+                    self.M.setup_digitize_timer(units=units, ideal_range_val=amplitude, coupling=coupling,
+                                                filter_val=filter_val, N=N, interval=1 / Fs)
             if not self.params['local']:
                 try:
                     # Run DUT ------------------------------------------------------------------------------------------
@@ -477,7 +485,7 @@ class DistortionAnalyzer:
         # METER
         self.M.setup_f8588A_meter(autorange=True, output_type='VOLT', mode='AC')
         meter_outval, meter_range, meter_ft = self.M.read_f8588A_meter()
-        meter_units = 'V'
+        dmm_units = 'V'
 
         # DIGITIZER ----------------------------------------------------------------------------------------------------
         mainlobe_type = self.params['mainlobe_type']
@@ -512,8 +520,14 @@ class DistortionAnalyzer:
         print('\tbeginning data collection process')
 
         if setup:
-            self.M.setup_digitize_aperture(units=meter_units, ideal_range_val=meter_range, coupling=coupling,
-                                           filter_val=filter_val, N=N, aperture=aperture)
+            if self.USE_APERTURE:
+                print('\tusing aperture to set sampling rate.')
+                self.M.setup_digitize_aperture(units=dmm_units, ideal_range_val=amplitude, coupling=coupling,
+                                               filter_val=filter_val, N=N, aperture=aperture)
+            else:
+                print('\tusing timer to set sampling rate.')
+                self.M.setup_digitize_timer(units=dmm_units, ideal_range_val=amplitude, coupling=coupling,
+                                            filter_val=filter_val, N=N, interval=1 / Fs)
         y = self.M.retrieve_digitize()
 
         pd.DataFrame(data=y, columns=['ydata']).to_csv('results/y_data.csv')

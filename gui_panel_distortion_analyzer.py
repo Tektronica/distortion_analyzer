@@ -57,6 +57,7 @@ class DistortionAnalyzerTab(wx.Panel):
         self.t = threading.Thread()
         self.da = da(self)
         self.user_input = {}
+        self.USE_APERTURE = True
 
         self.DUT_choice = 'f5560A'
         self.DMM_choice = 'f8588A'
@@ -520,7 +521,8 @@ class DistortionAnalyzerTab(wx.Panel):
                            'coupling': coupling,
                            'mainlobe_type': mainlobe_type,
                            'mainlobe_value': mainlobe_value,
-                           'filter': filter
+                           'filter': filter,
+                           'use_aperture': self.USE_APERTURE
                            }
 
     # ------------------------------------------------------------------------------------------------------------------

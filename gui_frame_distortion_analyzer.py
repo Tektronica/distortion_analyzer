@@ -57,6 +57,11 @@ class TestFrame(wx.Frame):
         self.menu_windowing_hann = self.radio_menu_windowing.AppendRadioItem(wx.ID_ANY, 'Hamming', '3')
         self.menu_windowing_blac = self.radio_menu_windowing.AppendRadioItem(wx.ID_ANY, 'Blackman', '4')
         menu_tree_settings_tab.AppendSubMenu(self.radio_menu_windowing, 'W&indowing')
+
+        self.radio_menu_trigger = wx.Menu()  # submenu
+        self.menu_trigger_aperture = self.radio_menu_trigger.AppendRadioItem(wx.ID_ANY, 'Aperture', '1')
+        self.menu_trigger_timer = self.radio_menu_trigger.AppendRadioItem(wx.ID_ANY, 'Timer', '2')
+        menu_tree_settings_tab.AppendSubMenu(self.radio_menu_trigger, 'T&rigger')
         menu_tree_settings_tab.AppendSeparator()
 
         self.menu_DUMMY = menu_tree_settings_tab.AppendCheckItem(wx.ID_ANY, "Use DUMMY Data?")
@@ -111,6 +116,8 @@ class TestFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.OnWindowSelection, self.menu_windowing_bart)
         self.Bind(wx.EVT_MENU, self.OnWindowSelection, self.menu_windowing_hann)
         self.Bind(wx.EVT_MENU, self.OnWindowSelection, self.menu_windowing_blac)
+        self.Bind(wx.EVT_MENU, self.OnTriggerSelection, self.menu_trigger_aperture)
+        self.Bind(wx.EVT_MENU, self.OnTriggerSelection, self.menu_trigger_timer)
         self.Bind(wx.EVT_MENU, self.OnDummyChecked, self.menu_DUMMY)
         # self.Bind(wx.EVT_MENU, self.open_breakpoints, self.menu_brkpts)
         self.Bind(wx.EVT_MENU, self.reset_view, self.menu_reset_view)
@@ -187,7 +194,8 @@ class TestFrame(wx.Frame):
 
     def open_spec_wizard(self, evt):
         dlg = SpecWizardDialog(self, None, wx.ID_ANY, )
-        dlg.Show()  # ShowModal() method displays dialog frame in the modal manner, while Show() makes it modeless.
+        dlg.ShowModal()  # ShowModal() method displays dialog frame in the modal manner, while Show() makes it modeless.
+        dlg.Destroy()
 
     # ------------------------------------------------------------------------------------------------------------------
     def config_all_instruments(self, evt):
@@ -233,6 +241,15 @@ class TestFrame(wx.Frame):
 
         self.tab_analyzer.da.WINDOW_SELECTION = window_value
         print(f"[{window_value}] Selected as the windowing function.")
+
+    def OnTriggerSelection(self, evt):
+        trigger_value = "aperture"
+        for item in self.radio_menu_trigger.GetMenuItems():
+            if item.IsChecked():
+                trigger_value = item.GetItemLabelText().lower()
+
+        self.tab_analyzer.da.USE_APERTURE = trigger_value
+        print(f"[{trigger_value}] Selected as the trigger method.")
 
     def OnDummyChecked(self, event):
         if self.menu_DUMMY.IsChecked():
