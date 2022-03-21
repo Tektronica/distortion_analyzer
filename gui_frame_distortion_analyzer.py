@@ -196,8 +196,14 @@ class TestFrame(wx.Frame):
     def open_spec_wizard(self, evt):
         # https://docs.wxpython.org/wx.Dialog.html#phoenix-title-modal-and-modeless
         dlg = SpecWizardDialog(self, None, wx.ID_ANY, )
-        dlg.ShowModal()  # ShowModal() method displays dialog frame in the modal manner, while Show() makes it modeless.
-        dlg.Destroy()
+        dlg.Show()  # ShowModal() method displays dialog frame in the modal manner, while Show() makes it modeless.
+
+        # with SpecWizardDialog(self, None, wx.ID_ANY, ) as dlg:
+        #     if dlg.Show() == wx.ID_OK:
+        #         # do something here
+        #         print('Hello')
+        #     else:
+        #         pass
 
     # ------------------------------------------------------------------------------------------------------------------
     def config_all_instruments(self, evt):

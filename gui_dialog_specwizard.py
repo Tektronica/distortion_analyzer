@@ -167,6 +167,7 @@ class SpecWizardDialog(wx.Dialog):
         self.Bind(wx.EVT_TEXT_ENTER, calc_Event, self.text_input)
         self.Bind(wx.EVT_TEXT_ENTER, calc_Event, self.text_spec)
         self.Bind(wx.EVT_RADIOBOX, calc_Event, self.radio_box_1)
+        self.Bind(wx.EVT_CLOSE, self.onClose)
 
         self.__set_properties()
         self.__do_layout()
@@ -235,6 +236,19 @@ class SpecWizardDialog(wx.Dialog):
         self.SetSizer(sizer_1)
         self.Layout()
 
+    # ------------------------------------------------------------------------------------------------------------------
+    def onClose(self, evt):
+        # https://stackoverflow.com/a/3397363/3382269
+
+        print('[dialog box] closing spec wizard')
+
+        if self.IsModal():
+            self.EndModal(wx.ID_OK)
+            evt.Skip()
+        else:
+            self.Destroy()
+
+    # ------------------------------------------------------------------------------------------------------------------
     def calc(self, e):
         text_spec = self.text_spec.GetValue()
         text_input = self.text_input.GetValue()
