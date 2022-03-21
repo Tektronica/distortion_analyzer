@@ -417,7 +417,7 @@ class f8588A_instrument:
             self.f8588A.write(f'TRIGGER:COUNT {N}')
             self.f8588A.write('TRIGger:DELay:AUTO OFF')
             self.f8588A.write('TRIGGER:DELay 0')
-            return True  # returns true if digitizer setup completes succesfully
+            return True  # returns true if digitizer setup completes successfully
 
         except Exception as e:
             print('setup_digitizer for the Fluke 8588A failed. What error was thrown here?')
