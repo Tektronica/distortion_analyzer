@@ -431,6 +431,14 @@ class f8588A_instrument:
         a way to reduce the internal sampling rate of 5MHz down to a specific sampling rate equal to the reciprocal of
         the sampling interval. In this mode, SENSE:DIG:APERTURE 0.000.
 
+        To manually trigger a batch of 50 readings with 10-second intervals:
+            TRIGger:RESet
+            TRIGger:SOURce TIMer
+            TRIGger:TIMer 10
+            TRIGger:COUNt 50
+            TRIGger:DELay:AUTO OFF
+            TRIGGER:DELay 0
+
         method is called before retrieve_digitize method
         """
         print('\tsetting up digitizer trigger interval method')
