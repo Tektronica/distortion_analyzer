@@ -127,12 +127,13 @@ class HistoryTab(wx.Panel):
         try:
             xt = df['xt'].to_numpy()
             yt = df['yt'].to_numpy()
-            xf = df['xf'].to_numpy()
 
+            xf = df['xf'].to_numpy()
             # https://stackoverflow.com/a/18919965/3382269
             # https://stackoverflow.com/a/51725795/3382269
             df['yf'] = df['yf'].str.replace('i', 'j').apply(lambda x: np.complex(x))
             yf = df['yf'].to_numpy()
+
         except KeyError:
             raise ValueError('Incorrect file attempted to be opened. '
                              '\nCheck data headers. xt, yt, xf, yf should be present')
@@ -145,6 +146,8 @@ class HistoryTab(wx.Panel):
         Fs = round(1 / (xt[1] - xt[0]), 2)
 
         # SPECTRAL -----------------------------------------------------------------------------------------------------
+        main_lobe_width = 6 * (Fs / N)
+
         if (N % 2) == 0:
             # for even values of N: length is (N / 2) + 1
             fft_length = int(N / 2) + 1
@@ -152,10 +155,11 @@ class HistoryTab(wx.Panel):
             # for odd values of N: length is (N + 1) / 2
             fft_length = int((N + 2) / 2)
 
-        xf_rfft, yf_rfft = xf[:fft_length], yf[:fft_length]
+        yf_rfft = yf[:fft_length]
+        xf_rfft = np.round(np.fft.rfftfreq(N, d=1. / Fs), 6)  # one-sided
 
-        thdn, *_ = THDN_F(yf_rfft, Fs, N)
-        thd = THD(yf_rfft, Fs)
+        thdn, *_ = THDN_F(xf_rfft, yf_rfft, Fs, N, main_lobe_width, hpf=0, lpf=100e3)
+        thd = THD(xf_rfft, yf_rfft, Fs, N, main_lobe_width)
 
         self.plot(xt, yt, fft_length, xf_rfft, yf_rfft)
         self.results_update(Fs, N, yrms, thdn, thd)
@@ -186,7 +190,7 @@ class HistoryTab(wx.Panel):
 
         # SPECTRAL -----------------------------------------------------------------------------------------------------
         yf_peak = max(abs(yf))
-        self.spectral.set_data(xf/1000, 20 * np.log10(np.abs(yf/yf_peak)))
+        self.spectral.set_data(xf/1000, 20 * np.log10(np.abs(yf / yf_peak)))
         try:
             self.ax2.relim()  # recompute the ax.dataLim
         except ValueError:
