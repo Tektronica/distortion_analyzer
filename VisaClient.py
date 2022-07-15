@@ -63,6 +63,8 @@ class VisaClient:
                 else:
                     print('No such mode.')
 
+                time.sleep(1)
+
                 # test communication to instrument by identifying instrument
                 idn = re.sub(r'[\r\n|\r\n|\n]+', '', self.INSTR.query('*IDN?').lstrip(' '))
                 print(f"[FOUND] {idn}")
